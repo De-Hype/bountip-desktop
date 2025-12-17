@@ -1,5 +1,4 @@
 // import React from "react";
-// import Image from "next/image";
 // import { getCurrencySymbolByCountry } from "@/utils/getCurrencySymbol";
 // // import { Store } from "@/redux/store/storesTypes";
 // import { Outlet } from "@/types/outlet";
@@ -75,9 +74,7 @@
 //     >
 //       <div className="text-center mb-6">
 //         {formData.showReceiptBranding && (
-//           <Image
-//             width={100}
-//             height={100}
+//           <img
 //             src={imageUrl || store?.logoUrl || defaultLogoUrl}
 //             alt="Business Logo"
 //             className="h-16 w-16 mx-auto mb-4 object-contain"

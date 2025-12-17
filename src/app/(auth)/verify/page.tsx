@@ -1,8 +1,7 @@
 "use client";
 import AssetsFiles from "@/assets";
 import { Mail } from "lucide-react";
-import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { COOKIE_NAMES, getCookie, deleteCookie } from "@/utils/cookiesUtils";
 import { tokenManager } from "@/utils/tokenManager";
@@ -13,8 +12,6 @@ import useToastStore from "@/stores/toastStore";
 
 const OTP_LENGTH = 4;
 
-import { electronNavigate } from "@/utils/electronNavigate";
-
 const VerifyPage = () => {
   const { showToast } = useToastStore();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -23,11 +20,11 @@ const VerifyPage = () => {
   );
 
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
-  const router = useRouter();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [regContext] = useState(() => {
     const cookie = getCookie<{ email?: string; name?: string }>(
       COOKIE_NAMES.REG_USER_EMAIL
@@ -53,11 +50,11 @@ const VerifyPage = () => {
         );
         hasShownToast.current = true;
       }
-      setTimeout(() => electronNavigate("auth"), 2000);
+      setTimeout(() => navigate("/auth"), 2000);
       return;
     }
     inputsRef.current[0]?.focus();
-  }, [name, email, router, showToast]);
+  }, [name, email, navigate, showToast]);
 
   if (!name || !email) {
     return null;
@@ -211,7 +208,7 @@ const VerifyPage = () => {
         "Your email has been verified successfully."
       );
 
-      electronNavigate("onboarding");
+      navigate("/onboarding");
     } catch (error: unknown) {
       console.error(error);
       const message =
@@ -254,7 +251,10 @@ const VerifyPage = () => {
   return (
     <main>
       <header className="flex items-center justify-center shadow-xl py-2">
-        <Image src={AssetsFiles.LogoTwo} alt="Bountip logo" />
+        <img
+          src={(AssetsFiles.LogoTwo as any).src || AssetsFiles.LogoTwo}
+          alt="Bountip logo"
+        />
       </header>
       <section className="flex items-center justify-center">
         <form
@@ -262,8 +262,10 @@ const VerifyPage = () => {
           className="flex flex-col justify-between items-center w-1/2 h-[75vh]"
         >
           <div className="flex flex-col items-center justify-center w-full flex-grow gap-4">
-            <Image
-              src={AssetsFiles.EmailImage}
+            <img
+              src={
+                (AssetsFiles.EmailImage as any).src || AssetsFiles.EmailImage
+              }
               alt="Email verification big pics"
             />
             <h3 className="text-2xl font-bold">

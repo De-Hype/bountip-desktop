@@ -2,7 +2,6 @@
 // import { useActivateStorefrontMutation } from "@/redux/business";
 // import { useAppSelector } from "@/hooks/redux-hooks";
 // import { useBusiness } from "@/hooks/use-business";
-// import Image from "next/image";
 // import SuccessToast from "@/components/Modals/Success/SuccessModal";
 // import ErrorToast from "@/components/Modals/Errors/ErrorModal";
 // import {
@@ -55,11 +54,10 @@
 //   return (
 //     <div className="flex flex-col items-center justify-center py-12">
 //       <div className="relative h-[358px] w-[447px]  bg-red-">
-//         <Image
+//         <img
 //           src="/empty-storefront.svg"
 //           alt="Empty Store front"
-//           fill
-//           className="object-contain"
+//           className="object-contain w-full h-full absolute inset-0"
 //         />
 //       </div>
 //       <div className="flex flex-col w-[447px] gap-4 mt-[30px]">

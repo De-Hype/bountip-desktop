@@ -1,14 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
 
 import { tokenManager } from "@/utils/tokenManager";
 import { useAuthStore } from "@/stores/authStore";
@@ -20,7 +18,6 @@ import AssetsFiles from "@/assets";
 import PinInput from "./PinInput";
 import { COOKIE_NAMES, getCookie } from "@/utils/cookiesUtils";
 import { useLoginPinMutation } from "@/redux/auth";
-import { electronNavigate } from "@/utils/electronNavigate";
 
 export const signinSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -45,7 +42,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   const [pinLogin, setPinLogin] = useState<boolean>(false);
   const [pin, setPin] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const router = useRouter();
+  const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const { showToast } = useToastStore();
   const [loginPin] = useLoginPinMutation();
@@ -85,7 +82,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         await businessService.loadAllOutlet();
       } catch {}
 
-      electronNavigate("dashboard");
+      navigate("/dashboard");
     } catch (error: any) {
       console.log(error, "This is the error");
 
@@ -106,7 +103,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
           "Your account is inactive. Please verify your email address."
         );
 
-        router.push(
+        navigate(
           `/verify?name=${encodeURIComponent(
             userName
           )}&email=${encodeURIComponent(userEmail)}/`
@@ -166,7 +163,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       try {
         await businessService.loadAllOutlet();
       } catch {}
-      router.push("/dashboard/");
+      navigate("/dashboard/");
     } catch (error: any) {
       const message = error?.message || "Unable to sign in with PIN.";
       showToast("error", "Sign in failed", message);
@@ -227,7 +224,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
             errors.password ? "border-red-400" : "border-[#E6E6E6]"
           } rounded-xl p-4 w-full relative`}
         >
-          <Image src={AssetsFiles.PasswordIcon} alt="Password Icon" />
+          <img src={AssetsFiles.PasswordIcon} alt="Password Icon" />
           <span className="h-[30px] w-0.5 bg-[#E6E6E6] mx-1.5"></span>
           <div className="flex flex-col w-full relative">
             <label className="text-sm text-[#898989] mb-1">Password</label>
@@ -281,7 +278,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       {!pinLogin && (
         <div className="flex justify-end items-center">
           <Link
-            href="/reset-password"
+            to="/reset-password"
             className="text-sm text-[#15BA5C] hover:underline"
           >
             Forgot Password?
@@ -300,30 +297,15 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
           {pinLogin ? "Login with Email" : "Login with PIN"}
         </span>
       </button>
-
-      {/* Divider and Google OAuth */}
-      {!pinLogin && (
-        <>
-          <div className="flex items-center w-full my-4">
-            <hr className="grow border-t border-gray-300" />
-            <span className="mx-4 text-sm text-gray-500">Or Continue With</span>
-            <hr className="grow border-t border-gray-300" />
-          </div>
-          {/* <GoogleSignIn mode="signin" /> */}
-        </>
-      )}
-
-      {/* Sign up toggle */}
       <div className="">
         <p className="text-sm text-gray-500 text-center">
           Don&apos;t have an account?{" "}
           <button
             type="button"
-            disabled={isLoading}
             onClick={onToggleMode}
             className="text-[#15BA5C] font-semibold hover:underline"
           >
-            {isLoading ? "Loading..." : "Sign up"}
+            Sign Up
           </button>
         </p>
       </div>

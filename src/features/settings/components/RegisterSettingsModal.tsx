@@ -2,7 +2,7 @@
 // "use client";
 // import React, { useState, useEffect } from "react";
 // import { Check, Loader2, Trash2 } from "lucide-react";
-// import Image from "next/image";
+// 
 // import { Modal } from "../ui/Modal";
 // // import { Input } from "../ui/Input";
 // import SettingFiles from "@/assets/icons/settings";

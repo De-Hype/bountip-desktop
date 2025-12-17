@@ -61,4 +61,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("p2p:message", handler);
     return () => ipcRenderer.removeListener("p2p:message", handler);
   },
+  // Updater
+  checkForUpdates: () => ipcRenderer.send('updater:check'),
+  quitAndInstall: () => ipcRenderer.send('updater:quitAndInstall'),
+  onUpdateAvailable: (cb) => {
+    const handler = (_e, info) => cb(info);
+    ipcRenderer.on('updater:update-available', handler);
+    return () => ipcRenderer.removeListener('updater:update-available', handler);
+  },
+  onUpdateDownloaded: (cb) => {
+    const handler = (_e, info) => cb(info);
+    ipcRenderer.on('updater:update-downloaded', handler);
+    return () => ipcRenderer.removeListener('updater:update-downloaded', handler);
+  },
+  onUpdateStatus: (cb) => {
+    const handler = (_e, text) => cb(text);
+    ipcRenderer.on('updater:status', handler);
+    return () => ipcRenderer.removeListener('updater:status', handler);
+  },
 });

@@ -5,7 +5,6 @@
 // import SettingFiles from "@/assets/icons/settings";
 // import { useChangePasswordMutation } from "@/redux/auth";
 // import { COOKIE_NAMES, removeCookie } from "@/utils/cookiesUtils";
-// import { useRouter } from "next/navigation";
 // import { useAppSelector } from "@/hooks/redux-hooks";
 
 // interface PasswordSettingsModalProps {

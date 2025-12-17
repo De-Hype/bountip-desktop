@@ -1,6 +1,5 @@
 import React, { useRef, useState } from "react";
 import { Upload, Loader2, X } from "lucide-react";
-import Image from "next/image";
 import { useUploadImageMutation } from "@/redux/app";
 
 interface ImageUploaderProps {
@@ -101,12 +100,11 @@ const ImageHandler: React.FC<ImageUploaderProps> = ({
         {preview ? (
           <div className="text-center">
             <div className="relative inline-block">
-              <Image
+              <img
                 src={preview}
                 alt="Preview"
                 width={sizeMap[previewSize].w}
                 height={sizeMap[previewSize].h}
-                unoptimized
                 className={`${sizeMap[previewSize].cls} object-cover rounded-lg shadow-md`}
               />
               {!disabled && (

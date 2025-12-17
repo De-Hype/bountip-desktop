@@ -1,7 +1,7 @@
 // "use client";
 
 // import React, { useCallback, useEffect, useMemo, useState } from "react";
-// import Image from "next/image";
+//
 // import { Check, Loader2, Trash2 } from "lucide-react";
 // import { parsePhoneNumberFromString } from "libphonenumber-js";
 
@@ -318,7 +318,7 @@
 //       };
 //     }, [src]);
 //     return (
-//       <Image
+//       <img
 //         src={resolved}
 //         alt={alt}
 //         width={width}

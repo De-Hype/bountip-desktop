@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import Image, { StaticImageData } from "next/image";
 import getWidthClass from "@/utils/getWidthClass";
 
 interface ModalProps {
-  image?: StaticImageData;
+  image?: any;
   isOpen: boolean;
   onClose: () => void;
   title: string;
@@ -40,7 +39,6 @@ export const Modal: React.FC<ModalProps> = ({
   }, [isOpen]);
 
   // Function to get width based on size prop
- 
 
   if (!isOpen && !isVisible) return null;
   if (!image) return null;
@@ -48,7 +46,9 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex justify-end z-50 transition-opacity duration-300 ease-in-out">
       <div
-        className={`bg-white shadow-xl rounded-l-lg ${getWidthClass(size)} h-full overflow-hidden transform transition-all duration-300 ease-in-out
+        className={`bg-white shadow-xl rounded-l-lg ${getWidthClass(
+          size
+        )} h-full overflow-hidden transform transition-all duration-300 ease-in-out
           ${isOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}
         `}
       >
@@ -56,8 +56,8 @@ export const Modal: React.FC<ModalProps> = ({
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex gap-4 items-center">
             <div className="p-2.5 rounded-full border border-[#15BA5C] bg-white">
-              <Image
-                src={image}
+              <img
+                src={image.src || image}
                 alt="Modal Icon"
                 className="object-contain h-[20px] w-[20px]"
               />

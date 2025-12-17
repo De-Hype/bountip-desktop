@@ -2,7 +2,7 @@
 // import React, { useState, useEffect, useRef } from "react";
 // import { Modal } from "../ui/Modal";
 // import SettingFiles from "@/assets/icons/settings";
-// import Image from "next/image";
+// 
 // import { Input } from "../ui/Input";
 // import { Loader2 } from "lucide-react";
 

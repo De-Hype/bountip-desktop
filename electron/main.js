@@ -1,10 +1,14 @@
 import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
+import pkg from 'electron-updater';
+import log from "electron-log";
 import keytar from "keytar";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import dgram from "dgram";
 import net from "net";
+
+const { autoUpdater } = pkg;
 
 const SERVICE_NAME = "bountip-desktop";
 const ACCOUNT_NAME = "auth-tokens";
@@ -24,6 +28,47 @@ let tcpPort = 0;
 let udpSocket = null;
 let tcpServer = null;
 const peers = new Map();
+
+// --- Auto-Updater Configuration ---
+log.transports.file.level = "info";
+autoUpdater.logger = log;
+
+function sendStatusToWindow(text) {
+  log.info(text);
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) win.webContents.send('updater:status', text);
+}
+
+autoUpdater.on('checking-for-update', () => {
+  sendStatusToWindow('Checking for update...');
+});
+autoUpdater.on('update-available', (info) => {
+  sendStatusToWindow('Update available.');
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) win.webContents.send('updater:update-available', info);
+});
+autoUpdater.on('update-not-available', (info) => {
+  sendStatusToWindow('Update not available.');
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) win.webContents.send('updater:update-not-available', info);
+});
+autoUpdater.on('error', (err) => {
+  sendStatusToWindow('Error in auto-updater. ' + err);
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) win.webContents.send('updater:error', err.toString());
+});
+autoUpdater.on('download-progress', (progressObj) => {
+  let log_message = "Download speed: " + progressObj.bytesPerSecond;
+  log_message = log_message + ' - Downloaded ' + progressObj.percent + '%';
+  log_message = log_message + ' (' + progressObj.transferred + "/" + progressObj.total + ')';
+  sendStatusToWindow(log_message);
+});
+autoUpdater.on('update-downloaded', (info) => {
+  sendStatusToWindow('Update downloaded');
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) win.webContents.send('updater:update-downloaded', info);
+});
+// ----------------------------------
 
 function initIdentityStore() {
   identityFilePath = path.join(app.getPath("userData"), "identity.json");
@@ -99,8 +144,8 @@ function cachePut(key, value) {
     const json = JSON.parse(raw || "{}");
     json[key] = value;
     fs.writeFileSync(cacheFilePath, JSON.stringify(json, null, 2), "utf-8");
-  } catch (e) {
-    console.error("cachePut error", e);
+  } catch (error) {
+    console.error("Failed to put cache", error);
   }
 }
 
@@ -111,10 +156,12 @@ function queueAdd(op) {
     }
     const raw = fs.readFileSync(queueFilePath, "utf-8");
     const list = JSON.parse(raw || "[]");
-    list.push({ ...op, ts: Date.now() });
+    list.push(op);
     fs.writeFileSync(queueFilePath, JSON.stringify(list, null, 2), "utf-8");
-  } catch (e) {
-    console.error("queueAdd error", e);
+    return true;
+  } catch (error) {
+    console.error("Failed to add queue", error);
+    return false;
   }
 }
 
@@ -130,116 +177,68 @@ function queueList() {
   }
 }
 
+function startTcpServer(onMessage) {
+  tcpServer = net.createServer((socket) => {
+    socket.on("data", (data) => {
+      try {
+        const str = data.toString();
+        const json = JSON.parse(str);
+        if (json.app === APP_ID && json.payload) {
+          onMessage(json.payload);
+        }
+      } catch {}
+    });
+  });
+
+  tcpServer.listen(0, () => {
+    tcpPort = tcpServer.address().port;
+  });
+}
+
 function startUdpDiscovery(deviceId) {
   udpSocket = dgram.createSocket({ type: "udp4", reuseAddr: true });
 
   udpSocket.on("message", (msg, rinfo) => {
     try {
-      const data = JSON.parse(msg.toString());
-      if (data.app !== APP_ID) return;
-      if (data.deviceId === deviceId) return;
-      peers.set(data.deviceId, {
-        deviceId: data.deviceId,
-        host: rinfo.address,
-        port: data.port,
-        lastSeen: Date.now(),
-      });
-      broadcastPeerUpdate();
+      const json = JSON.parse(msg.toString());
+      if (json.app === APP_ID && json.deviceId !== deviceId) {
+        if (!peers.has(json.deviceId)) {
+          peers.set(json.deviceId, { ip: rinfo.address, port: json.tcpPort });
+        }
+      }
     } catch {}
   });
 
   udpSocket.bind(MULTICAST_PORT, () => {
-    try {
-      udpSocket.addMembership(MULTICAST_ADDR);
-    } catch (e) {
-      console.error("Failed to join multicast group", e);
-    }
+    udpSocket.addMembership(MULTICAST_ADDR);
+    udpSocket.setMulticastLoopback(true);
   });
 
   setInterval(() => {
-    const payload = Buffer.from(
-      JSON.stringify({ app: APP_ID, deviceId, port: tcpPort, ts: Date.now() })
-    );
-    udpSocket.send(payload, 0, payload.length, MULTICAST_PORT, MULTICAST_ADDR);
-  }, 5000);
+    const msg = JSON.stringify({
+      app: APP_ID,
+      deviceId,
+      tcpPort,
+    });
+    udpSocket.send(msg, MULTICAST_PORT, MULTICAST_ADDR);
+  }, 3000);
 }
 
-function startTcpServer(onMessage) {
-  tcpServer = net.createServer((socket) => {
-    let buf = "";
-    socket.on("data", (chunk) => {
-      buf += chunk.toString();
-    });
-    socket.on("end", () => {
-      try {
-        const payload = JSON.parse(buf);
-        onMessage(payload);
-      } catch (e) {
-        console.error("Invalid TCP payload", e);
-      }
-    });
-  });
-
-  tcpServer.listen(0, () => {
-    const addr = tcpServer.address();
-    tcpPort = typeof addr === "object" ? addr.port : 0;
-  });
-}
-
-function sendToPeer(peer, payload) {
+function sendToPeer(peer, data) {
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection({ host: peer.host, port: peer.port }, () => {
-      socket.write(JSON.stringify(payload));
-      socket.end();
-      resolve(true);
+    const client = new net.Socket();
+    client.connect(peer.port, peer.ip, () => {
+      client.write(JSON.stringify(data));
+      client.end();
+      resolve();
     });
-    socket.on("error", reject);
+    client.on("error", reject);
   });
 }
-
-function broadcastPeerUpdate() {
-  const win = BrowserWindow.getAllWindows()[0];
-  if (!win) return;
-  const list = Array.from(peers.values());
-  win.webContents.send("p2p:peers", list);
-}
-
-// function createWindow() {
-//   const iconPath = path.resolve(__dirname, "../src/assets/LogoOne.svg");
-//   const iconImage = nativeImage.createFromPath(iconPath);
-
-//   const win = new BrowserWindow({
-//     width: 1200,
-//     height: 800,
-//     show: false,
-//     backgroundColor: "#ffffff",
-//     webPreferences: {
-//       nodeIntegration: false,
-//       contextIsolation: true,
-//       preload: path.resolve(__dirname, "preload.js"),
-//     },
-//     icon: iconPath,
-//   });
-
-//   if (!app.isPackaged) {
-//     win.loadURL("http://localhost:3005");
-//     win.webContents.openDevTools();
-//   } else {
-//     const indexPath = path.join(__dirname, "..", "out", "index.html");
-//     win.loadFile(indexPath);
-//   }
-
-//   if (process.platform === "darwin" && !iconImage.isEmpty()) {
-//     app.dock.setIcon(iconImage);
-//   }
-
-//   win.once("ready-to-show", () => {
-//     win.show();
-//   });
-// }
 
 function createWindow() {
   const iconPath = path.join(__dirname, "assets", "icon.png");
+  const appIcon = nativeImage.createFromPath(iconPath);
 
   const win = new BrowserWindow({
     width: 1200,
@@ -251,8 +250,12 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
     },
-    icon: iconPath,
+    icon: appIcon,
   });
+
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(appIcon);
+  }
 
   // 🔥 ADD THIS BLOCK (CRITICAL)
   win.webContents.on("render-process-gone", (_event, details) => {
@@ -267,11 +270,14 @@ function createWindow() {
   });
 
   if (!app.isPackaged) {
-    win.loadURL("http://localhost:3005");
+    win.loadURL("http://localhost:5173");
     win.webContents.openDevTools();
   } else {
-    const appPath = app.getAppPath();
-    win.loadFile(path.join(appPath, "out", "index.html"));
+    // In production, load the file directly from the dist folder
+    // When using file:// protocol, path.join resolves to an absolute file path
+    // which Electron's loadFile handles correctly.
+    // Ensure we are pointing to the correct index.html inside the packaged app
+    win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 
   win.once("ready-to-show", () => win.show());
@@ -377,6 +383,22 @@ app.whenReady().then(() => {
       console.error("sendToPeer error", e);
     }
   });
+
+  // --- Auto-Updater IPC ---
+  ipcMain.on('updater:check', () => {
+    autoUpdater.checkForUpdates();
+  });
+
+  ipcMain.on('updater:quitAndInstall', () => {
+    autoUpdater.quitAndInstall();
+  });
+
+  // Check for updates after startup (only in production)
+  setTimeout(() => {
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdatesAndNotify();
+    }
+  }, 3000);
 
   createWindow();
 });

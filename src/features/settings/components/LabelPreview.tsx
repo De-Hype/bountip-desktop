@@ -4,7 +4,7 @@
 
 // // import React from "react";
 // // import { Camera } from "lucide-react";
-// // import Image from "next/image";
+// // 
 // // import { useSelectedOutlet } from "@/hooks/useSelectedOutlet";
 
 // // interface LabelPreviewProps {

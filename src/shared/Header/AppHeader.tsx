@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import React, { useMemo, useState } from "react";
 import UserProfile from "./UserProfile";
 import { X } from "lucide-react";
@@ -32,8 +31,9 @@ interface Notification {
 }
 
 export default function AppHeader() {
-  const pathname = usePathname();
-  const router = useRouter();
+  const location = useLocation();
+  const pathname = location.pathname;
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { selectedOutlet } = useBusinessStore();
 
@@ -170,7 +170,7 @@ export default function AppHeader() {
 
           <div className="flex items-center gap-4">
             <Link
-              href="/dashboard"
+              to="/dashboard"
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative"
             >
               <svg
@@ -214,7 +214,7 @@ export default function AppHeader() {
             <UserProfile
               user={{ fullName: fullName }}
               logoUrl={logoUrl}
-              logout={() => performLogout(router)}
+              logout={() => performLogout(navigate)}
             />
           </div>
         </div>

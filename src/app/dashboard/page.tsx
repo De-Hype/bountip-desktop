@@ -3,10 +3,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight, LogOut } from "lucide-react";
 import AssetsFiles from "@/assets";
-import Image from "next/image";
 import { useAuthStore } from "@/stores/authStore";
 import { performLogout } from "@/services/authSession";
 
@@ -55,7 +54,7 @@ const DashboardCard = ({
           className={`w-12 h-12  rounded-xl flex items-center justify-center mb-4 ${iconContainerClassName}`}
         >
           {/* <Icon className={`w-6 top-10 h-6 text-green-500 ${iconClassName}`} /> */}
-          <Image
+          <img
             src={Icon?.src || Icon}
             width={40}
             height={40}
@@ -72,7 +71,7 @@ const DashboardCard = ({
             className={`mt-3 relative inline-block ${badgeContainerClassName}`}
           >
             <img
-              src={AssetsFiles.csbadge.src}
+              src={(AssetsFiles.csbadge as any).src || AssetsFiles.csbadge}
               alt={badge}
               className={`h-7 w-auto ${badgeImageClassName}`}
             />
@@ -102,7 +101,7 @@ const DashboardCard = ({
 
 const Dashboard = () => {
   const { user: userData } = useAuthStore();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [currentPath, setCurrentPath] = useState("/dashboard");
   const [peers, setPeers] = useState<
     Array<{ deviceId: string; host: string; port: number; lastSeen: number }>
@@ -265,11 +264,11 @@ const Dashboard = () => {
 
   const handleNavigation = (path: any) => {
     setCurrentPath(path);
-    router.push(path + "/");
+    navigate(path);
   };
 
   const handleLogout = () => {
-    performLogout(router);
+    performLogout(navigate);
   };
   console.log(peers, "This are the connected peers");
   console.log(logs, "This are the logs");

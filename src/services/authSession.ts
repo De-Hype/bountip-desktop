@@ -1,11 +1,9 @@
-import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { NavigateFunction } from "react-router-dom";
 import { tokenManager } from "@/utils/tokenManager";
 import { useAuthStore } from "@/stores/authStore";
 import { deleteCookie, COOKIE_NAMES, setCookie } from "@/utils/cookiesUtils";
 
-import { electronNavigate } from "@/utils/electronNavigate";
-
-export const performLogout = (router: AppRouterInstance) => {
+export const performLogout = (navigate: NavigateFunction) => {
   // Clear tokens from memory + keytar
   tokenManager.clearTokens();
 
@@ -24,5 +22,5 @@ export const performLogout = (router: AppRouterInstance) => {
   deleteCookie(COOKIE_NAMES.RESET_USER_EMAIL);
 
   // Redirect to sign-in
-  electronNavigate("auth");
+  navigate("/auth");
 };

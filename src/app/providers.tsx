@@ -4,10 +4,9 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 //@ts-nocheck
-"use client";
 
 import ReactQueryProvider from "@/react-query/providers";
-import { usePathname, useRouter } from "next/navigation";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { tokenManager } from "@/utils/tokenManager";
@@ -15,7 +14,6 @@ import { userStorage } from "@/services/userStorage";
 import useToastStore from "@/stores/toastStore";
 import Toast from "@/shared/Toast/Toast";
 import AssetsFiles from "@/assets";
-import Image from "next/image";
 import httpService from "@/services/httpService";
 import businessService from "@/services/businessService";
 import { Provider } from "react-redux";
@@ -23,20 +21,14 @@ import { configureStore } from "@reduxjs/toolkit";
 import { outletApi } from "@/redux/outlets";
 import { appApi } from "@/redux/app";
 import { authApi } from "@/redux/auth";
-import { getPhoneCountries } from "@/utils/getPhoneCountries";
-import useBusinessStore from "@/stores/useBusinessStore";
-import { electronNavigate } from "@/utils/electronNavigate";
 import { WifiOff } from "lucide-react";
+import { UpdateNotifier } from "@/components/UpdateNotifier";
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim()
-  ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1`
-  : "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
-
-const PUBLIC_PATHS = ["/auth/", "/reset-password/", "/verify/"];
+const PUBLIC_PATHS = ["/auth", "/reset-password", "/verify"];
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { isAuthenticated, setAuth, clearAuth } = useAuthStore();
   const toast = useToastStore();
 
@@ -45,7 +37,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const SYNC_INTERVAL_MS = Number(
-    process.env.NEXT_PUBLIC_SYNC_INTERVAL_MS || 300000
+    import.meta.env.VITE_SYNC_INTERVAL_MS || 300000
   );
 
   /**
@@ -170,45 +162,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isBootstrapping) return;
 
-    const isFile =
-      typeof window !== "undefined" && window.location.protocol === "file:";
-    let fileRoute = "";
-    if (isFile) {
-      try {
-        const afterOut = window.location.pathname.split("/out/")[1] || "";
-        // Normalize like app router paths (strip index.html, trailing slash)
-        fileRoute =
-          "/" + afterOut.replace(/index\.html$/, "").replace(/\/?$/, "");
-      } catch {}
-    }
-
-    const isPublic =
-      PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
-      (isFile &&
-        (fileRoute.startsWith("/auth") ||
-          fileRoute.startsWith("/reset-password") ||
-          fileRoute.startsWith("/verify")));
+    const pathname = location.pathname;
+    const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
     if (!isAuthenticated && !isPublic) {
-      if (isFile) {
-        if (!fileRoute.startsWith("/auth")) electronNavigate("auth");
-      } else {
-        if (pathname !== "/auth") electronNavigate("auth");
-      }
+      if (!pathname.startsWith("/auth")) navigate("/auth");
       return;
     }
 
-    const onAuthPage =
-      pathname.startsWith("/auth/") ||
-      (isFile && fileRoute.startsWith("/auth"));
+    const onAuthPage = pathname.startsWith("/auth");
     if (isAuthenticated && onAuthPage) {
-      if (isFile) {
-        if (!fileRoute.startsWith("/dashboard")) electronNavigate("dashboard");
-      } else {
-        if (pathname !== "/dashboard") electronNavigate("dashboard");
-      }
+      navigate("/dashboard");
     }
-  }, [isAuthenticated, pathname, isBootstrapping]);
+  }, [isAuthenticated, location.pathname, isBootstrapping, navigate]);
 
   /**
    * ------------------------------------------------------
@@ -218,10 +184,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   if (isBootstrapping) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
-        <Image
+        <img
           src={AssetsFiles.LogoTwo}
           alt="Bountip"
-          priority
           className="w-36 animate-pulse"
         />
       </div>
@@ -241,6 +206,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <Toast {...toast} />
         {children}
       </ReactQueryProvider>
+      {/* Update Notifier */}
+      <UpdateNotifier />
     </ReduxProvider>
   );
 }

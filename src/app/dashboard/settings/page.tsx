@@ -1,8 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
-import Image from "next/image";
 import { ChevronRight } from "lucide-react";
 import settingsItems from "@/data/settingItems";
 import { BusinessDetailsModal } from "@/features/settings/components/BusinessDetailsModal";
@@ -12,8 +11,8 @@ import { useBusinessStore } from "@/stores/useBusinessStore";
 //import { PriceSettingsModal } from "@/features/settings/components/PriceSettingsModal";
 
 const SettingsPage: React.FC = () => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeModal, setActiveModal] = useState<string | null>(null);
 
   const { fetchBusinessData } = useBusinessStore();
@@ -28,9 +27,9 @@ const SettingsPage: React.FC = () => {
 
   const handleSettingClick = (id: string) => {
     if (id === "customer-Tiers") {
-      router.push("settings/customer/");
+      navigate("/dashboard/settings/customer");
     } else if (id === "customise-modal") {
-      router.push("settings/customization/");
+      navigate("/dashboard/settings/customization");
     } else {
       setActiveModal(id);
     }
@@ -39,7 +38,7 @@ const SettingsPage: React.FC = () => {
   const handleModalClose = () => {
     setActiveModal(null);
     // Clear modal param from URL
-    router.push("/dashboard/settings/");
+    navigate("/dashboard/settings");
   };
 
   useEffect(() => {
@@ -63,8 +62,8 @@ const SettingsPage: React.FC = () => {
 
               <div className="flex items-start justify-between mb-4">
                 <div className={`p-3 rounded-full ${item.color}`}>
-                  <Image
-                    src={item.icon}
+                  <img
+                    src={(item.icon as any).src || item.icon}
                     alt={item.title}
                     width={24}
                     height={24}

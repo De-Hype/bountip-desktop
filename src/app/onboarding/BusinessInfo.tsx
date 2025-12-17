@@ -4,7 +4,7 @@
 //@ts-nocheck
 "use client";
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import BusinessRevenueComponent from "./BusinessRevenueComponent";
 import { Country, ICountry } from "country-state-city";
@@ -65,7 +65,7 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
   const [currencySearchTerm, setCurrencySearchTerm] = useState("");
 
   const [logoUrl, setLogoUrl] = useState("");
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { outlets } = useBusinessStore();
   const outletIdParam = searchParams.get("outletId") || "";
   const outlet = outlets.find((o) => o.id === outletIdParam) as unknown as

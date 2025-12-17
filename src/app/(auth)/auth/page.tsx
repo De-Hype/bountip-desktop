@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import { useState, Suspense } from "react";
 import AssetsFiles from "@/assets";
 import AuthForm from "../Form/AuthForm";
@@ -14,18 +13,20 @@ const AuthPageContent = () => {
   return (
     <section className="min-h-screen flex">
       <aside className="flex-1 relative min-h-screen">
-        <Image
-          src={AssetsFiles.AuthBgImage}
+        <img
+          src={(AssetsFiles.AuthBgImage as any).src || AssetsFiles.AuthBgImage}
           alt="Auth pages"
-          fill
-          className="object-cover"
+          className="absolute inset-0 w-full h-full object-cover"
           style={{ objectPosition: "20% center" }}
         />
       </aside>
 
       <section className="flex-1 flex items-center justify-center my-12">
         <section className="flex items-center justify-center flex-col gap-3.5 w-[450px]">
-          <Image src={AssetsFiles.LogoTwo} alt="Logo" />
+          <img
+            src={(AssetsFiles.LogoTwo as any).src || AssetsFiles.LogoTwo}
+            alt="Logo"
+          />
           <h3 className="text-[#1E1E1E] font-bold text-[45px] mt-5">
             Welcome Back
           </h3>

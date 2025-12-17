@@ -1,15 +1,14 @@
 "use client";
 import { useAuthStore } from "@/stores/authStore";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useSetPinMutation } from "@/redux/auth";
-import { electronNavigate } from "@/utils/electronNavigate";
 import PinInput from "./PinInput";
 import useToastStore from "@/stores/toastStore";
 
 const SetUpPin = () => {
-  const router = useRouter();
+  const navigate = useNavigate();
   const pin = useAuthStore((state) => state.pin);
   const [setPin] = useSetPinMutation();
   const { showToast } = useToastStore();
@@ -29,7 +28,7 @@ const SetUpPin = () => {
           "PIN setup successful",
           "PIN setup successful, please sign in"
         );
-        electronNavigate("dashboard");
+        navigate("/dashboard");
       } catch (error) {
         console.error("PIN setup error:", error);
         showToast(

@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect, useRef } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useNavigate, useLocation } from "react-router-dom";
 import AssetsFiles from "@/assets";
 import { ChevronDown, LogOut, User, Loader2 } from "lucide-react";
-import Image from "next/image";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { useAuthStore } from "@/stores/authStore";
 import type { Outlet as BaseOutlet } from "@/services/businessService";
@@ -27,8 +26,9 @@ const UserProfile = ({
 }: UserProfileProps) => {
   const ACTIVE_OUTLET_STORAGE_KEY = "bountip_active_outlet_id";
   const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pathname = location.pathname;
   const dropdownRef = useRef<HTMLDivElement>(null);
   const {
     outlets,
@@ -88,13 +88,11 @@ const UserProfile = ({
       onProfileClick();
     } else {
       // Otherwise navigate to settings
-      router.push("/dashboard/settings?modal=business-info/");
+      navigate("/dashboard/settings?modal=business-info/");
     }
   };
 
   const outletList: OutletView[] = (outlets as OutletView[]) || [];
-
- 
 
   // Once outlets are loaded, sync with Redux ONLY on initial load
   useEffect(() => {
@@ -146,7 +144,7 @@ const UserProfile = ({
 
     // Only force onboarding flow when we're not already on the customization page
     if (needsOnboarding && !isCustomizationRoute) {
-      router.push(`/onboarding?outletId=${outlet.id}/`);
+      navigate(`/onboarding?outletId=${outlet.id}/`);
     }
   };
 
@@ -170,8 +168,12 @@ const UserProfile = ({
         }`}
       >
         <div className="shrink-0 relative">
-          <Image
-            src={displayImage}
+          <img
+            src={
+              typeof displayImage === "string"
+                ? displayImage
+                : (displayImage as any).src || displayImage
+            }
             alt="User"
             width={40}
             height={40}
@@ -202,8 +204,12 @@ const UserProfile = ({
       {/* Mobile View */}
       <div onClick={() => setOpen(!open)} className="md:hidden cursor-pointer">
         <div className="relative">
-          <Image
-            src={displayImage}
+          <img
+            src={
+              typeof displayImage === "string"
+                ? displayImage
+                : (displayImage as any).src || displayImage
+            }
             alt="User"
             width={40}
             height={40}

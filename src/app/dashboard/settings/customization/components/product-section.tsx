@@ -2,7 +2,7 @@
 // import Image from "next/image";
 // import { Plus, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 
-// import { useRouter } from "next/navigation";
+// import { useNavigate } from "react-router-dom";
 // import {
 //   useGetProductsQuery,
 //   useMakeProductAvailableMutation,
@@ -55,7 +55,7 @@
 //   const [makeAllUnavailable, setMakeAllUnavailable] = useState(false);
 //   const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
 
-//   const router = useRouter();
+//   const navigate = useNavigate();
 
 //   const {
 //     data: productData,

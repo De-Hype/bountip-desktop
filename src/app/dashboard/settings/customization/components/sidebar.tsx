@@ -3,7 +3,7 @@
 // import ShareStoreLink from "./StoreFrontLink";
 // import { Share2 } from "lucide-react";
 // import { BsArrowLeftShort } from "react-icons/bs";
-// import { useRouter } from "next/navigation";
+// import { useNavigate } from "react-router-dom";
 // import { useAppSelector } from "@/hooks/redux-hooks";
 
 // interface SidebarProps {
@@ -23,7 +23,7 @@
 //       ? isStorefrontActive
 //       : Boolean(outlet?.storeCode);
 //   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-//   const router = useRouter();
+//   const navigate = useNavigate();
 
 //   return (
 //     <div className="w-64 shrink-0">

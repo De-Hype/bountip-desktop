@@ -1,31 +1,27 @@
 "use client";
 
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import AssetsFiles from "@/assets";
-import Image from "next/image";
-import { electronNavigate } from "@/utils/electronNavigate";
 
 const Homepage = () => {
   const { isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Only run on client
-    if (typeof window === "undefined") return;
-
     if (isAuthenticated) {
-      electronNavigate("dashboard");
+      navigate("/dashboard");
     } else {
-      electronNavigate("auth");
+      navigate("/auth");
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-      <Image
+      <img
         src={AssetsFiles.LogoTwo}
         alt="Bountip"
-        priority
         className="w-36 h-auto animate-pulse"
       />
     </div>

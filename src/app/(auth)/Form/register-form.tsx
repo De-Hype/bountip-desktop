@@ -5,11 +5,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
+import { Link, useNavigate } from "react-router-dom";
 import AssetsFiles from "@/assets";
 
-import { useRouter } from "next/navigation";
 import {
   PasswordStrengthMeter,
   getStrength,
@@ -42,12 +40,11 @@ interface RegistrationFormProps {
 }
 
 export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [accepted, setAccepted] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const setAuth = useAuthStore((state) => state.setAuth);
   const { showToast } = useToastStore();
 
   const {
@@ -93,7 +90,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
         "Please verify your email to continue."
       );
 
-      router.push("/verify/");
+      navigate("/verify/");
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "Unable to sign up.";
@@ -194,7 +191,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
           errors.password ? "border-red-400" : "border-[#E6E6E6]"
         } rounded-xl p-4 w-full relative`}
       >
-        <Image src={AssetsFiles.PasswordIcon} alt="Password Icon" />
+        <img src={AssetsFiles.PasswordIcon} alt="Password Icon" />
         <span className="h-[30px] w-0.5 bg-[#E6E6E6] mx-1.5"></span>
         <div className="flex flex-col w-full relative">
           <label className="text-sm text-[#898989] mb-1">Create Password</label>
@@ -238,14 +235,11 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
         />
         <label htmlFor="acceptTerms" className="text-sm text-gray-600">
           By checking this box, you agree to our{" "}
-          <Link href="/privacy-policy" className="text-[#15BA5C] underline">
+          <Link to="/privacy-policy" className="text-[#15BA5C] underline">
             Privacy Policy
           </Link>{" "}
           and{" "}
-          <Link
-            href="/terms-and-conditions"
-            className="text-[#15BA5C] underline"
-          >
+          <Link to="/terms-and-conditions" className="text-[#15BA5C] underline">
             Terms & Conditions
           </Link>
           .

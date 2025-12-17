@@ -1,11 +1,10 @@
 import SettingFiles from "@/assets/icons/settings";
-import { StaticImageData } from "next/image";
 
 export interface ISettingItem {
   id: string;
   title: string;
   description: string;
-  icon: StaticImageData;
+  icon: any;
   color: string;
 }
 

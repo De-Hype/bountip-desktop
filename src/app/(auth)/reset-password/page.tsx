@@ -11,10 +11,8 @@ import {
   MailOpen,
   Loader2,
 } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+import { Link, useNavigate } from "react-router-dom";
 import React, { useState, useRef, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import {
   getStrength,
   getStrengthLabel,
@@ -29,10 +27,8 @@ import {
   deleteCookie,
 } from "@/utils/cookiesUtils";
 
-import { electronNavigate } from "@/utils/electronNavigate";
-
 const ResetPasswordPageContent = () => {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [email, setEmail] = useState<string>(() => {
     const v = getCookie<string | { email?: string }>(
       COOKIE_NAMES.RESET_USER_EMAIL
@@ -54,17 +50,13 @@ const ResetPasswordPageContent = () => {
   return (
     <section className="max-h-screen h-screen">
       <div className="flex items-center justify-between px-5">
-        <Image src={AssetsFiles.LogoTwo} alt="Logo" />
+        <img
+          src={(AssetsFiles.LogoTwo as any).src || AssetsFiles.LogoTwo}
+          alt="Logo"
+        />
         <section className="flex items-center gap-1.5">
           <p className="text-base">Remember Password?</p>
-          <Link
-            className="text-[#15BA5C] text-base"
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              electronNavigate("auth");
-            }}
-          >
+          <Link className="text-[#15BA5C] text-base" to="/auth">
             Sign in here
           </Link>
         </section>
@@ -420,7 +412,13 @@ function CreateNewPassword({
         </p>
         <div className="w-full flex flex-col gap-3.5">
           <div className="flex items-center border border-[#E6E6E6] rounded-xl p-4 w-full relative">
-            <Image src={AssetsFiles.PasswordIcon} alt="Password Icon" />
+            <img
+              src={
+                (AssetsFiles.PasswordIcon as any).src ||
+                AssetsFiles.PasswordIcon
+              }
+              alt="Password Icon"
+            />
             <span className="h-[30px] w-0.5 bg-[#E6E6E6] mx-1.5"></span>
             <div className="flex flex-col w-full relative">
               <label className="text-sm text-[#898989] mb-1">Password</label>
@@ -446,7 +444,13 @@ function CreateNewPassword({
           </div>
 
           <div className="flex items-center border border-[#E6E6E6] rounded-xl p-4 w-full relative">
-            <Image src={AssetsFiles.PasswordIcon} alt="Password Icon" />
+            <img
+              src={
+                (AssetsFiles.PasswordIcon as any).src ||
+                AssetsFiles.PasswordIcon
+              }
+              alt="Password Icon"
+            />
             <span className="h-[30px] w-0.5 bg-[#E6E6E6] mx-1.5"></span>
             <div className="flex flex-col w-full relative">
               <label className="text-sm text-[#898989] mb-1">
@@ -502,6 +506,7 @@ function CreateNewPassword({
 }
 
 function PasswordResetSuccessful() {
+  const navigate = useNavigate();
   return (
     <form className="flex flex-col justify-between items-center w-1/2 h-[75vh]">
       <div className="flex flex-col items-center justify-center w-full flex-grow gap-4">
@@ -518,7 +523,7 @@ function PasswordResetSuccessful() {
 
       <button
         type="button"
-        onClick={() => electronNavigate("auth")}
+        onClick={() => navigate("/auth")}
         className="bg-[#15BA5C] text-center text-white font-bold text-xl py-3.5 rounded-[10px] hover:bg-[#13a551] w-full"
       >
         Log in

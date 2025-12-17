@@ -1,7 +1,6 @@
 "use client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import AssetsFiles from "@/assets";
-import Image, { StaticImageData } from "next/image";
 import SetUpPin from "./SetUpPin";
 import BusinessInfo from "./BusinessInfo";
 import React, { useCallback } from "react";
@@ -9,11 +8,9 @@ import ConcentricArcsLayout from "./SideLanding";
 import SplitedProgressBar from "./SplitedProgressBar";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 
-import { electronNavigate } from "@/utils/electronNavigate";
-
 const OnboardingClient = () => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { outlets } = useBusinessStore();
 
   const currentStep = searchParams.get("step") || "business";
@@ -27,13 +24,13 @@ const OnboardingClient = () => {
 
   const handleNextStep = useCallback(() => {
     if (skipPin) {
-      electronNavigate("dashboard");
+      navigate("/dashboard");
       return;
     }
     const params = new URLSearchParams(searchParams.toString());
     params.set("step", "pin");
-    router.push(`?${params.toString()}` + "/");
-  }, [router, searchParams, skipPin]);
+    setSearchParams(params);
+  }, [searchParams, skipPin, navigate, setSearchParams]);
 
   const isPinStep = !skipPin && currentStep === "pin";
   const isBusinessStep = currentStep === "business";
@@ -73,7 +70,7 @@ export default OnboardingClient;
 // --- BountmpLanding and ProfileImage below ---
 
 interface ProfileImageProps {
-  src: StaticImageData;
+  src: any;
   alt: string;
   className?: string;
 }
@@ -86,8 +83,8 @@ const ProfileImage: React.FC<ProfileImageProps> = ({
   <div
     className={`absolute w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-lg ${className}`}
   >
-    <Image
-      src={src}
+    <img
+      src={src.src || src}
       alt={alt}
       width={64}
       height={64}
@@ -100,7 +97,10 @@ const BountmpLanding: React.FC = () => {
   return (
     <div className="relative h-full bg-[#FAFAFC] overflow-hidden">
       <div className="absolute top-8 left-8 z-30">
-        <Image src={AssetsFiles.LogoTwo} alt="Bountip Logo" />
+        <img
+          src={(AssetsFiles.LogoTwo as any).src || AssetsFiles.LogoTwo}
+          alt="Bountip Logo"
+        />
       </div>
 
       {/* ConcentricArcsLayout */}
