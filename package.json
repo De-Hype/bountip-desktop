@@ -1,0 +1,109 @@
+{
+  "name": "bountip-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+"scripts": {
+  "dev": "concurrently \"npm:next\" \"npm:electron\"",
+  "next": "next dev -p 3005",
+  "electron": "wait-on http://localhost:3005 && electron .",
+  "postinstall": "electron-builder install-app-deps",
+
+  "build": "next build && node scripts/adjust-html-paths.js",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:all": "npm run build && electron-builder -mwl"
+},
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-separator": "^1.1.7",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "@tanstack/react-query": "^5.90.5",
+    "better-sqlite3": "^11.7.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "country-currency-map": "^2.1.7",
+    "country-state-city": "^3.2.1",
+    "currency-codes": "^2.2.0",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^12.23.22",
+    "input-otp": "^1.4.2",
+    "keytar": "^7.9.0",
+    "libphonenumber-js": "^1.12.31",
+    "lucide-react": "^0.544.0",
+    "next": "15.5.4",
+    "next-auth": "^4.24.13",
+    "rc-slider": "^11.1.9",
+    "react": "19.1.0",
+    "react-day-picker": "^9.11.1",
+    "react-dom": "19.1.0",
+    "react-hook-form": "^7.67.0",
+    "react-icons": "^5.5.0",
+    "react-select": "^5.10.2",
+    "recharts": "^3.3.0",
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.1.13",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "electron": "^28.3.0",
+    "electron-builder": "^24.12.0",
+    "electron-icon-maker": "^0.0.5",
+    "electron-rebuild": "^3.2.9",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.4",
+    "i": "^0.3.7",
+    "npm": "^11.6.4",
+    "tailwindcss": "^4",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "^5",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.bountip.desktop",
+    "productName": "Bountip Desktop",
+    "files": [
+      "electron/**",
+      "out/**",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "artifactName": "Bountip-Desktop-${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.business",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "publisherName": "Bountip",
+      "requestedExecutionLevel": "asInvoker"
+    }
+  }
+}
