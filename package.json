@@ -5,16 +5,15 @@
   "author": "Bountip",
   "private": true,
   "type": "module",
-  "main": "electron/main.js",
+  "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "concurrently -k \"npm:vite\" \"npm:electron:dev\"",
-    "vite": "vite",
-    "electron:dev": "wait-on http://localhost:5173 && electron .",
+    "dev": "vite",
     "build": "vite build",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "dist:all": "npm run build && electron-builder -mwl",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "rebuild": "electron-rebuild -f"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

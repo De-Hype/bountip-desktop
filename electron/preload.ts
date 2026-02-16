@@ -1,9 +1,9 @@
+import { contextBridge, ipcRenderer } from 'electron';
+
 console.log("🔥 PRELOAD LOADED!");
 
-const { contextBridge, ipcRenderer } = require("electron");
-
 contextBridge.exposeInMainWorld("electronAPI", {
-  storeTokens: (payload) => ipcRenderer.send("auth:storeTokens", payload),
+  storeTokens: (payload: any) => ipcRenderer.send("auth:storeTokens", payload),
   clearTokens: () => ipcRenderer.send("auth:clearTokens"),
   getTokens: async () => {
     try {
@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       return null;
     }
   },
-  saveUser: async (user) => {
+  saveUser: async (user: any) => {
     try {
       return await ipcRenderer.invoke("db:saveUser", user);
     } catch (error) {
@@ -36,46 +36,46 @@ contextBridge.exposeInMainWorld("electronAPI", {
       return { online: true };
     }
   },
-  setNetworkStatus: (online) => ipcRenderer.send("network:setOnline", online),
-  onNetworkStatus: (cb) => {
-    const handler = (_e, payload) => cb(payload);
+  setNetworkStatus: (online: boolean) => ipcRenderer.send("network:setOnline", online),
+  onNetworkStatus: (cb: (payload: any) => void) => {
+    const handler = (_e: any, payload: any) => cb(payload);
     ipcRenderer.on("network:status", handler);
     return () => ipcRenderer.removeListener("network:status", handler);
   },
-  cacheGet: async (key) => ipcRenderer.invoke("cache:get", key),
-  cachePut: async (key, value) => ipcRenderer.invoke("cache:put", key, value),
-  queueAdd: async (op) => ipcRenderer.invoke("queue:add", op),
+  cacheGet: async (key: string) => ipcRenderer.invoke("cache:get", key),
+  cachePut: async (key: string, value: any) => ipcRenderer.invoke("cache:put", key, value),
+  queueAdd: async (op: any) => ipcRenderer.invoke("queue:add", op),
   queueList: async () => ipcRenderer.invoke("queue:list"),
   queueClear: async () => ipcRenderer.invoke("queue:clear"),
-  queueSet: async (list) => ipcRenderer.invoke("queue:set", list),
+  queueSet: async (list: any[]) => ipcRenderer.invoke("queue:set", list),
   getPeers: async () => ipcRenderer.invoke("p2p:getPeers"),
-  onPeers: (cb) => {
-    const handler = (_e, list) => cb(list);
+  onPeers: (cb: (list: any[]) => void) => {
+    const handler = (_e: any, list: any[]) => cb(list);
     ipcRenderer.on("p2p:peers", handler);
     return () => ipcRenderer.removeListener("p2p:peers", handler);
   },
-  broadcast: (message) => ipcRenderer.send("p2p:broadcast", message),
-  sendToPeer: (deviceId, message) => ipcRenderer.send("p2p:sendToPeer", deviceId, message),
-  onP2PMessage: (cb) => {
-    const handler = (_e, payload) => cb(payload);
+  broadcast: (message: any) => ipcRenderer.send("p2p:broadcast", message),
+  sendToPeer: (deviceId: string, message: any) => ipcRenderer.send("p2p:sendToPeer", deviceId, message),
+  onP2PMessage: (cb: (payload: any) => void) => {
+    const handler = (_e: any, payload: any) => cb(payload);
     ipcRenderer.on("p2p:message", handler);
     return () => ipcRenderer.removeListener("p2p:message", handler);
   },
   // Updater
   checkForUpdates: () => ipcRenderer.send('updater:check'),
   quitAndInstall: () => ipcRenderer.send('updater:quitAndInstall'),
-  onUpdateAvailable: (cb) => {
-    const handler = (_e, info) => cb(info);
+  onUpdateAvailable: (cb: (info: any) => void) => {
+    const handler = (_e: any, info: any) => cb(info);
     ipcRenderer.on('updater:update-available', handler);
     return () => ipcRenderer.removeListener('updater:update-available', handler);
   },
-  onUpdateDownloaded: (cb) => {
-    const handler = (_e, info) => cb(info);
+  onUpdateDownloaded: (cb: (info: any) => void) => {
+    const handler = (_e: any, info: any) => cb(info);
     ipcRenderer.on('updater:update-downloaded', handler);
     return () => ipcRenderer.removeListener('updater:update-downloaded', handler);
   },
-  onUpdateStatus: (cb) => {
-    const handler = (_e, text) => cb(text);
+  onUpdateStatus: (cb: (text: string) => void) => {
+    const handler = (_e: any, text: string) => cb(text);
     ipcRenderer.on('updater:status', handler);
     return () => ipcRenderer.removeListener('updater:status', handler);
   },

@@ -78,7 +78,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   /**
    * ------------------------------------------------------
-   * STEP 2 — NETWORK STATUS SYNC (ELECTRON)
+   * STEP 2 — NETWORK STATUS SYNC (ELECTRON ONLY)
    * ------------------------------------------------------
    */
   useEffect(() => {
@@ -87,23 +87,37 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const api = (window as any).electronAPI;
     if (!api) return;
 
-    const sync = () => api.setNetworkStatus(navigator.onLine);
-
-    sync();
-    window.addEventListener("online", sync);
-    window.addEventListener("offline", sync);
-
+    // 1. Initial Fetch from Main Process
     api
       .getNetworkStatus()
-      .then(({ online }: any) => setIsOnline(online))
-      .catch(() => setIsOnline(navigator.onLine));
+      .then(({ online }: any) => {
+        console.log("[Providers] Initial network status:", online);
+        setIsOnline(online);
+      })
+      .catch((err: any) => {
+        console.error("[Providers] Failed to get network status:", err);
+        // Fallback to false if IPC fails, forcing offline mode until update
+        setIsOnline(false);
+      });
 
-    const off = api.onNetworkStatus(({ online }: any) => setIsOnline(online));
+    // 2. Listen for Updates from Main Process
+    const removeListener = api.onNetworkStatus(({ online }: any) => {
+      console.log("[Providers] Network status updated:", online);
+      setIsOnline(online);
+    });
+
+    // 3. Notify Main Process of Browser Events (Optional but helpful)
+    // We strictly trust the Main Process response, but we can hint it to check.
+    const handleBrowserOnline = () => api.setNetworkStatus(true);
+    const handleBrowserOffline = () => api.setNetworkStatus(false);
+
+    window.addEventListener("online", handleBrowserOnline);
+    window.addEventListener("offline", handleBrowserOffline);
 
     return () => {
-      window.removeEventListener("online", sync);
-      window.removeEventListener("offline", sync);
-      off && off();
+      window.removeEventListener("online", handleBrowserOnline);
+      window.removeEventListener("offline", handleBrowserOffline);
+      if (removeListener) removeListener();
     };
   }, []);
 
