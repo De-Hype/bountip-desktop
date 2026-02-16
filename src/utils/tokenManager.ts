@@ -61,6 +61,10 @@ export const tokenManager = {
     }
   },
 
+  async hydrate(): Promise<AuthTokens | null> {
+    return this.loadTokensFromStore();
+  },
+
   getAccessToken(): string | null {
     return this.getTokens()?.accessToken ?? null;
   },

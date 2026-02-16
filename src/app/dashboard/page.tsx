@@ -125,7 +125,7 @@ const Dashboard = () => {
         const list = await api.getPeers();
         setPeers(list || []);
         setLogs((prev) =>
-          [`Discovered ${list?.length || 0} peer(s)`, ...prev].slice(0, 100)
+          [`Discovered ${list?.length || 0} peer(s)`, ...prev].slice(0, 100),
         );
       } catch {}
     })();
@@ -133,7 +133,7 @@ const Dashboard = () => {
     const offPeers = api.onPeers((list) => {
       setPeers(list || []);
       setLogs((prev) =>
-        [`Peers updated: ${list?.length || 0}`, ...prev].slice(0, 100)
+        [`Peers updated: ${list?.length || 0}`, ...prev].slice(0, 100),
       );
     });
 
@@ -214,16 +214,16 @@ const Dashboard = () => {
     {
       icon: AssetsFiles.analytics,
       title: "Report & Analysis",
-      path: "/report-analysis",
-     // badge: "Coming Soon",
+      path: "/dashboard/report-analysis",
+      // badge: "Coming Soon",
       available: true,
     },
     {
       icon: AssetsFiles.phusers,
       title: "Roles & Permissions",
-      path: "/roles-permissions",
-      badge: "Coming Soon",
-      available: false,
+      path: "/dashboard/roles-permissions",
+      // badge: "Coming Soon",
+      available: true,
     },
     {
       icon: AssetsFiles.settings,

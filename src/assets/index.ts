@@ -45,6 +45,8 @@ import AtmCard from "@/assets/images/AtmCard.svg";
 //Product Management Icons SVG
 import CsvCheck from "@/assets/icons/product-management/CsvCheckMark.svg";
 
+
+
 const AssetsFiles = {
   EmailImage,
   AuthBgImage,

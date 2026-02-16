@@ -8,7 +8,6 @@ import { performLogout } from "@/services/authSession";
 import { useAuthStore } from "@/stores/authStore";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 
-// Define route titles mapping
 const routeTitles: Record<string, string> = {
   "/dashboard/pos": "Point of Sale",
   "/dashboard": "Dashboard",
@@ -18,8 +17,17 @@ const routeTitles: Record<string, string> = {
   "/dashboard/inventory": "Inventory Management",
   "/dashboard/customers": "Customer Management",
   "/dashboard/orders": "Order Management",
-  "/dashboard/reports": "Reports & Analytics",
+  "/dashboard/report-analysis": "Reports & Analysis",
+  "/dashboard/roles-permissions": "Roles & Permissions",
   "/dashboard/settings": "Settings",
+};
+
+const routeDescriptions: Record<string, string> = {
+  "/dashboard/settings": "Manage your business and personal preferences here",
+  "/dashboard/report-analysis":
+    "Analyze sales, performance, and key metrics for your business.",
+  "/dashboard/roles-permissions":
+    "Manage access level control between your staff",
 };
 
 interface Notification {
@@ -108,8 +116,8 @@ export default function AppHeader() {
     setSelectedNotification(notification);
     setNotifications(
       notifications.map((n) =>
-        n.id === notification.id ? { ...n, isRead: true } : n
-      )
+        n.id === notification.id ? { ...n, isRead: true } : n,
+      ),
     );
   };
 
@@ -123,23 +131,19 @@ export default function AppHeader() {
     setIsPanelOpen(false);
   };
 
-  // Get the page title based on current route
   const pageTitle = useMemo(() => {
-    // Try exact match first
     if (routeTitles[pathname]) {
       return routeTitles[pathname];
     }
 
-    // Try to find partial match (for nested routes)
     const matchedRoute = Object.keys(routeTitles).find(
-      (route) => pathname.startsWith(route) && route !== "/"
+      (route) => pathname.startsWith(route) && route !== "/",
     );
 
     if (matchedRoute) {
       return routeTitles[matchedRoute];
     }
 
-    // Default fallback - capitalize first segment
     const segments = pathname.split("/").filter(Boolean);
     if (segments.length > 0) {
       return segments[segments.length - 1]
@@ -151,17 +155,21 @@ export default function AppHeader() {
     return "Dashboard";
   }, [pathname]);
 
+  const headerDescription = routeDescriptions[pathname];
+  const headerTitle =
+    pathname === "/dashboard/settings" ? "General Settings" : pageTitle;
+
   return (
     <>
       <header className="bg-white px-8 py-4">
         <div className="flex items-center justify-between">
-          {pageTitle === "Settings" ? (
+          {headerDescription ? (
             <div className="flex flex-col gap-3">
               <h1 className="text-2xl font-bold text-[#1C1B20]">
-                General Settings
+                {headerTitle}
               </h1>
               <p className="text-[16px] text-[#737373] mt-1">
-                Manage your business and personal preferences here
+                {headerDescription}
               </p>
             </div>
           ) : (
