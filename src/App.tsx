@@ -8,7 +8,7 @@ import VerifyPage from "./app/(auth)/verify/page";
 import DashboardPage from "./app/dashboard/page";
 import DashboardLayout from "./app/dashboard/layout";
 import SettingsPage from "./app/dashboard/settings/page";
-import CustomerSettingsPage from "./app/dashboard/settings/customer/page";
+//import CustomerSettingsPage from "./app/dashboard/settings/customer/page";
 import CustomizationSettingsPage from "./app/dashboard/settings/customization/page";
 import ReportAnalysisPage from "./app/dashboard/report-analysis/page";
 import RolesAndPermissionPage from "./app/dashboard/roles-permissions/page";
@@ -36,10 +36,10 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardLayoutWrapper />}>
             <Route index element={<DashboardPage />} />
             <Route path="settings" element={<SettingsPage />} />
-            <Route
+            {/* <Route
               path="settings/customer"
               element={<CustomerSettingsPage />}
-            />
+            /> */}
             <Route
               path="settings/customization"
               element={<CustomizationSettingsPage />}

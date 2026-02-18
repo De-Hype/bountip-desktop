@@ -16,7 +16,7 @@ const CatalogueProductList = () => {
   return (
     <section className="bg-white rounded-[14px]  mx-5 px-4 py-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-col gap-[16px]">
+        <div className="flex flex-col gap-[16px] w-[380px]">
           <h2 className="text-xl font-semibold text-[#1C1B20]">All Products</h2>
           <p className="text-sm text-[#737373]">
             Create, organize, and manage all your bakery products in one place

@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { ChevronRight } from "lucide-react";
 import settingsItems from "@/data/settingItems";
-import { BusinessDetailsModal } from "@/features/settings/components/BusinessDetailsModal";
+import { BusinessDetailsModal } from "@/features/settings/tabs/BusinessDetailsModal";
 //import { PaymentMethodsModal } from "@/features/settings/components/PaymentMethodsModal";
 
 import { useBusinessStore } from "@/stores/useBusinessStore";

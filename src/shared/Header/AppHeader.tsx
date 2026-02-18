@@ -20,10 +20,13 @@ const routeTitles: Record<string, string> = {
   "/dashboard/report-analysis": "Reports & Analysis",
   "/dashboard/roles-permissions": "Roles & Permissions",
   "/dashboard/settings": "Settings",
+  "/dashboard/settings/customization": "General Settings",
 };
 
 const routeDescriptions: Record<string, string> = {
   "/dashboard/settings": "Manage your business and personal preferences here",
+  "/dashboard/settings/customization":
+    "Manage your business and personal preferences here",
   "/dashboard/report-analysis":
     "Analyze sales, performance, and key metrics for your business.",
   "/dashboard/roles-permissions":
