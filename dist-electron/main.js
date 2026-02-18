@@ -280,6 +280,18 @@ class P2PService {
   }
   startUdpDiscovery() {
     this.udpSocket = dgram.createSocket({ type: "udp4", reuseAddr: true });
+    this.udpSocket.on("error", (err) => {
+      const code = err.code;
+      if (code === "EADDRNOTAVAIL") {
+        console.warn(
+          "[P2PService] Multicast address not available. P2P discovery disabled."
+        );
+        this.udpSocket?.close();
+        this.udpSocket = null;
+        return;
+      }
+      console.error("[P2PService] UDP socket error:", err);
+    });
     this.udpSocket.on("message", (msg, rinfo) => {
       try {
         const json2 = JSON.parse(msg.toString());
@@ -295,8 +307,24 @@ class P2PService {
       }
     });
     this.udpSocket.bind(MULTICAST_PORT, () => {
-      this.udpSocket?.addMembership(MULTICAST_ADDR);
-      this.udpSocket?.setMulticastLoopback(true);
+      try {
+        this.udpSocket?.addMembership(MULTICAST_ADDR);
+        this.udpSocket?.setMulticastLoopback(true);
+      } catch (err) {
+        const code = err.code;
+        if (code === "EADDRNOTAVAIL") {
+          console.warn(
+            "[P2PService] addMembership failed with EADDRNOTAVAIL. P2P discovery disabled."
+          );
+          this.udpSocket?.close();
+          this.udpSocket = null;
+          return;
+        }
+        console.error(
+          "[P2PService] Unexpected error during multicast setup:",
+          err
+        );
+      }
     });
     setInterval(() => {
       const msg = JSON.stringify({

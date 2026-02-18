@@ -93,26 +93,5 @@ const settingsItems: ISettingItem[] = [
     icon: SettingFiles.LabelingSettings,
     color: "border border-[#15BA5C] text-green-600",
   },
-  {
-    id: "payment-Tiers",
-    title: "Payment Tiers",
-    description: "set up your payment tiers ",
-    icon: SettingFiles.PaymentIcon,
-    color: "border border-[#15BA5C] text-green-600",
-  },
-  {
-    id: "customer-Tiers",
-    title: "Customers",
-    description: "Set up your customer tiers",
-    icon: SettingFiles.PaymentIcon,
-    color: "border border-[#15BA5C] text-green-600",
-  },
-  // {
-  //   id: "register",
-  //   title: "Register",
-  //   description: "Add the registers available in your business",
-  //   icon: SettingFiles.RegisterSettingsIcon, // Update with your actual path
-  //   color: "border border-[#15BA5C] text-green-600",
-  // },
 ];
 export default settingsItems;

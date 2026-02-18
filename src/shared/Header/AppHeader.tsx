@@ -11,9 +11,9 @@ import { useBusinessStore } from "@/stores/useBusinessStore";
 const routeTitles: Record<string, string> = {
   "/dashboard/pos": "Point of Sale",
   "/dashboard": "Dashboard",
-  "/dashboard/products": "Product Management",
-  "/dashboard/products/catalogue": "Product Catalogue",
-  "/dashboard/products/basket": "Product Basket",
+  "/dashboard/product-management": "Product Management",
+  "/dashboard/product-managment/catalogue": "Product Catalogue",
+  "/dashboard/product-management/basket": "Product Basket",
   "/dashboard/inventory": "Inventory Management",
   "/dashboard/customers": "Customer Management",
   "/dashboard/orders": "Order Management",

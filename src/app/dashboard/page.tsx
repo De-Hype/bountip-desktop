@@ -163,23 +163,20 @@ const Dashboard = () => {
       path: "/dashboard/product-management",
       available: true,
     },
-    /*     {
-      icon: AssetsFiles.PreIcon,
-      title: "Pre-Order",
-      path: "/pre-order",
-      available: true,
-    }, */
+
     {
       icon: AssetsFiles.cardpos,
       title: "Point of Sale (POS)",
       path: "/pos",
-      available: true,
+      badge: "Coming Soon",
+      available: false,
     },
     {
       icon: AssetsFiles.productionbelt,
       title: "Production Management",
       path: "/production",
-      available: true,
+      badge: "Coming Soon",
+      available: false,
     },
     {
       icon: AssetsFiles.noodlebowl,
@@ -187,36 +184,21 @@ const Dashboard = () => {
       path: "/receipt-management",
       badge: "Coming Soon",
       available: false,
-      // Example badge custom styles (optional)
-      // badgeContainerClassName: "mt-4",
-      // badgeImageClassName: "h-8",
-      // badgeTextClassName: "text-sm font-bold"
     },
     {
       icon: AssetsFiles.inventory,
       title: "Inventory",
       path: "/inventory",
-      // badge: "Coming Soon",
-      available: true,
+      badge: "Coming Soon",
+      available: false,
     },
-    /*    {
-      icon: AssetsFiles.ProductionIcon,
-      title: "Production Module",
-      path: "/production",
-      available: true,
-    },
-    {
-      icon: AssetsFiles.ProductManagementIcon,
-      title: "Product Management",
-      path: "/product-management",
-      available: true,
-    }, */
+
     {
       icon: AssetsFiles.analytics,
       title: "Report & Analysis",
       path: "/dashboard/report-analysis",
-      // badge: "Coming Soon",
-      available: true,
+      badge: "Coming Soon",
+      available: false,
     },
     {
       icon: AssetsFiles.phusers,

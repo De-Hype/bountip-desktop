@@ -15,6 +15,7 @@ import RolesAndPermissionPage from "./app/dashboard/roles-permissions/page";
 import OnboardingPage from "./app/onboarding/page";
 import PrivacyPolicyPage from "./app/privacy-policy/page";
 import TermsPage from "./app/terms-and-conditions/page";
+import ProductManagementPage from "./app/dashboard/product-management/page";
 
 const DashboardLayoutWrapper = () => (
   <DashboardLayout>
@@ -47,6 +48,10 @@ export default function App() {
             <Route
               path="roles-permissions"
               element={<RolesAndPermissionPage />}
+            />
+            <Route
+              path="product-management"
+              element={<ProductManagementPage />}
             />
           </Route>
 

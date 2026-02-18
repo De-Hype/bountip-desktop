@@ -1,7 +1,7 @@
 import RoleNotFound from "@/assets/images/not-found/roles_not_found.png"
 
 const NotFoundAssests = {
-    RoleNotFound
+  RoleNotFound,
 };
 
 export default NotFoundAssests;

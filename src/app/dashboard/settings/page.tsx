@@ -8,6 +8,15 @@ import { BusinessDetailsModal } from "@/features/settings/components/BusinessDet
 //import { PaymentMethodsModal } from "@/features/settings/components/PaymentMethodsModal";
 
 import { useBusinessStore } from "@/stores/useBusinessStore";
+import { PaymentTierModal } from "@/features/settings/tabs/PaymentTierModal";
+import { LocationSettingsModal } from "@/features/settings/tabs/LocationSettingsModal";
+import { OperatingHoursModal } from "@/features/settings/tabs/OperatingHoursModal";
+import { AccountSettingsModal } from "@/features/settings/tabs/AccountSettingsModal";
+import { PaymentMethodsModal } from "@/features/settings/tabs/PaymentMethodsModal";
+import { ReceiptSettingsModal } from "@/features/settings/tabs/ReceiptCustomizationModal";
+import { InvoiceCustomizationModal } from "@/features/settings/tabs/InvoiceCustomizationModal";
+import { LabellingSettingsModal } from "@/features/settings/tabs/LabellingSettingsModal";
+import { PasswordSettingsModal } from "@/features/settings/tabs/PasswordSettingsModal";
 //import { PriceSettingsModal } from "@/features/settings/components/PriceSettingsModal";
 
 const SettingsPage: React.FC = () => {
@@ -89,65 +98,52 @@ const SettingsPage: React.FC = () => {
         onClose={handleModalClose}
       />
 
-      {/* <PriceSettingsModal
+      <PaymentTierModal
         isOpen={activeModal === "pricing"}
         onClose={handleModalClose}
-      /> */}
+      />
 
-      {/* <PaymentMethodsModal
-        isOpen={activeModal === "payment-methods"}
-        onClose={handleModalClose}
-      /> */}
-
-      {/* <LocationSettingsModal
+      <LocationSettingsModal
         isOpen={activeModal === "location"}
         onClose={handleModalClose}
-      /> */}
+      />
 
-      {/* <PasswordSettingsModal
-        isOpen={activeModal === "password-settings"}
-        onClose={handleModalClose}
-      /> */}
-
-      {/* <LabellingSettingsModal
-        isOpen={activeModal === "labelling-settings"}
-        onClose={handleModalClose}
-      /> */}
-
-      {/* <InventoryHubModal
-        isOpen={activeModal === "inventory-hub"}
-        onClose={handleModalClose}
-      /> */}
-
-      {/* <InvoiceCustomizationModal
-        isOpen={activeModal === "invoice-customization"}
-        onClose={handleModalClose}
-      /> */}
-
-      {/* <OperatingHoursModal
+      <OperatingHoursModal
         isOpen={activeModal === "operating-hours"}
         onClose={handleModalClose}
-      /> */}
+      />
 
-      {/* <ReceiptSettingsModal
-        isOpen={activeModal === "receipt-customization"}
-        onClose={handleModalClose}
-      /> */}
-
-      {/* <AccountSettingsModal
+      <AccountSettingsModal
         isOpen={activeModal === "account-settings"}
         onClose={handleModalClose}
-      /> */}
+      />
 
-      {/* <PaymentTierModal
-        isOpen={activeModal === "payment-Tiers"}
+      <PaymentMethodsModal
+        isOpen={activeModal === "payment-methods"}
         onClose={handleModalClose}
-      /> */}
+      />
 
-      {/* <RegisterSettingsModal
-        isOpen={activeModal === "register"}
+      <ReceiptSettingsModal
+        isOpen={activeModal === "receipt-customization"}
         onClose={handleModalClose}
-      /> */}
+      />
+
+      <InvoiceCustomizationModal
+        isOpen={activeModal === "invoice-customization"}
+        onClose={handleModalClose}
+      />
+
+      <PasswordSettingsModal
+        isOpen={activeModal === "password-settings"}
+        onClose={handleModalClose}
+      />
+
+      <LabellingSettingsModal
+        isOpen={activeModal === "labelling-settings"}
+        onClose={handleModalClose}
+      />
+
+
     </div>
   );
 };

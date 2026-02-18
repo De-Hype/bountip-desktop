@@ -14,7 +14,7 @@ const AssignPinModal = ({ isOpen, onClose }: AssignPinModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[2000000] flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-2000000 flex items-center justify-center bg-black/40">
       <div className="w-full max-w-xl bg-white rounded-[20px] shadow-xl">
         <div className="flex items-center justify-end px-6 pt-4">
           <button
