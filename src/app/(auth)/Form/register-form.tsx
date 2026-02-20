@@ -29,7 +29,7 @@ export const signupSchema = z.object({
     .min(6, "Password must be at least 6 characters")
     .regex(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,}$/,
-      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
     ),
 });
 
@@ -87,7 +87,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
       showToast(
         "success",
         "Sign up successful",
-        "Please verify your email to continue."
+        "Please verify your email to continue.",
       );
 
       navigate("/verify/");
@@ -126,7 +126,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
           <input
             type="text"
             placeholder="Enter Business Name"
-            className="text-[#1E1E1E] text-base font-medium focus:outline-none"
+            className="text-[#1E1E1E] text-base font-medium focus:outline-none placeholder-[#A6A6A6]"
             {...register("businessName")}
           />
           {errors.businessName && (
@@ -152,7 +152,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
           <input
             type="text"
             placeholder="Enter Full Name"
-            className="text-[#1E1E1E] text-base font-medium focus:outline-none"
+            className="text-[#1E1E1E] text-base font-medium focus:outline-none placeholder-[#A6A6A6]"
             {...register("fullName")}
           />
           {errors.fullName && (
@@ -176,7 +176,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
           <input
             type="email"
             placeholder="Enter Email"
-            className="text-[#1E1E1E] text-base font-medium focus:outline-none"
+            className="text-[#1E1E1E] text-base font-medium focus:outline-none placeholder-[#A6A6A6]"
             {...register("email")}
           />
           {errors.email && (
@@ -198,7 +198,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
           <input
             type={showPassword ? "text" : "password"}
             placeholder={showPassword ? "Enter Password" : "***************"}
-            className="text-[#1E1E1E] text-base font-medium focus:outline-none pr-8"
+            className="text-[#1E1E1E] text-base font-medium focus:outline-none pr-8 placeholder-[#A6A6A6]"
             {...register("password")}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -248,7 +248,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
 
       {/* Submit Button */}
       <button
-        className={`text-white font-bold text-xl py-3.5 rounded-[10px] transition-colors ${
+        className={`text-white cursor-pointer font-bold text-xl py-3.5 rounded-[10px] transition-colors ${
           isLoading || !accepted
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-[#15BA5C] hover:bg-[#13a551]"
@@ -257,6 +257,20 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
         disabled={isLoading || !accepted}
       >
         {isLoading ? "Loading..." : "Sign Up"}
+      </button>
+
+      <div className="flex items-center gap-2">
+        <span className="h-px flex-1 bg-[#E5E5E5]" />
+        <span className="text-xs text-[#9CA3AF]">Or Continue With</span>
+        <span className="h-px flex-1 bg-[#E5E5E5]" />
+      </div>
+
+      <button
+        type="button"
+        className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-[12px] border border-[#E5E5E5] bg-white py-3.5 text-[15px] font-medium text-[#1E1E1E] hover:bg-gray-50 transition-colors"
+      >
+        <img src={AssetsFiles.GoogleIcon} alt="Google" className="h-5 w-5" />
+        <span>Sign up with Google</span>
       </button>
 
       {/* Sign up/Sign in toggle */}

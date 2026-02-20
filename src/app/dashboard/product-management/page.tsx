@@ -1,4 +1,5 @@
 import CatalogueProductList from "@/features/product-management/CatalogueProductList";
+import CreateProduct from "@/features/product-management/CreateProduct";
 import { Download, Plus, ChevronDown, Upload, CloudUpload } from "lucide-react";
 import { useState } from "react";
 
@@ -7,6 +8,7 @@ const ProductManagementPage = () => {
     "catalogue",
   );
   const [isBulkMenuOpen, setIsBulkMenuOpen] = useState(false);
+  const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
 
   return (
     <section className="flex flex-col gap-4">
@@ -104,6 +106,7 @@ const ProductManagementPage = () => {
 
             <button
               type="button"
+              onClick={() => setIsCreateProductOpen(true)}
               className="inline-flex cursor-pointer h-11 items-center gap-2 rounded-[10px] bg-[#15BA5C] px-4 py-2 text-sm font-medium text-white hover:bg-[#13A652] transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -113,6 +116,10 @@ const ProductManagementPage = () => {
         )}
       </div>
       {activeTab === "catalogue" && <CatalogueProductList />}
+      <CreateProduct
+        isOpen={isCreateProductOpen}
+        onClose={() => setIsCreateProductOpen(false)}
+      />
     </section>
   );
 };

@@ -138,7 +138,7 @@ const CreateUser = () => {
               </label>
               <div className="relative">
                 <select
-                  className="w-full appearance-none rounded-[10px] bg-[#FAFAFC] border border-[#D1D1D1] px-3 py-2.5 pr-10 text-sm text-[#111827] placeholder-[#A6A6A6] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C] bg-white"
+                  className="w-full appearance-none rounded-[10px] bg-[#FAFAFC] border border-[#D1D1D1] px-3 py-2.5 pr-10 text-sm text-[#111827] placeholder-[#A6A6A6] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C] "
                   defaultValue=""
                 >
                   <option value="" disabled>
@@ -156,7 +156,7 @@ const CreateUser = () => {
               </label>
               <div className="relative">
                 <select
-                  className="w-full appearance-none rounded-[10px] bg-[#FAFAFC] border border-[#D1D1D1] px-3 py-2.5 pr-10 text-sm text-[#111827] placeholder-[#A6A6A6] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C] bg-white"
+                  className="w-full appearance-none rounded-[10px] bg-[#FAFAFC] border border-[#D1D1D1] px-3 py-2.5 pr-10 text-sm text-[#111827] placeholder-[#A6A6A6] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C]"
                   defaultValue=""
                 >
                   <option value="" disabled>

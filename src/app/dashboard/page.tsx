@@ -180,10 +180,10 @@ const Dashboard = () => {
     },
     {
       icon: AssetsFiles.noodlebowl,
-      title: "Receipt Management",
-      path: "/receipt-management",
-      badge: "Coming Soon",
-      available: false,
+      title: "Recipe Management",
+      path: "/dashboard/recipe-management",
+     // badge: "Coming Soon",
+      available: true,
     },
     {
       icon: AssetsFiles.inventory,

@@ -35,33 +35,453 @@ export class DatabaseService {
       );
     `);
 
-    // Sync Queue Table
+    // Sync Queue Table (offline-first sync operations)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS sync_queue (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        op TEXT
+        op TEXT,
+        status TEXT DEFAULT 'pending',
+        retry_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_error TEXT
       );
     `);
 
-    // Migration: Ensure new columns exist
-    const columns = this.db.pragma("table_info(sync_queue)") as any[];
-    const hasStatus = columns.some((col) => col.name === "status");
+    // Core mirrored entities from remote Postgres schema (SQLite-friendly)
+    // Note: Types are adapted to SQLite (uuid → TEXT, json/jsonb → TEXT, numeric → REAL).
 
-    if (!hasStatus) {
-      // Schema migration: Recreate table to ensure clean state with new schema
-      // Since the user asked for a "clean slate" previously, dropping the old incompatible table is acceptable.
-      this.db.exec("DROP TABLE sync_queue");
-      this.db.exec(`
-        CREATE TABLE sync_queue (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          op TEXT,
-          status TEXT DEFAULT 'pending', -- pending, syncing, failed
-          retry_count INTEGER DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          last_error TEXT
-        );
-      `);
-    }
+    // business
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS business (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        slug TEXT,
+        status TEXT DEFAULT 'active' NOT NULL,
+        logoUrl TEXT,
+        country TEXT,
+        businessType TEXT,
+        address TEXT,
+        currency TEXT,
+        revenueRange TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        lastSyncedAt TEXT,
+        ownerId TEXT
+      );
+    `);
+
+    // business_outlet
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS business_outlet (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        address TEXT,
+        state TEXT,
+        email TEXT,
+        postalCode TEXT,
+        phoneNumber TEXT,
+        whatsappNumber TEXT,
+        currency TEXT,
+        revenueRange TEXT,
+        country TEXT,
+        storeCode TEXT,
+        localInventoryRef TEXT,
+        centralInventoryRef TEXT,
+        outletRef TEXT,
+        isMainLocation INTEGER DEFAULT 0 NOT NULL,
+        businessType TEXT,
+        isActive INTEGER DEFAULT 1 NOT NULL,
+        whatsappChannel INTEGER DEFAULT 1 NOT NULL,
+        emailChannel INTEGER DEFAULT 1 NOT NULL,
+        isDeleted INTEGER DEFAULT 0 NOT NULL,
+        isOnboarded INTEGER DEFAULT 0 NOT NULL,
+        operatingHours TEXT,
+        logoUrl TEXT,
+        taxSettings TEXT,
+        serviceCharges TEXT,
+        paymentMethods TEXT,
+        priceTier TEXT,
+        receiptSettings TEXT,
+        labelSettings TEXT,
+        invoiceSettings TEXT,
+        generalSettings TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        lastSyncedAt TEXT,
+        businessId TEXT,
+        bankDetails TEXT
+      );
+    `);
+
+    // business_role
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS business_role (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        permissions TEXT NOT NULL,
+        createdAt TEXT,
+        updatedAt TEXT,
+        businessId TEXT NOT NULL
+      );
+    `);
+
+    // business_user
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS business_user (
+        id TEXT PRIMARY KEY,
+        accessType TEXT DEFAULT 'super_admin' NOT NULL,
+        permissions TEXT,
+        status TEXT DEFAULT 'active' NOT NULL,
+        invitedBy TEXT,
+        invitationToken TEXT,
+        invitationExpiry TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        lastSyncedAt TEXT,
+        userId TEXT,
+        outletId TEXT NOT NULL,
+        businessId TEXT NOT NULL
+      );
+    `);
+
+    // business_user_roles_business_role (join table)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS business_user_roles_business_role (
+        businessUserId TEXT NOT NULL,
+        businessRoleId TEXT NOT NULL,
+        PRIMARY KEY (businessUserId, businessRoleId)
+      );
+    `);
+
+    // customers
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id TEXT PRIMARY KEY,
+        email TEXT,
+        name TEXT,
+        phoneNumber TEXT,
+        customerCode TEXT,
+        status TEXT DEFAULT 'active' NOT NULL,
+        verificationCode TEXT,
+        verificationCodeExpiry TEXT,
+        emailVerified INTEGER DEFAULT 0 NOT NULL,
+        phoneVerfied INTEGER DEFAULT 0 NOT NULL,
+        reference TEXT,
+        createdAt TEXT,
+        outletId TEXT,
+        otherEmails TEXT,
+        otherNames TEXT,
+        otherPhoneNumbers TEXT,
+        customerType TEXT DEFAULT 'individual' NOT NULL,
+        pricingTier TEXT,
+        paymentTermId TEXT,
+        organizationName TEXT,
+        addedBy TEXT,
+        updatedBy TEXT,
+        updatedAt TEXT,
+        deletedAt TEXT
+      );
+    `);
+
+    // customer_address
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS customer_address (
+        id TEXT PRIMARY KEY,
+        address TEXT,
+        isDefault INTEGER DEFAULT 0 NOT NULL,
+        createdAt TEXT,
+        updatedAt TEXT,
+        customerId TEXT
+      );
+    `);
+
+    // product
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS product (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        isActive INTEGER DEFAULT 1 NOT NULL,
+        description TEXT,
+        category TEXT,
+        price REAL,
+        preparationArea TEXT,
+        weight REAL,
+        productCode TEXT,
+        weightScale TEXT,
+        productAvailableStock REAL,
+        packagingMethod TEXT,
+        priceTierId TEXT,
+        allergenList TEXT,
+        logoUrl TEXT,
+        logoHash TEXT,
+        leadTime INTEGER,
+        availableAtStorefront INTEGER DEFAULT 0 NOT NULL,
+        createdAtStorefront INTEGER DEFAULT 0 NOT NULL,
+        isDeleted INTEGER DEFAULT 0 NOT NULL,
+        createdAt TEXT,
+        updatedAt TEXT,
+        lastSyncedAt TEXT,
+        outletId TEXT
+      );
+    `);
+
+    // cart
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS cart (
+        id TEXT PRIMARY KEY,
+        reference TEXT NOT NULL,
+        status TEXT DEFAULT 'active' NOT NULL,
+        createdAt TEXT,
+        updatedAt TEXT,
+        outletId TEXT,
+        itemCount INTEGER DEFAULT 0 NOT NULL,
+        totalQuantity INTEGER DEFAULT 0 NOT NULL,
+        totalAmount REAL DEFAULT 0 NOT NULL,
+        customerId TEXT
+      );
+    `);
+
+    // cart_item
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS cart_item (
+        id TEXT PRIMARY KEY,
+        productId TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unitPrice REAL DEFAULT 0 NOT NULL,
+        cartId TEXT,
+        priceTierDiscount REAL DEFAULT 0 NOT NULL,
+        priceTierMarkup REAL DEFAULT 0 NOT NULL
+      );
+    `);
+
+    // cart_item_modifier
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS cart_item_modifier (
+        id TEXT PRIMARY KEY,
+        unitAmount REAL NOT NULL,
+        modifierOptionId TEXT NOT NULL,
+        modifierOptionName TEXT NOT NULL,
+        quantity INTEGER DEFAULT 1 NOT NULL,
+        cartItemId TEXT,
+        modifierId TEXT,
+        priceTierDiscount REAL DEFAULT 0 NOT NULL,
+        priceTierMarkup REAL DEFAULT 0 NOT NULL
+      );
+    `);
+
+    // inventory
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS inventory (
+        id TEXT PRIMARY KEY,
+        type TEXT DEFAULT 'central' NOT NULL,
+        allowProcurement INTEGER DEFAULT 1 NOT NULL,
+        location TEXT,
+        reference TEXT,
+        externalReference TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        businessId TEXT,
+        outletId TEXT
+      );
+    `);
+
+    // inventory_item
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS inventory_item (
+        id TEXT PRIMARY KEY,
+        costMethod TEXT DEFAULT 'weighted_average' NOT NULL,
+        costPrice REAL DEFAULT 0 NOT NULL,
+        currentStockLevel REAL DEFAULT 0 NOT NULL,
+        minimumStockLevel REAL DEFAULT 0 NOT NULL,
+        reOrderLevel REAL DEFAULT 0 NOT NULL,
+        isDeleted INTEGER DEFAULT 0 NOT NULL,
+        addedBy TEXT,
+        modifiedBy TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        itemMasterId TEXT NOT NULL,
+        inventoryId TEXT
+      );
+    `);
+
+    // item_master
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS item_master (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        itemCode TEXT NOT NULL,
+        businessId TEXT NOT NULL,
+        category TEXT NOT NULL,
+        itemType TEXT NOT NULL,
+        unitOfPurchase TEXT NOT NULL,
+        unitOfTransfer TEXT NOT NULL,
+        unitOfConsumption TEXT NOT NULL,
+        displayedUnitOfMeasure TEXT NOT NULL,
+        transferPerPurchase REAL DEFAULT 0 NOT NULL,
+        consumptionPerTransfer REAL DEFAULT 0 NOT NULL,
+        isTraceable INTEGER DEFAULT 0 NOT NULL,
+        isTrackable INTEGER DEFAULT 0 NOT NULL,
+        createdAt TEXT,
+        updatedAt TEXT
+      );
+    `);
+
+    // item_lot
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS item_lot (
+        id TEXT PRIMARY KEY,
+        lotNumber TEXT NOT NULL,
+        quantityPurchased REAL NOT NULL,
+        supplierName TEXT,
+        supplierSesrialNumber TEXT,
+        supplierAddress TEXT,
+        currentStockLevel REAL NOT NULL,
+        initialStockLevel REAL NOT NULL,
+        expiryDate TEXT,
+        costPrice REAL NOT NULL,
+        createdAt TEXT,
+        updatedAt TEXT,
+        itemId TEXT
+      );
+    `);
+
+    // recipes
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS recipes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        productReference TEXT NOT NULL,
+        productName TEXT NOT NULL,
+        outletId TEXT NOT NULL,
+        mix TEXT DEFAULT 'standard' NOT NULL,
+        totalPortions REAL NOT NULL,
+        totalMixCost REAL DEFAULT 0 NOT NULL,
+        preparationTime REAL DEFAULT 0 NOT NULL,
+        difficulty_level TEXT DEFAULT 'Medium' NOT NULL,
+        instructions TEXT NOT NULL,
+        imageUrl TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        createdBy TEXT NOT NULL,
+        isDeleted INTEGER DEFAULT 0 NOT NULL,
+        inventoryId TEXT
+      );
+    `);
+
+    // recipe_ingredients
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS recipe_ingredients (
+        id TEXT PRIMARY KEY,
+        itemName TEXT NOT NULL,
+        unitOfMeasure TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        proposedFoodCost REAL DEFAULT 0 NOT NULL,
+        prepWaste REAL DEFAULT 0 NOT NULL,
+        critical INTEGER DEFAULT 0 NOT NULL,
+        isDeleted INTEGER DEFAULT 0 NOT NULL,
+        createdAt TEXT,
+        updatedAt TEXT,
+        recipeId TEXT,
+        itemId TEXT
+      );
+    `);
+
+    // system_default
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS system_default (
+        id TEXT PRIMARY KEY,
+        key TEXT DEFAULT 'category' NOT NULL,
+        data TEXT DEFAULT '[]' NOT NULL,
+        outletId TEXT
+      );
+    `);
+
+    // sync_session
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS sync_session (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        deviceId TEXT,
+        deviceName TEXT,
+        status TEXT DEFAULT 'initial' NOT NULL,
+        direction TEXT DEFAULT 'pull' NOT NULL,
+        scope TEXT,
+        recordsPulled INTEGER DEFAULT 0 NOT NULL,
+        recordsPushed INTEGER DEFAULT 0 NOT NULL,
+        tableStats TEXT,
+        startedAt TEXT,
+        completedAt TEXT,
+        nextSyncFrom TEXT,
+        conflicts TEXT,
+        errorMessage TEXT,
+        errorDetails TEXT,
+        createdAt TEXT,
+        updatedAt TEXT
+      );
+    `);
+
+    // sync_table_log
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS sync_table_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sessionId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        businessId TEXT,
+        outletId TEXT,
+        tableName TEXT NOT NULL,
+        operation TEXT DEFAULT 'pull' NOT NULL,
+        recordsProcessed INTEGER DEFAULT 0 NOT NULL,
+        syncVersion INTEGER DEFAULT 1 NOT NULL,
+        syncedAt TEXT NOT NULL,
+        lastRecordTimestamp TEXT,
+        cursorState TEXT,
+        filterState TEXT,
+        conflictsDetected INTEGER DEFAULT 0 NOT NULL,
+        conflictsResolved INTEGER DEFAULT 0 NOT NULL,
+        createdAt TEXT
+      );
+    `);
+
+    // user
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS user (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        fullName TEXT NOT NULL,
+        password TEXT,
+        pin TEXT NOT NULL,
+        otpCodeHash TEXT,
+        otpCodeExpiry TEXT,
+        failedLoginCount INTEGER,
+        failedLoginRetryTime TEXT,
+        lastFailedLogin TEXT,
+        isEmailVerified INTEGER DEFAULT 0 NOT NULL,
+        isPin INTEGER DEFAULT 0 NOT NULL,
+        isDeleted INTEGER DEFAULT 0 NOT NULL,
+        lastLoginAt TEXT,
+        status TEXT DEFAULT 'inactive' NOT NULL,
+        authProvider TEXT,
+        providerId TEXT,
+        publicId TEXT,
+        providerData TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        lastSyncedAt TEXT
+      );
+    `);
+
+    // notifications
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        isRead INTEGER DEFAULT 0 NOT NULL,
+        createdAt TEXT,
+        userId TEXT
+      );
+    `);
   }
 
   // Identity Methods
@@ -107,7 +527,7 @@ export class DatabaseService {
   getQueue(): any[] {
     const rows = this.db
       .prepare(
-        "SELECT op FROM sync_queue WHERE status = 'pending' ORDER BY id ASC"
+        "SELECT op FROM sync_queue WHERE status = 'pending' ORDER BY id ASC",
       )
       .all() as { op: string }[];
     return rows.map((r) => JSON.parse(r.op));
@@ -117,7 +537,7 @@ export class DatabaseService {
   getPendingQueueItems() {
     return this.db
       .prepare(
-        "SELECT * FROM sync_queue WHERE status = 'pending' ORDER BY id ASC"
+        "SELECT * FROM sync_queue WHERE status = 'pending' ORDER BY id ASC",
       )
       .all();
   }
@@ -136,7 +556,7 @@ export class DatabaseService {
     // So we mark it as failed immediately and stop trying.
     this.db
       .prepare(
-        "UPDATE sync_queue SET status = 'failed', last_error = ? WHERE id = ?"
+        "UPDATE sync_queue SET status = 'failed', last_error = ? WHERE id = ?",
       )
       .run(error, id);
   }
@@ -147,7 +567,7 @@ export class DatabaseService {
 
   setQueue(list: any[]) {
     const insert = this.db.prepare(
-      "INSERT INTO sync_queue (op, status) VALUES (?, ?)"
+      "INSERT INTO sync_queue (op, status) VALUES (?, ?)",
     );
     const clear = this.db.prepare("DELETE FROM sync_queue");
 

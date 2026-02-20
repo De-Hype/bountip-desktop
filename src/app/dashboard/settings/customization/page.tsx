@@ -3,7 +3,12 @@
 import { useState } from "react";
 import CustomizationSidebar from "@/features/settings/tabs/customization/CustomizationSidebar";
 import NotFound from "@/features/settings/tabs/customization/NotFound";
+import BasicInfo from "@/features/settings/tabs/customization/BasicInfo";
 import { StoreFrontCustomizationStep } from "@/types/settings/customization";
+import CustomizeTab from "@/features/settings/tabs/customization/CustomizeTab";
+import BusinessOperations from "@/features/settings/tabs/customization/BusinessOperations";
+import ProductInfo from "@/features/settings/tabs/customization/ProductInfo";
+import PreviewStoreFront from "@/features/settings/tabs/customization/PreviewStoreFront";
 
 const steps: { id: StoreFrontCustomizationStep; label: string }[] = [
   { id: "basic-information", label: "Basic Information" },
@@ -25,13 +30,22 @@ const CustomizationPage = () => {
             <CustomizationSidebar
               activeStep={activeStep}
               onStepChange={setActiveStep}
-              disabled={true}
+              disabled={false}
               steps={steps}
             />
           </div>
 
-          <section className="rounded-[14px] bg-white px-4 py-4 min-h-[60vh]">
-            <NotFound />
+          <section className="rounded-[14px] bg-white px-4 py-4 h-[calc(100vh-5rem)] overflow-y-auto">
+            {activeStep === "basic-information" && <BasicInfo />}
+            {activeStep === "customization" && <CustomizeTab />}
+            {activeStep === "business-operations" && <BusinessOperations />}
+            {activeStep === "products" && <ProductInfo />}
+            {activeStep === "preview-storefront" && <PreviewStoreFront />}
+            {activeStep !== "basic-information" &&
+              activeStep !== "customization" &&
+              activeStep !== "business-operations" &&
+              activeStep !== "products" &&
+              activeStep !== "preview-storefront" && <NotFound />}
           </section>
         </div>
       </div>

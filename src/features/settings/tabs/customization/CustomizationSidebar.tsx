@@ -2,8 +2,6 @@ import { StoreFrontCustomizationStep } from "@/types/settings/customization";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-
-
 interface CustomizationSidebarProps {
   activeStep: StoreFrontCustomizationStep;
   onStepChange?: (step: StoreFrontCustomizationStep) => void;
@@ -11,13 +9,11 @@ interface CustomizationSidebarProps {
   steps: { id: StoreFrontCustomizationStep; label: string }[];
 }
 
-
-
 const CustomizationSidebar = ({
   activeStep,
   onStepChange,
   disabled = false,
-  steps
+  steps,
 }: CustomizationSidebarProps) => {
   const navigate = useNavigate();
 
@@ -29,7 +25,7 @@ const CustomizationSidebar = ({
   };
 
   return (
-    <aside className="flex   flex-col gap-6 py-4">
+    <aside className="flex flex-col gap-6 py-4">
       <button
         type="button"
         onClick={() => navigate("/dashboard/settings")}
@@ -73,6 +69,6 @@ const CustomizationSidebar = ({
   );
 };
 
-export type {  CustomizationSidebarProps };
+export type { CustomizationSidebarProps };
 
 export default CustomizationSidebar;

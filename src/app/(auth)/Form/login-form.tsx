@@ -26,7 +26,7 @@ export const signinSchema = z.object({
     .min(6, "Password must be at least 6 characters")
     .regex(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,}$/,
-      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
     ),
 });
 
@@ -100,13 +100,13 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         showToast(
           "error",
           "Account Inactive",
-          "Your account is inactive. Please verify your email address."
+          "Your account is inactive. Please verify your email address.",
         );
 
         navigate(
           `/verify?name=${encodeURIComponent(
-            userName
-          )}&email=${encodeURIComponent(userEmail)}/`
+            userName,
+          )}&email=${encodeURIComponent(userEmail)}/`,
         );
         return;
       }
@@ -126,7 +126,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     }
     if (pin.length < 4) return;
     const emailCookie = getCookie<string | { email?: string }>(
-      COOKIE_NAMES.TOKEN_USER_EMAIL
+      COOKIE_NAMES.TOKEN_USER_EMAIL,
     );
     const email =
       typeof emailCookie === "string" ? emailCookie : emailCookie?.email || "";
@@ -134,7 +134,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       showToast(
         "error",
         "PIN login unavailable",
-        "Please log in with your password first."
+        "Please log in with your password first.",
       );
       setPinLogin(false);
       return;
@@ -205,7 +205,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
             <input
               type="email"
               placeholder="Enter Email"
-              className="text-[#1E1E1E] text-base font-medium focus:outline-none"
+              className="text-[#1E1E1E] text-base font-medium focus:outline-none placeholder-[#A6A6A6]"
               {...register("email")}
             />
             {errors.email && (
@@ -290,13 +290,28 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       <button
         type="button"
         onClick={() => setPinLogin(!pinLogin)}
-        className="flex items-center justify-center gap-2 border py-3.5 rounded-[10px] border-[#E6E6E6] hover:bg-gray-50 transition-colors"
+        className="flex items-center cursor-pointer justify-center gap-2 border py-3.5 rounded-[10px] border-[#E6E6E6] hover:bg-gray-50 transition-colors"
       >
         <LockKeyhole />
         <span className="text-[#1E1E1E] text-[17px] font-normal">
           {pinLogin ? "Login with Email" : "Login with PIN"}
         </span>
       </button>
+
+      <div className="flex items-center gap-2">
+        <span className="h-px flex-1 bg-[#E5E5E5]" />
+        <span className="text-xs text-[#9CA3AF]">Or Continue With</span>
+        <span className="h-px flex-1 bg-[#E5E5E5]" />
+      </div>
+
+      <button
+        type="button"
+        className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-[12px] border border-[#E5E5E5] bg-white py-3.5 text-[15px] font-medium text-[#1E1E1E] hover:bg-gray-50 transition-colors"
+      >
+        <img src={AssetsFiles.GoogleIcon} alt="Google" className="h-5 w-5" />
+        <span>Login with Google</span>
+      </button>
+
       <div className="">
         <p className="text-sm text-gray-500 text-center">
           Don&apos;t have an account?{" "}

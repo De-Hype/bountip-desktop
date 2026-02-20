@@ -254,7 +254,7 @@ const RolesAndPermissionPage = () => {
             {roles.map((role) => (
               <div
                 key={role.id}
-                className="min-w-[240px] max-w-[280px] bg-[#1F2933] rounded-2xl overflow-hidden flex-shrink-0"
+                className="min-w-[240px] max-w-[280px] bg-[#1F2933] rounded-2xl overflow-hidden shrink-0"
               >
                 <div className="px-4 py-4 flex items-start justify-between">
                   <div>
@@ -461,7 +461,7 @@ const RolesAndPermissionPage = () => {
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       {openUserId === user.id && (
-                        <div className="absolute right-0 bottom-full mb-2 z-[1000000] w-44 rounded-[14px] bg-black py-2 shadow-lg">
+                        <div className="absolute right-0 bottom-full mb-2 z-1000000 w-44 rounded-[14px] bg-black py-2 shadow-lg">
                           <button
                             type="button"
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-white hover:bg-[#111111]"
@@ -496,7 +496,7 @@ const RolesAndPermissionPage = () => {
       </section>
 
       {isCreateRoleOpen && (
-        <div className="fixed inset-0 z-[2000000] flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-2000000 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-5xl bg-white rounded-[20px] shadow-xl">
             <div className="relative flex items-center justify-between px-8 pt-6 pb-4 border-[#E5E7EB]">
               <h2 className="text-[20px] font-bold text-[#111827]">
@@ -536,7 +536,7 @@ const RolesAndPermissionPage = () => {
       )}
 
       {isCreateUserOpen && (
-        <div className="fixed inset-0 z-[2000000] flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-2000000 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-5xl bg-white rounded-[20px] shadow-xl">
             <div className="flex items-center justify-between px-8 pt-6 pb-4 ">
               <h2 className="text-[20px] font-semibold text-[#111827]">

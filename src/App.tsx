@@ -8,7 +8,6 @@ import VerifyPage from "./app/(auth)/verify/page";
 import DashboardPage from "./app/dashboard/page";
 import DashboardLayout from "./app/dashboard/layout";
 import SettingsPage from "./app/dashboard/settings/page";
-//import CustomerSettingsPage from "./app/dashboard/settings/customer/page";
 import CustomizationSettingsPage from "./app/dashboard/settings/customization/page";
 import ReportAnalysisPage from "./app/dashboard/report-analysis/page";
 import RolesAndPermissionPage from "./app/dashboard/roles-permissions/page";
@@ -16,6 +15,7 @@ import OnboardingPage from "./app/onboarding/page";
 import PrivacyPolicyPage from "./app/privacy-policy/page";
 import TermsPage from "./app/terms-and-conditions/page";
 import ProductManagementPage from "./app/dashboard/product-management/page";
+import RecipeManagementPage from "./app/dashboard/recipe-management/page";
 
 const DashboardLayoutWrapper = () => (
   <DashboardLayout>
@@ -48,6 +48,10 @@ export default function App() {
             <Route
               path="roles-permissions"
               element={<RolesAndPermissionPage />}
+            />
+            <Route
+              path="recipe-management"
+              element={<RecipeManagementPage />}
             />
             <Route
               path="product-management"
