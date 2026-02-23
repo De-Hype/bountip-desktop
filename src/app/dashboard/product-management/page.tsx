@@ -116,6 +116,7 @@ const ProductManagementPage = () => {
         )}
       </div>
       {activeTab === "catalogue" && <CatalogueProductList />}
+      
       <CreateProduct
         isOpen={isCreateProductOpen}
         onClose={() => setIsCreateProductOpen(false)}

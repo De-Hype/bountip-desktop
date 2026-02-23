@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import { app } from "electron";
 import fs from "fs";
+import { schemas } from "../features/schemas";
 
 export class DatabaseService {
   private db: Database.Database;
@@ -50,81 +51,11 @@ export class DatabaseService {
     // Core mirrored entities from remote Postgres schema (SQLite-friendly)
     // Note: Types are adapted to SQLite (uuid → TEXT, json/jsonb → TEXT, numeric → REAL).
 
-    // business
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS business (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        slug TEXT,
-        status TEXT DEFAULT 'active' NOT NULL,
-        logoUrl TEXT,
-        country TEXT,
-        businessType TEXT,
-        address TEXT,
-        currency TEXT,
-        revenueRange TEXT,
-        createdAt TEXT,
-        updatedAt TEXT,
-        lastSyncedAt TEXT,
-        ownerId TEXT
-      );
-    `);
 
-    // business_outlet
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS business_outlet (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT,
-        address TEXT,
-        state TEXT,
-        email TEXT,
-        postalCode TEXT,
-        phoneNumber TEXT,
-        whatsappNumber TEXT,
-        currency TEXT,
-        revenueRange TEXT,
-        country TEXT,
-        storeCode TEXT,
-        localInventoryRef TEXT,
-        centralInventoryRef TEXT,
-        outletRef TEXT,
-        isMainLocation INTEGER DEFAULT 0 NOT NULL,
-        businessType TEXT,
-        isActive INTEGER DEFAULT 1 NOT NULL,
-        whatsappChannel INTEGER DEFAULT 1 NOT NULL,
-        emailChannel INTEGER DEFAULT 1 NOT NULL,
-        isDeleted INTEGER DEFAULT 0 NOT NULL,
-        isOnboarded INTEGER DEFAULT 0 NOT NULL,
-        operatingHours TEXT,
-        logoUrl TEXT,
-        taxSettings TEXT,
-        serviceCharges TEXT,
-        paymentMethods TEXT,
-        priceTier TEXT,
-        receiptSettings TEXT,
-        labelSettings TEXT,
-        invoiceSettings TEXT,
-        generalSettings TEXT,
-        createdAt TEXT,
-        updatedAt TEXT,
-        lastSyncedAt TEXT,
-        businessId TEXT,
-        bankDetails TEXT
-      );
-    `);
 
-    // business_role
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS business_role (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        permissions TEXT NOT NULL,
-        createdAt TEXT,
-        updatedAt TEXT,
-        businessId TEXT NOT NULL
-      );
-    `);
+    
+
+
 
     // business_user
     this.db.exec(`
@@ -196,35 +127,7 @@ export class DatabaseService {
       );
     `);
 
-    // product
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS product (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        isActive INTEGER DEFAULT 1 NOT NULL,
-        description TEXT,
-        category TEXT,
-        price REAL,
-        preparationArea TEXT,
-        weight REAL,
-        productCode TEXT,
-        weightScale TEXT,
-        productAvailableStock REAL,
-        packagingMethod TEXT,
-        priceTierId TEXT,
-        allergenList TEXT,
-        logoUrl TEXT,
-        logoHash TEXT,
-        leadTime INTEGER,
-        availableAtStorefront INTEGER DEFAULT 0 NOT NULL,
-        createdAtStorefront INTEGER DEFAULT 0 NOT NULL,
-        isDeleted INTEGER DEFAULT 0 NOT NULL,
-        createdAt TEXT,
-        updatedAt TEXT,
-        lastSyncedAt TEXT,
-        outletId TEXT
-      );
-    `);
+    
 
     // cart
     this.db.exec(`
@@ -482,6 +385,16 @@ export class DatabaseService {
         userId TEXT
       );
     `);
+
+    for (const schema of schemas) {
+      this.db.exec(schema.create);
+
+      if (schema.indexes?.length) {
+        for (const index of schema.indexes) {
+          this.db.exec(index);
+        }
+      }
+    }
   }
 
   // Identity Methods

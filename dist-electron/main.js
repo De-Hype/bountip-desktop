@@ -19,6 +19,182 @@ import require$$1$3 from "string_decoder";
 import require$$14 from "zlib";
 import require$$4$2 from "http";
 import require$$1$6 from "https";
+const userSchema = {
+  name: "user",
+  create: `
+    CREATE TABLE IF NOT EXISTS user (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      fullName TEXT NOT NULL,
+      password TEXT,
+      pin TEXT NOT NULL,
+      otpCodeHash TEXT,
+      otpCodeExpiry TEXT,
+      failedLoginCount INTEGER DEFAULT 0,
+      failedLoginRetryTime TEXT,
+      lastFailedLogin TEXT,
+      isEmailVerified INTEGER DEFAULT 0 NOT NULL,
+      isPin INTEGER DEFAULT 0 NOT NULL,
+      isDeleted INTEGER DEFAULT 0 NOT NULL,
+      lastLoginAt TEXT,
+      status TEXT DEFAULT 'inactive' NOT NULL,
+      authProvider TEXT,
+      providerId TEXT,
+      publicId TEXT,
+      providerData TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      lastSyncedAt TEXT
+    );
+  `,
+  indexes: [
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email ON user(email);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_status ON user(status);`,
+    `CREATE INDEX IF NOT EXISTS idx_user_lastSyncedAt ON user(lastSyncedAt);`
+  ]
+};
+const productSchema = {
+  name: "product",
+  create: `
+    CREATE TABLE IF NOT EXISTS product (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      isActive INTEGER DEFAULT 1 NOT NULL,
+      description TEXT,
+      category TEXT,
+      price REAL,
+      preparationArea TEXT,
+      weight REAL,
+      productCode TEXT,
+      weightScale TEXT,
+      productAvailableStock REAL,
+      packagingMethod TEXT,
+      priceTierId TEXT,
+      allergenList TEXT,
+      logoUrl TEXT,
+      logoHash TEXT,
+      leadTime INTEGER,
+      availableAtStorefront INTEGER DEFAULT 0 NOT NULL,
+      createdAtStorefront INTEGER DEFAULT 0 NOT NULL,
+      isDeleted INTEGER DEFAULT 0 NOT NULL,
+      createdAt TEXT,
+      updatedAt TEXT,
+      lastSyncedAt TEXT,
+      outletId TEXT
+    );
+  `,
+  indexes: [
+    `CREATE INDEX IF NOT EXISTS idx_product_outlet ON product(outletId);`,
+    `CREATE INDEX IF NOT EXISTS idx_product_category ON product(category);`,
+    `CREATE INDEX IF NOT EXISTS idx_product_isActive ON product(isActive);`,
+    `CREATE INDEX IF NOT EXISTS idx_product_lastSyncedAt ON product(lastSyncedAt);`
+  ]
+};
+const businessOutletSchema = {
+  name: "business_outlet",
+  create: `
+    CREATE TABLE IF NOT EXISTS business_outlet (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      address TEXT,
+      state TEXT,
+      email TEXT,
+      postalCode TEXT,
+      phoneNumber TEXT,
+      whatsappNumber TEXT,
+      currency TEXT,
+      revenueRange TEXT,
+      country TEXT,
+      storeCode TEXT,
+      localInventoryRef TEXT,
+      centralInventoryRef TEXT,
+      outletRef TEXT,
+      isMainLocation INTEGER DEFAULT 0 NOT NULL,
+      businessType TEXT,
+      isActive INTEGER DEFAULT 1 NOT NULL,
+      whatsappChannel INTEGER DEFAULT 1 NOT NULL,
+      emailChannel INTEGER DEFAULT 1 NOT NULL,
+      isDeleted INTEGER DEFAULT 0 NOT NULL,
+      isOnboarded INTEGER DEFAULT 0 NOT NULL,
+      operatingHours TEXT,
+      logoUrl TEXT,
+      taxSettings TEXT,
+      serviceCharges TEXT,
+      paymentMethods TEXT,
+      priceTier TEXT,
+      receiptSettings TEXT,
+      labelSettings TEXT,
+      invoiceSettings TEXT,
+      generalSettings TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      lastSyncedAt TEXT,
+      businessId TEXT,
+      bankDetails TEXT
+    );
+  `,
+  indexes: [
+    `CREATE INDEX IF NOT EXISTS idx_outlet_businessId ON business_outlet(businessId);`,
+    `CREATE INDEX IF NOT EXISTS idx_outlet_isActive ON business_outlet(isActive);`,
+    `CREATE INDEX IF NOT EXISTS idx_outlet_isOnboarded ON business_outlet(isOnboarded);`,
+    `CREATE INDEX IF NOT EXISTS idx_outlet_lastSyncedAt ON business_outlet(lastSyncedAt);`
+  ]
+};
+const businessSchema = {
+  name: "business",
+  create: `
+    CREATE TABLE IF NOT EXISTS business (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      slug TEXT,
+      status TEXT DEFAULT 'active' NOT NULL,
+      logoUrl TEXT,
+      country TEXT,
+      businessType TEXT,
+      address TEXT,
+      currency TEXT,
+      revenueRange TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      lastSyncedAt TEXT,
+      ownerId TEXT
+    );
+  `,
+  indexes: [
+    `CREATE INDEX IF NOT EXISTS idx_business_status ON business(status);`,
+    `CREATE INDEX IF NOT EXISTS idx_business_slug ON business(slug);`,
+    `CREATE INDEX IF NOT EXISTS idx_business_lastSyncedAt ON business(lastSyncedAt);`
+  ]
+};
+const businessRoleSchema = {
+  name: "business_role",
+  create: `
+    CREATE TABLE IF NOT EXISTS business_role (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      permissions TEXT NOT NULL,
+      createdAt TEXT,
+      updatedAt TEXT,
+      businessId TEXT NOT NULL
+    );
+  `,
+  indexes: [
+    // Speeds up queries like: get roles for a business
+    `CREATE INDEX IF NOT EXISTS idx_business_role_businessId 
+     ON business_role(businessId);`,
+    // Optional but useful if you search roles by name inside a business
+    `CREATE INDEX IF NOT EXISTS idx_business_role_name 
+     ON business_role(name);`
+  ]
+};
+const schemas = [
+  userSchema,
+  productSchema,
+  businessOutletSchema,
+  businessSchema,
+  businessRoleSchema
+];
 class DatabaseService {
   constructor() {
     const userDataPath = app.getPath("userData");
@@ -49,76 +225,6 @@ class DatabaseService {
         retry_count INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_error TEXT
-      );
-    `);
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS business (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        slug TEXT,
-        status TEXT DEFAULT 'active' NOT NULL,
-        logoUrl TEXT,
-        country TEXT,
-        businessType TEXT,
-        address TEXT,
-        currency TEXT,
-        revenueRange TEXT,
-        createdAt TEXT,
-        updatedAt TEXT,
-        lastSyncedAt TEXT,
-        ownerId TEXT
-      );
-    `);
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS business_outlet (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT,
-        address TEXT,
-        state TEXT,
-        email TEXT,
-        postalCode TEXT,
-        phoneNumber TEXT,
-        whatsappNumber TEXT,
-        currency TEXT,
-        revenueRange TEXT,
-        country TEXT,
-        storeCode TEXT,
-        localInventoryRef TEXT,
-        centralInventoryRef TEXT,
-        outletRef TEXT,
-        isMainLocation INTEGER DEFAULT 0 NOT NULL,
-        businessType TEXT,
-        isActive INTEGER DEFAULT 1 NOT NULL,
-        whatsappChannel INTEGER DEFAULT 1 NOT NULL,
-        emailChannel INTEGER DEFAULT 1 NOT NULL,
-        isDeleted INTEGER DEFAULT 0 NOT NULL,
-        isOnboarded INTEGER DEFAULT 0 NOT NULL,
-        operatingHours TEXT,
-        logoUrl TEXT,
-        taxSettings TEXT,
-        serviceCharges TEXT,
-        paymentMethods TEXT,
-        priceTier TEXT,
-        receiptSettings TEXT,
-        labelSettings TEXT,
-        invoiceSettings TEXT,
-        generalSettings TEXT,
-        createdAt TEXT,
-        updatedAt TEXT,
-        lastSyncedAt TEXT,
-        businessId TEXT,
-        bankDetails TEXT
-      );
-    `);
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS business_role (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        permissions TEXT NOT NULL,
-        createdAt TEXT,
-        updatedAt TEXT,
-        businessId TEXT NOT NULL
       );
     `);
     this.db.exec(`
@@ -181,34 +287,6 @@ class DatabaseService {
         createdAt TEXT,
         updatedAt TEXT,
         customerId TEXT
-      );
-    `);
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS product (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        isActive INTEGER DEFAULT 1 NOT NULL,
-        description TEXT,
-        category TEXT,
-        price REAL,
-        preparationArea TEXT,
-        weight REAL,
-        productCode TEXT,
-        weightScale TEXT,
-        productAvailableStock REAL,
-        packagingMethod TEXT,
-        priceTierId TEXT,
-        allergenList TEXT,
-        logoUrl TEXT,
-        logoHash TEXT,
-        leadTime INTEGER,
-        availableAtStorefront INTEGER DEFAULT 0 NOT NULL,
-        createdAtStorefront INTEGER DEFAULT 0 NOT NULL,
-        isDeleted INTEGER DEFAULT 0 NOT NULL,
-        createdAt TEXT,
-        updatedAt TEXT,
-        lastSyncedAt TEXT,
-        outletId TEXT
       );
     `);
     this.db.exec(`
@@ -440,6 +518,14 @@ class DatabaseService {
         userId TEXT
       );
     `);
+    for (const schema2 of schemas) {
+      this.db.exec(schema2.create);
+      if (schema2.indexes?.length) {
+        for (const index of schema2.indexes) {
+          this.db.exec(index);
+        }
+      }
+    }
   }
   // Identity Methods
   getIdentity() {
@@ -18253,9 +18339,11 @@ class AssetService {
 }
 const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
 const SYNC_ENDPOINT = `${API_URL}/sync`;
+const PULL_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync/pull";
 class SyncService {
   constructor(db, network, p2p) {
     this.isSyncing = false;
+    this.isPulling = false;
     this.db = db;
     this.network = network;
     this.p2p = p2p;
@@ -18272,20 +18360,62 @@ class SyncService {
   async checkLeaderAndSync() {
     const online = this.network.getStatus().online;
     if (!online) return;
-    const pending = this.db.getPendingQueueItems();
-    if (pending.length === 0) return;
     this.p2p.getPeers();
     const myId = this.p2p.getDeviceId();
     const deviceIds = this.p2p.getDevices();
     const allIds = [myId, ...deviceIds].sort();
     const leaderId = allIds[0];
-    if (myId === leaderId) {
-      console.log("[SyncService] I am the leader. Initiating sync...");
-      await this.attemptSync(pending);
-    } else {
+    if (myId !== leaderId) {
       console.log(
         `[SyncService] I am not the leader. Leader is ${leaderId}. Waiting for leader to sync (or sending to leader).`
       );
+      return;
+    }
+    console.log("[SyncService] I am the leader. Initiating pull sync...");
+    await this.performPull();
+    const pending = this.db.getPendingQueueItems();
+    if (pending.length === 0) return;
+    console.log(
+      `[SyncService] Initiating push sync for ${pending.length} pending items...`
+    );
+    await this.attemptSync(pending);
+  }
+  async performPull() {
+    if (this.isPulling) return;
+    this.isPulling = true;
+    try {
+      const identity = this.db.getIdentity();
+      const userId = identity && typeof identity === "object" ? identity.id ?? identity.userId ?? identity.user?.id ?? null : null;
+      if (!userId) {
+        console.error(
+          "[SyncService] Pull sync skipped because userId is not available in identity"
+        );
+        return;
+      }
+      const url = new URL(PULL_ENDPOINT);
+      url.searchParams.set("userId", String(userId));
+      console.log(`[SyncService] Pulling data from ${url.toString()}...`);
+      const response = await net.fetch(url.toString(), {
+        method: "GET"
+      });
+      if (!response.ok) {
+        const txt = await response.text();
+        console.error(
+          `[SyncService] Pull sync failed: HTTP ${response.status}: ${txt}`
+        );
+        return;
+      }
+      const json2 = await response.json();
+      if (!json2 || !json2.data || !json2.currentTimestamp) {
+        console.error(
+          "[SyncService] Pull sync response missing data or currentTimestamp"
+        );
+        return;
+      }
+    } catch (e) {
+      console.error("[SyncService] Pull sync error:", e);
+    } finally {
+      this.isPulling = false;
     }
   }
   async attemptSync(pending) {
@@ -18307,7 +18437,6 @@ class SyncService {
           const response = await net.fetch(SYNC_ENDPOINT, {
             method: "POST",
             body: JSON.stringify(payload),
-            // Send the operation as the body
             headers: { "Content-Type": "application/json" }
           });
           if (response.ok) {

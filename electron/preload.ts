@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer } from "electron";
 
 console.log("🔥 PRELOAD LOADED!");
 
@@ -36,14 +36,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
       return { online: true };
     }
   },
-  setNetworkStatus: (online: boolean) => ipcRenderer.send("network:setOnline", online),
+  setNetworkStatus: (online: boolean) =>
+    ipcRenderer.send("network:setOnline", online),
   onNetworkStatus: (cb: (payload: any) => void) => {
     const handler = (_e: any, payload: any) => cb(payload);
     ipcRenderer.on("network:status", handler);
     return () => ipcRenderer.removeListener("network:status", handler);
   },
   cacheGet: async (key: string) => ipcRenderer.invoke("cache:get", key),
-  cachePut: async (key: string, value: any) => ipcRenderer.invoke("cache:put", key, value),
+  cachePut: async (key: string, value: any) =>
+    ipcRenderer.invoke("cache:put", key, value),
   queueAdd: async (op: any) => ipcRenderer.invoke("queue:add", op),
   queueList: async () => ipcRenderer.invoke("queue:list"),
   queueClear: async () => ipcRenderer.invoke("queue:clear"),
@@ -55,28 +57,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("p2p:peers", handler);
   },
   broadcast: (message: any) => ipcRenderer.send("p2p:broadcast", message),
-  sendToPeer: (deviceId: string, message: any) => ipcRenderer.send("p2p:sendToPeer", deviceId, message),
+  sendToPeer: (deviceId: string, message: any) =>
+    ipcRenderer.send("p2p:sendToPeer", deviceId, message),
   onP2PMessage: (cb: (payload: any) => void) => {
     const handler = (_e: any, payload: any) => cb(payload);
     ipcRenderer.on("p2p:message", handler);
     return () => ipcRenderer.removeListener("p2p:message", handler);
   },
   // Updater
-  checkForUpdates: () => ipcRenderer.send('updater:check'),
-  quitAndInstall: () => ipcRenderer.send('updater:quitAndInstall'),
+  checkForUpdates: () => ipcRenderer.send("updater:check"),
+  quitAndInstall: () => ipcRenderer.send("updater:quitAndInstall"),
   onUpdateAvailable: (cb: (info: any) => void) => {
     const handler = (_e: any, info: any) => cb(info);
-    ipcRenderer.on('updater:update-available', handler);
-    return () => ipcRenderer.removeListener('updater:update-available', handler);
+    ipcRenderer.on("updater:update-available", handler);
+    return () =>
+      ipcRenderer.removeListener("updater:update-available", handler);
   },
   onUpdateDownloaded: (cb: (info: any) => void) => {
     const handler = (_e: any, info: any) => cb(info);
-    ipcRenderer.on('updater:update-downloaded', handler);
-    return () => ipcRenderer.removeListener('updater:update-downloaded', handler);
+    ipcRenderer.on("updater:update-downloaded", handler);
+    return () =>
+      ipcRenderer.removeListener("updater:update-downloaded", handler);
   },
   onUpdateStatus: (cb: (text: string) => void) => {
     const handler = (_e: any, text: string) => cb(text);
-    ipcRenderer.on('updater:status', handler);
-    return () => ipcRenderer.removeListener('updater:status', handler);
+    ipcRenderer.on("updater:status", handler);
+    return () => ipcRenderer.removeListener("updater:status", handler);
   },
 });

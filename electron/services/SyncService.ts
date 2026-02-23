@@ -4,13 +4,15 @@ import { P2PService } from "./P2PService";
 import { net } from "electron";
 
 const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
-const SYNC_ENDPOINT = `${API_URL}/sync`; // User will provide the specific URL
+const SYNC_ENDPOINT = `${API_URL}/sync`;
+const PULL_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync/pull";
 
 export class SyncService {
   private db: DatabaseService;
   private network: NetworkService;
   private p2p: P2PService;
   private isSyncing = false;
+  private isPulling = false;
 
   constructor(db: DatabaseService, network: NetworkService, p2p: P2PService) {
     this.db = db;
@@ -21,15 +23,12 @@ export class SyncService {
   }
 
   private init() {
-    // Listen for network status changes
     this.network.onStatusChange((online) => {
       if (online) {
         this.checkLeaderAndSync();
       }
     });
 
-    // P2P Sync Trigger (Leader Election)
-    // Runs periodically to check if we are leader and have tasks
     setInterval(() => this.checkLeaderAndSync(), 10000);
   }
 
@@ -37,28 +36,86 @@ export class SyncService {
     const online = this.network.getStatus().online;
     if (!online) return;
 
-    // optimization: Don't bother with leader election or sync if we have no pending tasks
-    const pending = this.db.getPendingQueueItems();
-    if (pending.length === 0) return;
-
-    const peers = this.p2p.getPeers(); // Active peers
+    const peers = this.p2p.getPeers();
     const myId = this.p2p.getDeviceId();
 
-    // Gather all connected device IDs
     const deviceIds = this.p2p.getDevices();
     const allIds = [myId, ...deviceIds].sort();
 
-    const leaderId = allIds[0]; // Lowest ID is leader
+    const leaderId = allIds[0];
 
-    if (myId === leaderId) {
-      console.log("[SyncService] I am the leader. Initiating sync...");
-      await this.attemptSync(pending);
-    } else {
+    if (myId !== leaderId) {
       console.log(
-        `[SyncService] I am not the leader. Leader is ${leaderId}. Waiting for leader to sync (or sending to leader).`
+        `[SyncService] I am not the leader. Leader is ${leaderId}. Waiting for leader to sync (or sending to leader).`,
       );
-      // TODO: In a full implementation, we would send 'pending' items to the leader here via P2P.
-      // For now, we wait.
+      return;
+    }
+
+    console.log("[SyncService] I am the leader. Initiating pull sync...");
+    await this.performPull();
+
+    const pending = this.db.getPendingQueueItems();
+    if (pending.length === 0) return;
+
+    console.log(
+      `[SyncService] Initiating push sync for ${pending.length} pending items...`,
+    );
+    await this.attemptSync(pending);
+  }
+
+  private async performPull() {
+    if (this.isPulling) return;
+    this.isPulling = true;
+
+    try {
+      const identity = this.db.getIdentity();
+      const userId =
+        identity && typeof identity === "object"
+          ? (identity.id ?? identity.userId ?? identity.user?.id ?? null)
+          : null;
+
+      if (!userId) {
+        console.error(
+          "[SyncService] Pull sync skipped because userId is not available in identity",
+        );
+        return;
+      }
+
+      const url = new URL(PULL_ENDPOINT);
+
+      url.searchParams.set("userId", String(userId));
+
+      console.log(`[SyncService] Pulling data from ${url.toString()}...`);
+
+      const response = await net.fetch(url.toString(), {
+        method: "GET",
+      });
+
+      if (!response.ok) {
+        const txt = await response.text();
+        console.error(
+          `[SyncService] Pull sync failed: HTTP ${response.status}: ${txt}`,
+        );
+        return;
+      }
+
+      const json = (await response.json()) as any;
+
+      if (!json || !json.data || !json.currentTimestamp) {
+        console.error(
+          "[SyncService] Pull sync response missing data or currentTimestamp",
+        );
+        return;
+      }
+
+      // this.db.applyPullData({
+      //   currentTimestamp: json.currentTimestamp,
+      //   data: json.data,
+      // });
+    } catch (e) {
+      console.error("[SyncService] Pull sync error:", e);
+    } finally {
+      this.isPulling = false;
     }
   }
 
@@ -67,7 +124,6 @@ export class SyncService {
     this.isSyncing = true;
 
     try {
-      // Use passed pending items or fetch fresh
       const itemsToSync = pending || this.db.getPendingQueueItems();
       if (itemsToSync.length === 0) {
         this.isSyncing = false;
@@ -75,7 +131,7 @@ export class SyncService {
       }
 
       console.log(
-        `[SyncService] Syncing ${itemsToSync.length} items to ${SYNC_ENDPOINT}...`
+        `[SyncService] Syncing ${itemsToSync.length} items to ${SYNC_ENDPOINT}...`,
       );
 
       for (const item of itemsToSync) {
@@ -83,10 +139,9 @@ export class SyncService {
         try {
           const payload = JSON.parse(queueItem.op);
 
-          // Always send to the specific SYNC_ENDPOINT
           const response = await net.fetch(SYNC_ENDPOINT, {
             method: "POST",
-            body: JSON.stringify(payload), // Send the operation as the body
+            body: JSON.stringify(payload),
             headers: { "Content-Type": "application/json" },
           });
 
@@ -95,17 +150,17 @@ export class SyncService {
           } else {
             const txt = await response.text();
             console.error(
-              `[SyncService] Sync failed for ${queueItem.id}: ${txt}`
+              `[SyncService] Sync failed for ${queueItem.id}: ${txt}`,
             );
             this.db.markAsFailed(
               queueItem.id,
-              `HTTP ${response.status}: ${txt}`
+              `HTTP ${response.status}: ${txt}`,
             );
           }
         } catch (e: any) {
           console.error(
             `[SyncService] Error processing item ${queueItem.id}:`,
-            e
+            e,
           );
           this.db.markAsFailed(queueItem.id, e.message);
         }

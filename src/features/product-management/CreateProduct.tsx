@@ -2,6 +2,41 @@ import { useState } from "react";
 import { X, Check } from "lucide-react";
 import AssetsFiles from "@/assets";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
+import useBusinessStore from "@/stores/useBusinessStore";
+
+type ProductCreatePayload = {
+  name: string;
+  description: string | null;
+  category: string | null;
+  preparationArea: string | null;
+  price: number | null;
+  priceTierId: string[] | null;
+  allergens: string[];
+  allergenList: string[];
+  weight: number | null;
+  weightScale: string | null;
+  packagingMethod: string[];
+  leadTime: number | null;
+  availableAtStorefront: 0 | 1;
+  createdAtStorefront: 0 | 1;
+  isDeleted: 0 | 1;
+  isActive: 0 | 1;
+  productAvailableStock: number | null;
+  productCode: string | null;
+  logoUrl: string | null;
+  logoHash: string | null;
+  outletId: string;
+};
+
+type ElectronAPI = {
+  createProduct: (payload: ProductCreatePayload) => Promise<{ id: string }>;
+};
+
+const getElectronAPI = (): ElectronAPI | null => {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { electronAPI?: ElectronAPI };
+  return w.electronAPI ?? null;
+};
 
 type ProductCategory = {
   id: number;
@@ -191,6 +226,7 @@ const AddEntityModal = ({
 
 const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
   const [activeTab, setActiveTab] = useState<"basic" | "modifiers">("basic");
+  const { selectedOutletId } = useBusinessStore();
   const [productName, setProductName] = useState("");
   const [categories, setCategories] =
     useState<ProductCategory[]>(initialCategories);
@@ -229,6 +265,67 @@ const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
   const [isAddAllergenModalOpen, setIsAddAllergenModalOpen] = useState(false);
   const [isAddWeightUnitModalOpen, setIsAddWeightUnitModalOpen] =
     useState(false);
+
+  const handleSaveProduct = async () => {
+    const api = getElectronAPI();
+    if (!api || !selectedOutletId) return;
+
+    const selectedCategory = categories.find(
+      (category) => category.id === selectedCategoryId,
+    );
+
+    const selectedPreparationArea = preparationAreas.find(
+      (area) => area.id === selectedPreparationAreaId,
+    );
+
+    const selectedPriceTier = priceTiers.find((tier) => tier.active);
+
+    const activePackagingMethods = packagingMethods
+      .filter((method) => selectedPackagingMethods[String(method.id)])
+      .map((method) => method.name);
+
+    const activeAllergens = allergens
+      .filter((allergen) => allergen.selected)
+      .map((allergen) => allergen.name);
+
+    const leadTimeTotalMinutes =
+      (Number(leadTimeDays) || 0) * 24 * 60 +
+      (Number(leadTimeHours) || 0) * 60 +
+      (Number(leadTimeMinutes) || 0);
+
+    const selectedWeightUnit = weightUnits.find(
+      (unit) => unit.id === selectedWeightUnitId,
+    );
+
+    const payload = {
+      name: productName,
+      description,
+      category: selectedCategory?.name ?? null,
+      preparationArea: selectedPreparationArea?.name ?? null,
+      price: defaultPrice ? Number(defaultPrice) : null,
+      priceTierId: selectedPriceTier ? [selectedPriceTier.name] : null,
+      allergens: activeAllergens,
+      allergenList: activeAllergens,
+      weight: weight ? Number(weight) : null,
+      weightScale: selectedWeightUnit?.name ?? null,
+      packagingMethod: activePackagingMethods,
+      leadTime: leadTimeTotalMinutes || null,
+      availableAtStorefront: 1 as 1,
+      createdAtStorefront: 1 as 1,
+      isDeleted: 0 as 0,
+      isActive: 1 as 1,
+      productAvailableStock: null,
+      productCode: null,
+      logoUrl: null,
+      logoHash: null,
+      outletId: selectedOutletId,
+    };
+
+    try {
+      await api.createProduct(payload);
+      onClose();
+    } catch {}
+  };
 
   if (!isOpen) return null;
 
@@ -835,6 +932,7 @@ const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
                 <div className="flex items-center justify-end gap-3 w-full  py-4">
                   <button
                     type="button"
+                    onClick={handleSaveProduct}
                     className="rounded-[10px] bg-[#15BA5C] w-full px-8 py-2.5 text-sm font-medium text-white cursor-pointer hover:bg-[#13A652]"
                   >
                     Save Product

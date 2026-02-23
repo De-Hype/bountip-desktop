@@ -95,19 +95,19 @@ app.whenReady().then(() => {
 
   // IPC Handlers
   ipcMain.on("auth:storeTokens", (_event, payload) =>
-    authService.storeTokens(payload)
+    authService.storeTokens(payload),
   );
   ipcMain.on("auth:clearTokens", () => authService.clearTokens());
   ipcMain.handle("auth:getTokens", () => authService.getTokens());
 
   ipcMain.handle("db:getUser", () => authService.getUser());
   ipcMain.handle("db:saveUser", (_event, payload) =>
-    authService.saveUser(payload)
+    authService.saveUser(payload),
   );
 
   ipcMain.handle("cache:get", (_event, key) => dbService.getCache(key));
   ipcMain.handle("cache:put", (_event, key, value) =>
-    dbService.putCache(key, value)
+    dbService.putCache(key, value),
   );
 
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
@@ -117,15 +117,15 @@ app.whenReady().then(() => {
 
   ipcMain.handle("network:getStatus", () => networkService.getStatus());
   ipcMain.on("network:setOnline", (_event, flag) =>
-    networkService.setOnline(flag)
+    networkService.setOnline(flag),
   );
 
   ipcMain.handle("p2p:getPeers", () => p2pService.getPeers());
   ipcMain.on("p2p:broadcast", (_event, payload) =>
-    p2pService.broadcast(payload)
+    p2pService.broadcast(payload),
   );
   ipcMain.on("p2p:sendToPeer", (_event, deviceId, payload) =>
-    p2pService.sendToPeerById(deviceId, payload)
+    p2pService.sendToPeerById(deviceId, payload),
   );
 
   // Updater IPC
