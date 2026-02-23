@@ -107,11 +107,11 @@ export class SyncService {
         );
         return;
       }
-
-      // this.db.applyPullData({
-      //   currentTimestamp: json.currentTimestamp,
-      //   data: json.data,
-      // });
+      console.log("Pulled stuff", json);
+      this.db.applyPullData({
+        currentTimestamp: json.currentTimestamp,
+        data: json.data,
+      });
     } catch (e) {
       console.error("[SyncService] Pull sync error:", e);
     } finally {
