@@ -6,6 +6,7 @@ export const businessSchema: TableSchema = {
   create: `
     CREATE TABLE IF NOT EXISTS business (
       id TEXT PRIMARY KEY,
+      localId TEXT,
       name TEXT,
       slug TEXT,
       status TEXT DEFAULT 'active' NOT NULL,

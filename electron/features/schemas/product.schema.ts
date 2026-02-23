@@ -6,6 +6,7 @@ export const productSchema: TableSchema = {
   create: `
     CREATE TABLE IF NOT EXISTS product (
       id TEXT PRIMARY KEY,
+      localId TEXT,
       name TEXT NOT NULL,
       isActive INTEGER DEFAULT 1 NOT NULL,
       description TEXT,
