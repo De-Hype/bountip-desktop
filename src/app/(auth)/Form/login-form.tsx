@@ -2,7 +2,7 @@
 "use client";
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -38,10 +38,12 @@ interface LoginFormProps {
 
 export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
-
   const [pinLogin, setPinLogin] = useState<boolean>(false);
   const [pin, setPin] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [failedAttempts, setFailedAttempts] = useState<number>(0);
+  const [lockUntil, setLockUntil] = useState<number | null>(null);
+  const [lockRemainingMs, setLockRemainingMs] = useState<number>(0);
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const { showToast } = useToastStore();
@@ -55,7 +57,60 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     resolver: zodResolver(signinSchema),
   });
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem("bountip_login_lock");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as { until?: number };
+      if (parsed.until && parsed.until > Date.now()) {
+        setLockUntil(parsed.until);
+      } else {
+        window.localStorage.removeItem("bountip_login_lock");
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!lockUntil) return;
+    const update = () => {
+      const diff = lockUntil - Date.now();
+      if (diff <= 0) {
+        setLockUntil(null);
+        setFailedAttempts(0);
+        setLockRemainingMs(0);
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem("bountip_login_lock");
+        }
+      } else {
+        setLockRemainingMs(diff);
+      }
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [lockUntil]);
+
+  const isLocked = lockUntil != null && lockUntil > Date.now();
+
+  const formatRemaining = () => {
+    const totalSeconds = Math.max(0, Math.floor(lockRemainingMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const mm = String(minutes).padStart(2, "0");
+    const ss = String(seconds).padStart(2, "0");
+    return `${mm}:${ss}`;
+  };
+
   const handleSignin = async (data: SigninFormValues) => {
+    if (isLocked) {
+      showToast(
+        "error",
+        "Too many attempts",
+        "Account locked due to too many failed attempts. Please try again later.",
+      );
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await authService.signin({
@@ -67,6 +122,12 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
 
       tokenManager.setTokens(tokens.accessToken, tokens.refreshToken);
       await userStorage.saveUserFromApi(user);
+      setFailedAttempts(0);
+      setLockUntil(null);
+      setLockRemainingMs(0);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("bountip_login_lock");
+      }
       setAuth({
         user: {
           id: user?.id,
@@ -86,8 +147,37 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     } catch (error: any) {
       console.log(error, "This is the error");
 
-      // Cast error to access response property
       const apiError = error as any;
+      const data = apiError?.response?.data;
+      const status = apiError?.response?.status;
+      const backendLockMessage =
+        typeof data?.message === "string" &&
+        data.message.toLowerCase().includes("account locked");
+
+      if (status === 401 && backendLockMessage) {
+        const lockMs = 5 * 60 * 1000;
+        const until = Date.now() + lockMs;
+        setLockUntil(until);
+        setFailedAttempts(0);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            "bountip_login_lock",
+            JSON.stringify({ until }),
+          );
+        }
+        showToast(
+          "error",
+          "Account locked",
+          data?.message ??
+            "Account locked due to too many failed attempts. Please try again after 5 minutes.",
+        );
+        return;
+      }
+
+      if (apiError?.code === "OFFLINE" || apiError?.message === "offline") {
+        showToast("error", "Offline", "Connect to the internet to sign in.");
+        return;
+      }
 
       if (apiError.message === "INACTIVE_ACCOUNT") {
         // Access name and email from response.data
@@ -110,6 +200,28 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         );
         return;
       }
+
+      setFailedAttempts((prev) => {
+        const next = prev + 1;
+        if (next >= 5) {
+          const lockMs = 5 * 60 * 1000;
+          const until = Date.now() + lockMs;
+          setLockUntil(until);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(
+              "bountip_login_lock",
+              JSON.stringify({ until }),
+            );
+          }
+          showToast(
+            "error",
+            "Account locked",
+            "Account locked due to too many failed attempts. Please try again after 5 minutes.",
+          );
+          return 0;
+        }
+        return next;
+      });
 
       const message = (error as Error).message || "Unable to sign in.";
       showToast("error", "Sign in failed", message);
@@ -174,11 +286,13 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
 
   const isSubmitDisabled = () => {
     if (isLoading) return true;
+    if (isLocked) return true;
     return false;
   };
 
   const getSubmitButtonText = () => {
     if (isLoading) return "Loading...";
+    if (isLocked) return `Locked (${formatRemaining()})`;
 
     return "Sign In";
   };
@@ -190,7 +304,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
-      className="w-full flex flex-col gap-[24px]"
+      className="relative w-full flex flex-col gap-[24px]"
     >
       {!pinLogin && (
         <div
@@ -324,6 +438,22 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
           </button>
         </p>
       </div>
+
+      {isLocked && (
+        <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center gap-3 rounded-[12px]">
+          <div className="flex items-center gap-2 text-red-600 text-lg font-semibold">
+            <LockKeyhole />
+            <span>Account Locked</span>
+          </div>
+          <p className="text-sm text-gray-600 text-center max-w-xs">
+            Account locked due to too many failed attempts. Please try again
+            after 5 minutes.
+          </p>
+          <p className="text-base font-mono text-gray-800">
+            Time remaining: {formatRemaining()}
+          </p>
+        </div>
+      )}
     </motion.form>
   );
 };

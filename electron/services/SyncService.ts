@@ -6,6 +6,7 @@ import { net } from "electron";
 const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
 const SYNC_ENDPOINT = `${API_URL}/sync`;
 const PULL_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync/pull";
+const MIN_PULL_INTERVAL_MS = 5 * 60 * 1000;
 
 export class SyncService {
   private db: DatabaseService;
@@ -13,6 +14,7 @@ export class SyncService {
   private p2p: P2PService;
   private isSyncing = false;
   private isPulling = false;
+  private lastPullAt = 0;
 
   constructor(db: DatabaseService, network: NetworkService, p2p: P2PService) {
     this.db = db;
@@ -29,7 +31,7 @@ export class SyncService {
       }
     });
 
-    setInterval(() => this.checkLeaderAndSync(), 10000);
+    setInterval(() => this.checkLeaderAndSync(), 60000);
   }
 
   private async checkLeaderAndSync() {
@@ -51,8 +53,12 @@ export class SyncService {
       return;
     }
 
-    console.log("[SyncService] I am the leader. Initiating pull sync...");
-    await this.performPull();
+    const now = Date.now();
+    if (now - this.lastPullAt >= MIN_PULL_INTERVAL_MS) {
+      console.log("[SyncService] I am the leader. Initiating pull sync...");
+      await this.performPull();
+      this.lastPullAt = Date.now();
+    }
 
     const pending = this.db.getPendingQueueItems();
     if (pending.length === 0) return;
@@ -68,11 +74,7 @@ export class SyncService {
     this.isPulling = true;
 
     try {
-      const identity = this.db.getIdentity();
-      const userId =
-        identity && typeof identity === "object"
-          ? (identity.id ?? identity.userId ?? identity.user?.id ?? null)
-          : null;
+      const userId = this.db.getSyncUserId();
 
       if (!userId) {
         console.error(

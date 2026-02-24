@@ -4,6 +4,7 @@ import require$$4$1, { fileURLToPath } from "url";
 import Database from "better-sqlite3";
 import fs$1 from "fs";
 import keytar from "keytar";
+import crypto from "crypto";
 import dgram from "dgram";
 import net$1 from "net";
 import require$$0 from "constants";
@@ -12,78 +13,231 @@ import require$$4 from "util";
 import require$$5 from "assert";
 import require$$1$5 from "child_process";
 import require$$0$2 from "events";
-import require$$0$3 from "crypto";
 import require$$1$1 from "tty";
 import require$$1$2 from "os";
 import require$$1$3 from "string_decoder";
 import require$$14 from "zlib";
 import require$$4$2 from "http";
 import require$$1$6 from "https";
+const userCreateSql = `
+  CREATE TABLE IF NOT EXISTS user (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    fullName TEXT NOT NULL,
+    password TEXT,
+    pin TEXT NOT NULL,
+    otpCodeHash TEXT,
+    otpCodeExpiry TEXT,
+    failedLoginCount INTEGER DEFAULT 0,
+    failedLoginRetryTime TEXT,
+    lastFailedLogin TEXT,
+    isEmailVerified INTEGER DEFAULT 0 NOT NULL,
+    isPin INTEGER DEFAULT 0 NOT NULL,
+    isDeleted INTEGER DEFAULT 0 NOT NULL,
+    lastLoginAt TEXT,
+    status TEXT DEFAULT 'inactive' NOT NULL,
+    authProvider TEXT,
+    providerId TEXT,
+    publicId TEXT,
+    providerData TEXT,
+    createdAt TEXT,
+    updatedAt TEXT,
+    lastSyncedAt TEXT
+  );
+`;
+const userUpsertSql = `
+  INSERT OR REPLACE INTO user (
+    id,
+    email,
+    fullName,
+    password,
+    pin,
+    otpCodeHash,
+    otpCodeExpiry,
+    failedLoginCount,
+    failedLoginRetryTime,
+    lastFailedLogin,
+    isEmailVerified,
+    isPin,
+    isDeleted,
+    lastLoginAt,
+    status,
+    authProvider,
+    providerId,
+    publicId,
+    providerData,
+    createdAt,
+    updatedAt,
+    lastSyncedAt
+  ) VALUES (
+    @id,
+    @email,
+    @fullName,
+    @password,
+    @pin,
+    @otpCodeHash,
+    @otpCodeExpiry,
+    @failedLoginCount,
+    @failedLoginRetryTime,
+    @lastFailedLogin,
+    @isEmailVerified,
+    @isPin,
+    @isDeleted,
+    @lastLoginAt,
+    @status,
+    @authProvider,
+    @providerId,
+    @publicId,
+    @providerData,
+    @createdAt,
+    @updatedAt,
+    @lastSyncedAt
+  )
+`;
+const buildUserUpsertParams = (u) => ({
+  id: u.id,
+  email: u.email ?? null,
+  fullName: u.fullName ?? null,
+  password: u.password ?? null,
+  pin: u.pin ?? null,
+  otpCodeHash: u.otpCodeHash ?? null,
+  otpCodeExpiry: u.otpCodeExpiry ?? null,
+  failedLoginCount: u.failedLoginCount ?? 0,
+  failedLoginRetryTime: u.failedLoginRetryTime ?? null,
+  lastFailedLogin: u.lastFailedLogin ?? null,
+  isEmailVerified: u.isEmailVerified ? 1 : 0,
+  isPin: u.isPin ? 1 : 0,
+  isDeleted: u.isDeleted ? 1 : 0,
+  lastLoginAt: u.lastLoginAt ?? null,
+  status: u.status ?? "inactive",
+  authProvider: u.authProvider ?? null,
+  providerId: u.providerId ?? null,
+  publicId: u.publicId ?? null,
+  providerData: u.providerData && typeof u.providerData === "object" ? JSON.stringify(u.providerData) : u.providerData ?? null,
+  createdAt: u.createdAt ?? null,
+  updatedAt: u.updatedAt ?? null,
+  lastSyncedAt: u.lastSyncedAt ?? null
+});
 const userSchema = {
   name: "user",
-  create: `
-    CREATE TABLE IF NOT EXISTS user (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL,
-      fullName TEXT NOT NULL,
-      password TEXT,
-      pin TEXT NOT NULL,
-      otpCodeHash TEXT,
-      otpCodeExpiry TEXT,
-      failedLoginCount INTEGER DEFAULT 0,
-      failedLoginRetryTime TEXT,
-      lastFailedLogin TEXT,
-      isEmailVerified INTEGER DEFAULT 0 NOT NULL,
-      isPin INTEGER DEFAULT 0 NOT NULL,
-      isDeleted INTEGER DEFAULT 0 NOT NULL,
-      lastLoginAt TEXT,
-      status TEXT DEFAULT 'inactive' NOT NULL,
-      authProvider TEXT,
-      providerId TEXT,
-      publicId TEXT,
-      providerData TEXT,
-      createdAt TEXT,
-      updatedAt TEXT,
-      lastSyncedAt TEXT
-    );
-  `,
+  create: userCreateSql,
   indexes: [
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email ON user(email);`,
     `CREATE INDEX IF NOT EXISTS idx_user_status ON user(status);`,
     `CREATE INDEX IF NOT EXISTS idx_user_lastSyncedAt ON user(lastSyncedAt);`
   ]
 };
+const productCreateSql = `
+  CREATE TABLE IF NOT EXISTS product (
+    localId INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT,
+    name TEXT NOT NULL,
+    isActive INTEGER DEFAULT 1 NOT NULL,
+    description TEXT,
+    category TEXT,
+    price REAL,
+    preparationArea TEXT,
+    weight REAL,
+    productCode TEXT,
+    weightScale TEXT,
+    productAvailableStock REAL,
+    packagingMethod TEXT,
+    priceTierId TEXT,
+    allergenList TEXT,
+    logoUrl TEXT,
+    logoHash TEXT,
+    leadTime INTEGER,
+    availableAtStorefront INTEGER DEFAULT 0 NOT NULL,
+    createdAtStorefront INTEGER DEFAULT 0 NOT NULL,
+    isDeleted INTEGER DEFAULT 0 NOT NULL,
+    createdAt TEXT,
+    updatedAt TEXT,
+    lastSyncedAt TEXT,
+    outletId TEXT
+  );
+`;
+const productUpsertSql = `
+  INSERT OR REPLACE INTO product (
+    id,
+    name,
+    isActive,
+    description,
+    category,
+    price,
+    preparationArea,
+    weight,
+    productCode,
+    weightScale,
+    productAvailableStock,
+    packagingMethod,
+    priceTierId,
+    allergenList,
+    logoUrl,
+    logoHash,
+    leadTime,
+    availableAtStorefront,
+    createdAtStorefront,
+    isDeleted,
+    createdAt,
+    updatedAt,
+    lastSyncedAt,
+    outletId
+  ) VALUES (
+    @id,
+    @name,
+    @isActive,
+    @description,
+    @category,
+    @price,
+    @preparationArea,
+    @weight,
+    @productCode,
+    @weightScale,
+    @productAvailableStock,
+    @packagingMethod,
+    @priceTierId,
+    @allergenList,
+    @logoUrl,
+    @logoHash,
+    @leadTime,
+    @availableAtStorefront,
+    @createdAtStorefront,
+    @isDeleted,
+    @createdAt,
+    @updatedAt,
+    @lastSyncedAt,
+    @outletId
+  )
+`;
+const buildProductUpsertParams = (p) => ({
+  id: p.id,
+  name: p.name ?? null,
+  isActive: p.isActive ? 1 : 1,
+  description: p.description ?? null,
+  category: p.category ?? null,
+  price: p.price ?? null,
+  preparationArea: p.preparationArea ?? null,
+  weight: p.weight ?? null,
+  productCode: p.productCode ?? null,
+  weightScale: p.weightScale ?? null,
+  productAvailableStock: p.productAvailableStock ?? null,
+  packagingMethod: p.packagingMethod ? JSON.stringify(p.packagingMethod) : null,
+  priceTierId: p.priceTierId ? JSON.stringify(p.priceTierId) : null,
+  allergenList: p.allergenList && p.allergenList.length > 0 ? JSON.stringify(p.allergenList) : null,
+  logoUrl: p.logoUrl ?? null,
+  logoHash: p.logoHash ?? null,
+  leadTime: p.leadTime ?? null,
+  availableAtStorefront: p.availableAtStorefront ? 1 : 0,
+  createdAtStorefront: p.createdAtStorefront ? 1 : 0,
+  isDeleted: p.isDeleted ? 1 : 0,
+  createdAt: p.createdAt ?? null,
+  updatedAt: p.updatedAt ?? null,
+  lastSyncedAt: p.lastSyncedAt ?? null,
+  outletId: p.outletId ?? null
+});
 const productSchema = {
   name: "product",
-  create: `
-    CREATE TABLE IF NOT EXISTS product (
-      localId INTEGER PRIMARY KEY AUTOINCREMENT,
-      id TEXT,
-      name TEXT NOT NULL,
-      isActive INTEGER DEFAULT 1 NOT NULL,
-      description TEXT,
-      category TEXT,
-      price REAL,
-      preparationArea TEXT,
-      weight REAL,
-      productCode TEXT,
-      weightScale TEXT,
-      productAvailableStock REAL,
-      packagingMethod TEXT,
-      priceTierId TEXT,
-      allergenList TEXT,
-      logoUrl TEXT,
-      logoHash TEXT,
-      leadTime INTEGER,
-      availableAtStorefront INTEGER DEFAULT 0 NOT NULL,
-      createdAtStorefront INTEGER DEFAULT 0 NOT NULL,
-      isDeleted INTEGER DEFAULT 0 NOT NULL,
-      createdAt TEXT,
-      updatedAt TEXT,
-      lastSyncedAt TEXT,
-      outletId TEXT
-    );
-  `,
+  create: productCreateSql,
   indexes: [
     `CREATE INDEX IF NOT EXISTS idx_product_outlet ON product(outletId);`,
     `CREATE INDEX IF NOT EXISTS idx_product_category ON product(category);`,
@@ -91,51 +245,173 @@ const productSchema = {
     `CREATE INDEX IF NOT EXISTS idx_product_lastSyncedAt ON product(lastSyncedAt);`
   ]
 };
+const businessOutletCreateSql = `
+  CREATE TABLE IF NOT EXISTS business_outlet (
+    localId INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT,
+    name TEXT NOT NULL,
+    description TEXT,
+    address TEXT,
+    state TEXT,
+    email TEXT,
+    postalCode TEXT,
+    phoneNumber TEXT,
+    whatsappNumber TEXT,
+    currency TEXT,
+    revenueRange TEXT,
+    country TEXT,
+    storeCode TEXT,
+    localInventoryRef TEXT,
+    centralInventoryRef TEXT,
+    outletRef TEXT,
+    isMainLocation INTEGER DEFAULT 0 NOT NULL,
+    businessType TEXT,
+    isActive INTEGER DEFAULT 1 NOT NULL,
+    whatsappChannel INTEGER DEFAULT 1 NOT NULL,
+    emailChannel INTEGER DEFAULT 1 NOT NULL,
+    isDeleted INTEGER DEFAULT 0 NOT NULL,
+    isOnboarded INTEGER DEFAULT 0 NOT NULL,
+    operatingHours TEXT,
+    logoUrl TEXT,
+    taxSettings TEXT,
+    serviceCharges TEXT,
+    paymentMethods TEXT,
+    priceTier TEXT,
+    receiptSettings TEXT,
+    labelSettings TEXT,
+    invoiceSettings TEXT,
+    generalSettings TEXT,
+    createdAt TEXT,
+    updatedAt TEXT,
+    lastSyncedAt TEXT,
+    businessId TEXT,
+    bankDetails TEXT
+  );
+`;
+const businessOutletUpsertSql = `
+  INSERT OR REPLACE INTO business_outlet (
+    id,
+    name,
+    description,
+    address,
+    state,
+    email,
+    postalCode,
+    phoneNumber,
+    whatsappNumber,
+    currency,
+    revenueRange,
+    country,
+    storeCode,
+    localInventoryRef,
+    centralInventoryRef,
+    outletRef,
+    isMainLocation,
+    businessType,
+    isActive,
+    whatsappChannel,
+    emailChannel,
+    isDeleted,
+    isOnboarded,
+    operatingHours,
+    logoUrl,
+    taxSettings,
+    serviceCharges,
+    paymentMethods,
+    priceTier,
+    receiptSettings,
+    labelSettings,
+    invoiceSettings,
+    generalSettings,
+    createdAt,
+    updatedAt,
+    lastSyncedAt,
+    businessId,
+    bankDetails
+  ) VALUES (
+    @id,
+    @name,
+    @description,
+    @address,
+    @state,
+    @email,
+    @postalCode,
+    @phoneNumber,
+    @whatsappNumber,
+    @currency,
+    @revenueRange,
+    @country,
+    @storeCode,
+    @localInventoryRef,
+    @centralInventoryRef,
+    @outletRef,
+    @isMainLocation,
+    @businessType,
+    @isActive,
+    @whatsappChannel,
+    @emailChannel,
+    @isDeleted,
+    @isOnboarded,
+    @operatingHours,
+    @logoUrl,
+    @taxSettings,
+    @serviceCharges,
+    @paymentMethods,
+    @priceTier,
+    @receiptSettings,
+    @labelSettings,
+    @invoiceSettings,
+    @generalSettings,
+    @createdAt,
+    @updatedAt,
+    @lastSyncedAt,
+    @businessId,
+    @bankDetails
+  )
+`;
+const buildBusinessOutletUpsertParams = (o) => ({
+  id: o.id,
+  name: o.name ?? null,
+  description: o.description ?? null,
+  address: o.address ?? null,
+  state: o.state ?? null,
+  email: o.email ?? null,
+  postalCode: o.postalCode ?? null,
+  phoneNumber: o.phoneNumber ?? null,
+  whatsappNumber: o.whatsappNumber ?? null,
+  currency: o.currency ?? null,
+  revenueRange: o.revenueRange ?? null,
+  country: o.country ?? null,
+  storeCode: o.storeCode ?? null,
+  localInventoryRef: o.localInventoryRef ?? null,
+  centralInventoryRef: o.centralInventoryRef ?? null,
+  outletRef: o.outletRef ?? null,
+  isMainLocation: o.isMainLocation ? 1 : 0,
+  businessType: o.businessType ?? null,
+  isActive: o.isActive ? 1 : 0,
+  whatsappChannel: o.whatsappChannel ? 1 : 0,
+  emailChannel: o.emailChannel ? 1 : 0,
+  isDeleted: o.isDeleted ? 1 : 0,
+  isOnboarded: o.isOnboarded ? 1 : 0,
+  operatingHours: o.operatingHours ?? null,
+  logoUrl: o.logoUrl ?? null,
+  taxSettings: o.taxSettings && typeof o.taxSettings === "object" ? JSON.stringify(o.taxSettings) : o.taxSettings ?? null,
+  serviceCharges: o.serviceCharges && typeof o.serviceCharges === "object" ? JSON.stringify(o.serviceCharges) : o.serviceCharges ?? null,
+  paymentMethods: o.paymentMethods && typeof o.paymentMethods === "object" ? JSON.stringify(o.paymentMethods) : o.paymentMethods ?? null,
+  priceTier: o.priceTier && typeof o.priceTier === "object" ? JSON.stringify(o.priceTier) : o.priceTier ?? null,
+  receiptSettings: o.receiptSettings && typeof o.receiptSettings === "object" ? JSON.stringify(o.receiptSettings) : o.receiptSettings ?? null,
+  labelSettings: o.labelSettings && typeof o.labelSettings === "object" ? JSON.stringify(o.labelSettings) : o.labelSettings ?? null,
+  invoiceSettings: o.invoiceSettings && typeof o.invoiceSettings === "object" ? JSON.stringify(o.invoiceSettings) : o.invoiceSettings ?? null,
+  generalSettings: o.generalSettings && typeof o.generalSettings === "object" ? JSON.stringify(o.generalSettings) : o.generalSettings ?? null,
+  createdAt: o.createdAt ?? null,
+  updatedAt: o.updatedAt ?? null,
+  lastSyncedAt: o.lastSyncedAt ?? null,
+  businessId: o.businessId ?? null,
+  bankDetails: o.bankDetails && typeof o.bankDetails === "object" ? JSON.stringify(o.bankDetails) : o.bankDetails ?? null
+});
 const businessOutletSchema = {
   name: "business_outlet",
-  create: `
-    CREATE TABLE IF NOT EXISTS business_outlet (
-      localId INTEGER PRIMARY KEY AUTOINCREMENT,
-      id TEXT,
-      name TEXT NOT NULL,
-      description TEXT,
-      address TEXT,
-      state TEXT,
-      email TEXT,
-      postalCode TEXT,
-      phoneNumber TEXT,
-      whatsappNumber TEXT,
-      currency TEXT,
-      revenueRange TEXT,
-      country TEXT,
-      storeCode TEXT,
-      localInventoryRef TEXT,
-      centralInventoryRef TEXT,
-      outletRef TEXT,
-      isMainLocation INTEGER DEFAULT 0 NOT NULL,
-      businessType TEXT,
-      isActive INTEGER DEFAULT 1 NOT NULL,
-      whatsappChannel INTEGER DEFAULT 1 NOT NULL,
-      emailChannel INTEGER DEFAULT 1 NOT NULL,
-      isDeleted INTEGER DEFAULT 0 NOT NULL,
-      isOnboarded INTEGER DEFAULT 0 NOT NULL,
-      operatingHours TEXT,
-      logoUrl TEXT,
-      taxSettings TEXT,
-      serviceCharges TEXT,
-      paymentMethods TEXT,
-      priceTier TEXT,
-      receiptSettings TEXT,
-      labelSettings TEXT,
-      invoiceSettings TEXT,
-      generalSettings TEXT,
-      createdAt TEXT,
-      updatedAt TEXT,
-      lastSyncedAt TEXT,
-      businessId TEXT,
-      bankDetails TEXT
-    );
-  `,
+  create: businessOutletCreateSql,
   indexes: [
     `CREATE INDEX IF NOT EXISTS idx_outlet_businessId ON business_outlet(businessId);`,
     `CREATE INDEX IF NOT EXISTS idx_outlet_isActive ON business_outlet(isActive);`,
@@ -143,27 +419,77 @@ const businessOutletSchema = {
     `CREATE INDEX IF NOT EXISTS idx_outlet_lastSyncedAt ON business_outlet(lastSyncedAt);`
   ]
 };
+const businessCreateSql = `
+  CREATE TABLE IF NOT EXISTS business (
+    localId INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT,
+    name TEXT,
+    slug TEXT,
+    status TEXT DEFAULT 'active' NOT NULL,
+    logoUrl TEXT,
+    country TEXT,
+    businessType TEXT,
+    address TEXT,
+    currency TEXT,
+    revenueRange TEXT,
+    createdAt TEXT,
+    updatedAt TEXT,
+    lastSyncedAt TEXT,
+    ownerId TEXT
+  );
+`;
+const businessUpsertSql = `
+  INSERT OR REPLACE INTO business (
+    id,
+    name,
+    slug,
+    status,
+    logoUrl,
+    country,
+    businessType,
+    address,
+    currency,
+    revenueRange,
+    createdAt,
+    updatedAt,
+    lastSyncedAt,
+    ownerId
+  ) VALUES (
+    @id,
+    @name,
+    @slug,
+    @status,
+    @logoUrl,
+    @country,
+    @businessType,
+    @address,
+    @currency,
+    @revenueRange,
+    @createdAt,
+    @updatedAt,
+    @lastSyncedAt,
+    @ownerId
+  )
+`;
+const buildBusinessUpsertParams = (b) => ({
+  id: b.id,
+  name: b.name ?? null,
+  slug: b.slug ?? null,
+  status: b.status ?? "active",
+  logoUrl: b.logoUrl ?? null,
+  country: b.country ?? null,
+  businessType: b.businessType ?? null,
+  address: b.address ?? null,
+  currency: b.currency ?? null,
+  revenueRange: b.revenueRange ?? null,
+  createdAt: b.createdAt ?? null,
+  updatedAt: b.updatedAt ?? null,
+  lastSyncedAt: b.lastSyncedAt ?? null,
+  ownerId: b.ownerId ?? null
+});
 const businessSchema = {
   name: "business",
-  create: `
-    CREATE TABLE IF NOT EXISTS business (
-      localId INTEGER PRIMARY KEY AUTOINCREMENT,
-      id TEXT,
-      name TEXT,
-      slug TEXT,
-      status TEXT DEFAULT 'active' NOT NULL,
-      logoUrl TEXT,
-      country TEXT,
-      businessType TEXT,
-      address TEXT,
-      currency TEXT,
-      revenueRange TEXT,
-      createdAt TEXT,
-      updatedAt TEXT,
-      lastSyncedAt TEXT,
-      ownerId TEXT
-    );
-  `,
+  create: businessCreateSql,
   indexes: [
     `CREATE INDEX IF NOT EXISTS idx_business_status ON business(status);`,
     `CREATE INDEX IF NOT EXISTS idx_business_slug ON business(slug);`,
@@ -582,6 +908,61 @@ class DatabaseService {
     const updated = { ...current, ...identity };
     this.db.prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)").run("user_identity", JSON.stringify(updated));
   }
+  getUserProfile() {
+    const identity = this.getIdentity();
+    const row = this.db.prepare("SELECT * FROM user LIMIT 1").get();
+    const fromIdentity = identity && typeof identity === "object" ? {
+      id: identity.id ?? identity.userId ?? identity.user?.id ?? row?.id ?? null,
+      email: identity.email ?? identity.user?.email ?? row?.email ?? null,
+      fullName: identity.fullName ?? identity.user?.fullName ?? row?.fullName ?? null,
+      status: identity.status ?? identity.user?.status ?? row?.status ?? null,
+      isEmailVerified: identity.isEmailVerified ?? identity.user?.isEmailVerified ?? (row && typeof row.isEmailVerified === "number" ? row.isEmailVerified === 1 : void 0),
+      createdAt: identity.createdAt ?? identity.user?.createdAt ?? row?.createdAt ?? null,
+      updatedAt: identity.updatedAt ?? identity.user?.updatedAt ?? row?.updatedAt ?? null
+    } : {
+      id: row?.id ?? null,
+      email: row?.email ?? null,
+      fullName: row?.fullName ?? null,
+      status: row?.status ?? null,
+      isEmailVerified: row && typeof row.isEmailVerified === "number" ? row.isEmailVerified === 1 : void 0,
+      createdAt: row?.createdAt ?? null,
+      updatedAt: row?.updatedAt ?? null
+    };
+    const deviceId = identity && typeof identity === "object" ? identity.deviceId ?? identity.user?.deviceId ?? null : null;
+    return {
+      id: fromIdentity.id ?? null,
+      email: fromIdentity.email ?? null,
+      name: fromIdentity.fullName ?? null,
+      status: fromIdentity.status ?? null,
+      isEmailVerified: fromIdentity.isEmailVerified,
+      createdAt: fromIdentity.createdAt ?? null,
+      updatedAt: fromIdentity.updatedAt ?? null,
+      deviceId
+    };
+  }
+  getSyncUserId() {
+    const identity = this.getIdentity();
+    if (identity && typeof identity === "object") {
+      const fromIdentity = identity.id ?? identity.userId ?? identity.user?.id ?? null;
+      if (fromIdentity) return String(fromIdentity);
+    }
+    const row = this.db.prepare("SELECT id FROM user LIMIT 1").get();
+    if (row && row.id) return String(row.id);
+    return null;
+  }
+  saveLoginHash(hash) {
+    this.db.prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)").run("login_hash", JSON.stringify({ hash }));
+  }
+  getLoginHash() {
+    const row = this.db.prepare("SELECT value FROM identity WHERE key = ?").get("login_hash");
+    if (!row) return null;
+    try {
+      const parsed = JSON.parse(row.value);
+      return parsed.hash ?? null;
+    } catch {
+      return null;
+    }
+  }
   // Cache Methods
   getCache(key) {
     const row = this.db.prepare("SELECT value FROM cache WHERE key = ?").get(key);
@@ -655,354 +1036,24 @@ class DatabaseService {
     const tx = this.db.transaction(() => {
       if (data.user) {
         const u = data.user;
-        this.db.prepare(
-          `
-          INSERT OR REPLACE INTO user (
-            id,
-            email,
-            fullName,
-            password,
-            pin,
-            otpCodeHash,
-            otpCodeExpiry,
-            failedLoginCount,
-            failedLoginRetryTime,
-            lastFailedLogin,
-            isEmailVerified,
-            isPin,
-            isDeleted,
-            lastLoginAt,
-            status,
-            authProvider,
-            providerId,
-            publicId,
-            providerData,
-            createdAt,
-            updatedAt,
-            lastSyncedAt
-          ) VALUES (
-            @id,
-            @email,
-            @fullName,
-            @password,
-            @pin,
-            @otpCodeHash,
-            @otpCodeExpiry,
-            @failedLoginCount,
-            @failedLoginRetryTime,
-            @lastFailedLogin,
-            @isEmailVerified,
-            @isPin,
-            @isDeleted,
-            @lastLoginAt,
-            @status,
-            @authProvider,
-            @providerId,
-            @publicId,
-            @providerData,
-            @createdAt,
-            @updatedAt,
-            @lastSyncedAt
-          )
-        `
-        ).run(
-          sanitize({
-            id: u.id,
-            email: u.email ?? null,
-            fullName: u.fullName ?? null,
-            password: u.password ?? null,
-            pin: u.pin ?? null,
-            otpCodeHash: u.otpCodeHash ?? null,
-            otpCodeExpiry: u.otpCodeExpiry ?? null,
-            failedLoginCount: u.failedLoginCount ?? 0,
-            failedLoginRetryTime: u.failedLoginRetryTime ?? null,
-            lastFailedLogin: u.lastFailedLogin ?? null,
-            isEmailVerified: u.isEmailVerified ? 1 : 0,
-            isPin: u.isPin ? 1 : 0,
-            isDeleted: u.isDeleted ? 1 : 0,
-            lastLoginAt: u.lastLoginAt ?? null,
-            status: u.status ?? "inactive",
-            authProvider: u.authProvider ?? null,
-            providerId: u.providerId ?? null,
-            publicId: u.publicId ?? null,
-            providerData: u.providerData && typeof u.providerData === "object" ? JSON.stringify(u.providerData) : u.providerData ?? null,
-            createdAt: u.createdAt ?? null,
-            updatedAt: u.updatedAt ?? null,
-            lastSyncedAt: u.lastSyncedAt ?? null
-          })
-        );
+        this.db.prepare(userUpsertSql).run(sanitize(buildUserUpsertParams(u)));
       }
       if (Array.isArray(data.businesses) && data.businesses.length > 0) {
-        const stmt = this.db.prepare(
-          `
-          INSERT OR REPLACE INTO business (
-            id,
-            name,
-            slug,
-            status,
-            logoUrl,
-            country,
-            businessType,
-            address,
-            currency,
-            revenueRange,
-            createdAt,
-            updatedAt,
-            lastSyncedAt,
-            ownerId
-          ) VALUES (
-            @id,
-            @name,
-            @slug,
-            @status,
-            @logoUrl,
-            @country,
-            @businessType,
-            @address,
-            @currency,
-            @revenueRange,
-            @createdAt,
-            @updatedAt,
-            @lastSyncedAt,
-            @ownerId
-          )
-        `
-        );
+        const stmt = this.db.prepare(businessUpsertSql);
         for (const b of data.businesses) {
-          stmt.run(
-            sanitize({
-              id: b.id,
-              name: b.name ?? null,
-              slug: b.slug ?? null,
-              status: b.status ?? "active",
-              logoUrl: b.logoUrl ?? null,
-              country: b.country ?? null,
-              businessType: b.businessType ?? null,
-              address: b.address ?? null,
-              currency: b.currency ?? null,
-              revenueRange: b.revenueRange ?? null,
-              createdAt: b.createdAt ?? null,
-              updatedAt: b.updatedAt ?? null,
-              lastSyncedAt: b.lastSyncedAt ?? null,
-              ownerId: b.ownerId ?? null
-            })
-          );
+          stmt.run(sanitize(buildBusinessUpsertParams(b)));
         }
       }
       if (Array.isArray(data.outlets) && data.outlets.length > 0) {
-        const stmt = this.db.prepare(
-          `
-          INSERT OR REPLACE INTO business_outlet (
-            id,
-            name,
-            description,
-            address,
-            state,
-            email,
-            postalCode,
-            phoneNumber,
-            whatsappNumber,
-            currency,
-            revenueRange,
-            country,
-            storeCode,
-            localInventoryRef,
-            centralInventoryRef,
-            outletRef,
-            isMainLocation,
-            businessType,
-            isActive,
-            whatsappChannel,
-            emailChannel,
-            isDeleted,
-            isOnboarded,
-            operatingHours,
-            logoUrl,
-            taxSettings,
-            serviceCharges,
-            paymentMethods,
-            priceTier,
-            receiptSettings,
-            labelSettings,
-            invoiceSettings,
-            generalSettings,
-            createdAt,
-            updatedAt,
-            lastSyncedAt,
-            businessId,
-            bankDetails
-          ) VALUES (
-            @id,
-            @name,
-            @description,
-            @address,
-            @state,
-            @email,
-            @postalCode,
-            @phoneNumber,
-            @whatsappNumber,
-            @currency,
-            @revenueRange,
-            @country,
-            @storeCode,
-            @localInventoryRef,
-            @centralInventoryRef,
-            @outletRef,
-            @isMainLocation,
-            @businessType,
-            @isActive,
-            @whatsappChannel,
-            @emailChannel,
-            @isDeleted,
-            @isOnboarded,
-            @operatingHours,
-            @logoUrl,
-            @taxSettings,
-            @serviceCharges,
-            @paymentMethods,
-            @priceTier,
-            @receiptSettings,
-            @labelSettings,
-            @invoiceSettings,
-            @generalSettings,
-            @createdAt,
-            @updatedAt,
-            @lastSyncedAt,
-            @businessId,
-            @bankDetails
-          )
-        `
-        );
+        const stmt = this.db.prepare(businessOutletUpsertSql);
         for (const o of data.outlets) {
-          stmt.run(
-            sanitize({
-              id: o.id,
-              name: o.name ?? null,
-              description: o.description ?? null,
-              address: o.address ?? null,
-              state: o.state ?? null,
-              email: o.email ?? null,
-              postalCode: o.postalCode ?? null,
-              phoneNumber: o.phoneNumber ?? null,
-              whatsappNumber: o.whatsappNumber ?? null,
-              currency: o.currency ?? null,
-              revenueRange: o.revenueRange ?? null,
-              country: o.country ?? null,
-              storeCode: o.storeCode ?? null,
-              localInventoryRef: o.localInventoryRef ?? null,
-              centralInventoryRef: o.centralInventoryRef ?? null,
-              outletRef: o.outletRef ?? null,
-              isMainLocation: o.isMainLocation ? 1 : 0,
-              businessType: o.businessType ?? null,
-              isActive: o.isActive ? 1 : 0,
-              whatsappChannel: o.whatsappChannel ? 1 : 0,
-              emailChannel: o.emailChannel ? 1 : 0,
-              isDeleted: o.isDeleted ? 1 : 0,
-              isOnboarded: o.isOnboarded ? 1 : 0,
-              operatingHours: o.operatingHours ?? null,
-              logoUrl: o.logoUrl ?? null,
-              taxSettings: o.taxSettings && typeof o.taxSettings === "object" ? JSON.stringify(o.taxSettings) : o.taxSettings ?? null,
-              serviceCharges: o.serviceCharges && typeof o.serviceCharges === "object" ? JSON.stringify(o.serviceCharges) : o.serviceCharges ?? null,
-              paymentMethods: o.paymentMethods && typeof o.paymentMethods === "object" ? JSON.stringify(o.paymentMethods) : o.paymentMethods ?? null,
-              priceTier: o.priceTier && typeof o.priceTier === "object" ? JSON.stringify(o.priceTier) : o.priceTier ?? null,
-              receiptSettings: o.receiptSettings && typeof o.receiptSettings === "object" ? JSON.stringify(o.receiptSettings) : o.receiptSettings ?? null,
-              labelSettings: o.labelSettings && typeof o.labelSettings === "object" ? JSON.stringify(o.labelSettings) : o.labelSettings ?? null,
-              invoiceSettings: o.invoiceSettings && typeof o.invoiceSettings === "object" ? JSON.stringify(o.invoiceSettings) : o.invoiceSettings ?? null,
-              generalSettings: o.generalSettings && typeof o.generalSettings === "object" ? JSON.stringify(o.generalSettings) : o.generalSettings ?? null,
-              createdAt: o.createdAt ?? null,
-              updatedAt: o.updatedAt ?? null,
-              lastSyncedAt: o.lastSyncedAt ?? null,
-              businessId: o.businessId ?? null,
-              bankDetails: o.bankDetails && typeof o.bankDetails === "object" ? JSON.stringify(o.bankDetails) : o.bankDetails ?? null
-            })
-          );
+          stmt.run(sanitize(buildBusinessOutletUpsertParams(o)));
         }
       }
       if (Array.isArray(data.products) && data.products.length > 0) {
-        const stmt = this.db.prepare(
-          `
-          INSERT OR REPLACE INTO product (
-            id,
-            name,
-            isActive,
-            description,
-            category,
-            price,
-            preparationArea,
-            weight,
-            productCode,
-            weightScale,
-            productAvailableStock,
-            packagingMethod,
-            priceTierId,
-            allergenList,
-            logoUrl,
-            logoHash,
-            leadTime,
-            availableAtStorefront,
-            createdAtStorefront,
-            isDeleted,
-            createdAt,
-            updatedAt,
-            lastSyncedAt,
-            outletId
-          ) VALUES (
-            @id,
-            @name,
-            @isActive,
-            @description,
-            @category,
-            @price,
-            @preparationArea,
-            @weight,
-            @productCode,
-            @weightScale,
-            @productAvailableStock,
-            @packagingMethod,
-            @priceTierId,
-            @allergenList,
-            @logoUrl,
-            @logoHash,
-            @leadTime,
-            @availableAtStorefront,
-            @createdAtStorefront,
-            @isDeleted,
-            @createdAt,
-            @updatedAt,
-            @lastSyncedAt,
-            @outletId
-          )
-        `
-        );
+        const stmt = this.db.prepare(productUpsertSql);
         for (const p of data.products) {
-          stmt.run(
-            sanitize({
-              id: p.id,
-              name: p.name ?? null,
-              isActive: p.isActive ? 1 : 1,
-              description: p.description ?? null,
-              category: p.category ?? null,
-              price: p.price ?? null,
-              preparationArea: p.preparationArea ?? null,
-              weight: p.weight ?? null,
-              productCode: p.productCode ?? null,
-              weightScale: p.weightScale ?? null,
-              productAvailableStock: p.productAvailableStock ?? null,
-              packagingMethod: p.packagingMethod ? JSON.stringify(p.packagingMethod) : null,
-              priceTierId: p.priceTierId ? JSON.stringify(p.priceTierId) : null,
-              allergenList: p.allergenList && p.allergenList.length > 0 ? JSON.stringify(p.allergenList) : null,
-              logoUrl: p.logoUrl ?? null,
-              logoHash: p.logoHash ?? null,
-              leadTime: p.leadTime ?? null,
-              availableAtStorefront: p.availableAtStorefront ? 1 : 0,
-              createdAtStorefront: p.createdAtStorefront ? 1 : 0,
-              isDeleted: p.isDeleted ? 1 : 0,
-              createdAt: p.createdAt ?? null,
-              updatedAt: p.updatedAt ?? null,
-              lastSyncedAt: p.lastSyncedAt ?? null,
-              outletId: p.outletId ?? null
-            })
-          );
+          stmt.run(sanitize(buildProductUpsertParams(p)));
         }
       }
     });
@@ -1041,10 +1092,24 @@ class AuthService {
     }
   }
   getUser() {
-    return this.db.getIdentity();
+    return this.db.getUserProfile();
   }
   saveUser(user) {
     this.db.saveIdentity(user);
+  }
+  saveLoginHash(email, password) {
+    const normalizedEmail = (email || "").trim().toLowerCase();
+    const raw = `${normalizedEmail}::${password}`;
+    const hash = crypto.createHash("sha256").update(raw).digest("hex");
+    this.db.saveLoginHash(hash);
+  }
+  verifyLoginHash(email, password) {
+    const stored = this.db.getLoginHash();
+    if (!stored) return false;
+    const normalizedEmail = (email || "").trim().toLowerCase();
+    const raw = `${normalizedEmail}::${password}`;
+    const hash = crypto.createHash("sha256").update(raw).digest("hex");
+    return stored === hash;
   }
 }
 const CHECK_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
@@ -4720,7 +4785,7 @@ function requireHttpExecutor() {
   httpExecutor.safeGetHeader = safeGetHeader;
   httpExecutor.configureRequestOptions = configureRequestOptions;
   httpExecutor.safeStringifyJson = safeStringifyJson;
-  const crypto_1 = require$$0$3;
+  const crypto_1 = crypto;
   const debug_12 = requireSrc$1();
   const fs_1 = fs$1;
   const stream_1 = require$$0$1;
@@ -5322,7 +5387,7 @@ function requireUuid() {
   hasRequiredUuid = 1;
   Object.defineProperty(uuid, "__esModule", { value: true });
   uuid.nil = uuid.UUID = void 0;
-  const crypto_1 = require$$0$3;
+  const crypto_1 = crypto;
   const error_1 = requireError();
   const invalidName = "options.name must be either a string or a Buffer";
   const randomHost = (0, crypto_1.randomBytes)(16);
@@ -12579,7 +12644,7 @@ function requireDownloadedUpdateHelper() {
   Object.defineProperty(DownloadedUpdateHelper, "__esModule", { value: true });
   DownloadedUpdateHelper.DownloadedUpdateHelper = void 0;
   DownloadedUpdateHelper.createTempUpdateFile = createTempUpdateFile;
-  const crypto_1 = require$$0$3;
+  const crypto_1 = crypto;
   const fs_1 = fs$1;
   const isEqual = requireLodash_isequal();
   const fs_extra_1 = /* @__PURE__ */ requireLib();
@@ -14409,7 +14474,7 @@ function requireAppUpdater() {
   Object.defineProperty(AppUpdater, "__esModule", { value: true });
   AppUpdater.NoOpLogger = AppUpdater.AppUpdater = void 0;
   const builder_util_runtime_1 = requireOut();
-  const crypto_1 = require$$0$3;
+  const crypto_1 = crypto;
   const os_1 = require$$1$2;
   const events_1 = require$$0$2;
   const fs_extra_1 = /* @__PURE__ */ requireLib();
@@ -15459,7 +15524,7 @@ function requireMacUpdater() {
   const AppUpdater_1 = requireAppUpdater();
   const Provider_1 = requireProvider();
   const child_process_1 = require$$1$5;
-  const crypto_1 = require$$0$3;
+  const crypto_1 = crypto;
   let MacUpdater$1 = class MacUpdater extends AppUpdater_1.AppUpdater {
     constructor(options, app2) {
       super(options, app2);
@@ -18656,7 +18721,7 @@ class AssetService {
     this.initProtocol();
   }
   getHash(url) {
-    return require$$0$3.createHash("md5").update(url).digest("hex");
+    return crypto.createHash("md5").update(url).digest("hex");
   }
   getFilePath(url) {
     const hash = this.getHash(url);
@@ -18741,7 +18806,7 @@ class AssetService {
   }
   requestFromPeers(url) {
     return new Promise((resolve) => {
-      const requestId = require$$0$3.randomUUID();
+      const requestId = crypto.randomUUID();
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(requestId);
         resolve(null);
@@ -18761,10 +18826,12 @@ class AssetService {
 const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
 const SYNC_ENDPOINT = `${API_URL}/sync`;
 const PULL_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync/pull";
+const MIN_PULL_INTERVAL_MS = 5 * 60 * 1e3;
 class SyncService {
   constructor(db, network, p2p) {
     this.isSyncing = false;
     this.isPulling = false;
+    this.lastPullAt = 0;
     this.db = db;
     this.network = network;
     this.p2p = p2p;
@@ -18776,7 +18843,7 @@ class SyncService {
         this.checkLeaderAndSync();
       }
     });
-    setInterval(() => this.checkLeaderAndSync(), 1e4);
+    setInterval(() => this.checkLeaderAndSync(), 6e4);
   }
   async checkLeaderAndSync() {
     const online = this.network.getStatus().online;
@@ -18792,8 +18859,12 @@ class SyncService {
       );
       return;
     }
-    console.log("[SyncService] I am the leader. Initiating pull sync...");
-    await this.performPull();
+    const now = Date.now();
+    if (now - this.lastPullAt >= MIN_PULL_INTERVAL_MS) {
+      console.log("[SyncService] I am the leader. Initiating pull sync...");
+      await this.performPull();
+      this.lastPullAt = Date.now();
+    }
     const pending = this.db.getPendingQueueItems();
     if (pending.length === 0) return;
     console.log(
@@ -18805,8 +18876,7 @@ class SyncService {
     if (this.isPulling) return;
     this.isPulling = true;
     try {
-      const identity = this.db.getIdentity();
-      const userId = identity && typeof identity === "object" ? identity.id ?? identity.userId ?? identity.user?.id ?? null : null;
+      const userId = this.db.getSyncUserId();
       if (!userId) {
         console.error(
           "[SyncService] Pull sync skipped because userId is not available in identity"
@@ -18960,6 +19030,14 @@ app.whenReady().then(() => {
   );
   ipcMain.on("auth:clearTokens", () => authService.clearTokens());
   ipcMain.handle("auth:getTokens", () => authService.getTokens());
+  ipcMain.handle(
+    "auth:saveLoginHash",
+    (_event, email, password) => authService.saveLoginHash(email, password)
+  );
+  ipcMain.handle(
+    "auth:verifyLoginHash",
+    (_event, email, password) => authService.verifyLoginHash(email, password)
+  );
   ipcMain.handle("db:getUser", () => authService.getUser());
   ipcMain.handle(
     "db:saveUser",

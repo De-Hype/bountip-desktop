@@ -99,6 +99,16 @@ app.whenReady().then(() => {
   );
   ipcMain.on("auth:clearTokens", () => authService.clearTokens());
   ipcMain.handle("auth:getTokens", () => authService.getTokens());
+  ipcMain.handle(
+    "auth:saveLoginHash",
+    (_event, email: string, password: string) =>
+      authService.saveLoginHash(email, password),
+  );
+  ipcMain.handle(
+    "auth:verifyLoginHash",
+    (_event, email: string, password: string) =>
+      authService.verifyLoginHash(email, password),
+  );
 
   ipcMain.handle("db:getUser", () => authService.getUser());
   ipcMain.handle("db:saveUser", (_event, payload) =>

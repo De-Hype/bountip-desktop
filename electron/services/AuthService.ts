@@ -1,5 +1,7 @@
-import keytar from 'keytar';
-import { DatabaseService } from './DatabaseService';
+import keytar from "keytar";
+import crypto from "crypto";
+import { DatabaseService } from "./DatabaseService";
+import { LocalUserProfile } from "../types/user.types";
 
 const SERVICE_NAME = "bountip-desktop";
 const ACCOUNT_NAME = "auth-tokens";
@@ -39,11 +41,27 @@ export class AuthService {
     }
   }
 
-  getUser() {
-    return this.db.getIdentity();
+  getUser(): LocalUserProfile {
+    return this.db.getUserProfile();
   }
 
   saveUser(user: any) {
     this.db.saveIdentity(user);
+  }
+
+  saveLoginHash(email: string, password: string) {
+    const normalizedEmail = (email || "").trim().toLowerCase();
+    const raw = `${normalizedEmail}::${password}`;
+    const hash = crypto.createHash("sha256").update(raw).digest("hex");
+    this.db.saveLoginHash(hash);
+  }
+
+  verifyLoginHash(email: string, password: string): boolean {
+    const stored = this.db.getLoginHash();
+    if (!stored) return false;
+    const normalizedEmail = (email || "").trim().toLowerCase();
+    const raw = `${normalizedEmail}::${password}`;
+    const hash = crypto.createHash("sha256").update(raw).digest("hex");
+    return stored === hash;
   }
 }

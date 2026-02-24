@@ -3,6 +3,23 @@ import path from "path";
 import { app } from "electron";
 import fs from "fs";
 import { schemas } from "../features/schemas";
+import {
+  userUpsertSql,
+  buildUserUpsertParams,
+} from "../features/schemas/user.schema";
+import {
+  businessUpsertSql,
+  buildBusinessUpsertParams,
+} from "../features/schemas/business.schema";
+import {
+  businessOutletUpsertSql,
+  buildBusinessOutletUpsertParams,
+} from "../features/schemas/business_outlet.schema";
+import {
+  productUpsertSql,
+  buildProductUpsertParams,
+} from "../features/schemas/product.schema";
+import { LocalUserProfile } from "../types/user.types";
 
 export class DatabaseService {
   private db: Database.Database;
@@ -76,6 +93,119 @@ export class DatabaseService {
     this.db
       .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
       .run("user_identity", JSON.stringify(updated));
+  }
+
+  getUserProfile(): LocalUserProfile {
+    const identity = this.getIdentity();
+    const row = this.db.prepare("SELECT * FROM user LIMIT 1").get() as
+      | {
+          id?: string;
+          email?: string;
+          fullName?: string;
+          status?: string;
+          isEmailVerified?: number;
+          createdAt?: string;
+          updatedAt?: string;
+        }
+      | undefined;
+
+    const fromIdentity =
+      identity && typeof identity === "object"
+        ? {
+            id:
+              identity.id ??
+              identity.userId ??
+              identity.user?.id ??
+              row?.id ??
+              null,
+            email: identity.email ?? identity.user?.email ?? row?.email ?? null,
+            fullName:
+              identity.fullName ??
+              identity.user?.fullName ??
+              row?.fullName ??
+              null,
+            status:
+              identity.status ?? identity.user?.status ?? row?.status ?? null,
+            isEmailVerified:
+              identity.isEmailVerified ??
+              identity.user?.isEmailVerified ??
+              (row && typeof row.isEmailVerified === "number"
+                ? row.isEmailVerified === 1
+                : undefined),
+            createdAt:
+              identity.createdAt ??
+              identity.user?.createdAt ??
+              row?.createdAt ??
+              null,
+            updatedAt:
+              identity.updatedAt ??
+              identity.user?.updatedAt ??
+              row?.updatedAt ??
+              null,
+          }
+        : {
+            id: row?.id ?? null,
+            email: row?.email ?? null,
+            fullName: row?.fullName ?? null,
+            status: row?.status ?? null,
+            isEmailVerified:
+              row && typeof row.isEmailVerified === "number"
+                ? row.isEmailVerified === 1
+                : undefined,
+            createdAt: row?.createdAt ?? null,
+            updatedAt: row?.updatedAt ?? null,
+          };
+
+    const deviceId =
+      identity && typeof identity === "object"
+        ? (identity.deviceId ?? identity.user?.deviceId ?? null)
+        : null;
+
+    return {
+      id: fromIdentity.id ?? null,
+      email: fromIdentity.email ?? null,
+      name: fromIdentity.fullName ?? null,
+      status: fromIdentity.status ?? null,
+      isEmailVerified: fromIdentity.isEmailVerified,
+      createdAt: fromIdentity.createdAt ?? null,
+      updatedAt: fromIdentity.updatedAt ?? null,
+      deviceId,
+    };
+  }
+
+  getSyncUserId(): string | null {
+    const identity = this.getIdentity();
+    if (identity && typeof identity === "object") {
+      const fromIdentity =
+        identity.id ?? identity.userId ?? identity.user?.id ?? null;
+      if (fromIdentity) return String(fromIdentity);
+    }
+
+    const row = this.db.prepare("SELECT id FROM user LIMIT 1").get() as
+      | { id?: string }
+      | undefined;
+    if (row && row.id) return String(row.id);
+
+    return null;
+  }
+
+  saveLoginHash(hash: string) {
+    this.db
+      .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
+      .run("login_hash", JSON.stringify({ hash }));
+  }
+
+  getLoginHash(): string | null {
+    const row = this.db
+      .prepare("SELECT value FROM identity WHERE key = ?")
+      .get("login_hash") as { value: string } | undefined;
+    if (!row) return null;
+    try {
+      const parsed = JSON.parse(row.value) as { hash?: string };
+      return parsed.hash ?? null;
+    } catch {
+      return null;
+    }
   }
 
   // Cache Methods
@@ -184,398 +314,30 @@ export class DatabaseService {
     const tx = this.db.transaction(() => {
       if (data.user) {
         const u = data.user;
-
-        this.db
-          .prepare(
-            `
-          INSERT OR REPLACE INTO user (
-            id,
-            email,
-            fullName,
-            password,
-            pin,
-            otpCodeHash,
-            otpCodeExpiry,
-            failedLoginCount,
-            failedLoginRetryTime,
-            lastFailedLogin,
-            isEmailVerified,
-            isPin,
-            isDeleted,
-            lastLoginAt,
-            status,
-            authProvider,
-            providerId,
-            publicId,
-            providerData,
-            createdAt,
-            updatedAt,
-            lastSyncedAt
-          ) VALUES (
-            @id,
-            @email,
-            @fullName,
-            @password,
-            @pin,
-            @otpCodeHash,
-            @otpCodeExpiry,
-            @failedLoginCount,
-            @failedLoginRetryTime,
-            @lastFailedLogin,
-            @isEmailVerified,
-            @isPin,
-            @isDeleted,
-            @lastLoginAt,
-            @status,
-            @authProvider,
-            @providerId,
-            @publicId,
-            @providerData,
-            @createdAt,
-            @updatedAt,
-            @lastSyncedAt
-          )
-        `,
-          )
-          .run(
-            sanitize({
-              id: u.id,
-              email: u.email ?? null,
-              fullName: u.fullName ?? null,
-              password: u.password ?? null,
-              pin: u.pin ?? null,
-              otpCodeHash: u.otpCodeHash ?? null,
-              otpCodeExpiry: u.otpCodeExpiry ?? null,
-              failedLoginCount: u.failedLoginCount ?? 0,
-              failedLoginRetryTime: u.failedLoginRetryTime ?? null,
-              lastFailedLogin: u.lastFailedLogin ?? null,
-              isEmailVerified: u.isEmailVerified ? 1 : 0,
-              isPin: u.isPin ? 1 : 0,
-              isDeleted: u.isDeleted ? 1 : 0,
-              lastLoginAt: u.lastLoginAt ?? null,
-              status: u.status ?? "inactive",
-              authProvider: u.authProvider ?? null,
-              providerId: u.providerId ?? null,
-              publicId: u.publicId ?? null,
-              providerData:
-                u.providerData && typeof u.providerData === "object"
-                  ? JSON.stringify(u.providerData)
-                  : (u.providerData ?? null),
-              createdAt: u.createdAt ?? null,
-              updatedAt: u.updatedAt ?? null,
-              lastSyncedAt: u.lastSyncedAt ?? null,
-            }),
-          );
+        this.db.prepare(userUpsertSql).run(sanitize(buildUserUpsertParams(u)));
       }
 
       if (Array.isArray(data.businesses) && data.businesses.length > 0) {
-        const stmt = this.db.prepare(
-          `
-          INSERT OR REPLACE INTO business (
-            id,
-            name,
-            slug,
-            status,
-            logoUrl,
-            country,
-            businessType,
-            address,
-            currency,
-            revenueRange,
-            createdAt,
-            updatedAt,
-            lastSyncedAt,
-            ownerId
-          ) VALUES (
-            @id,
-            @name,
-            @slug,
-            @status,
-            @logoUrl,
-            @country,
-            @businessType,
-            @address,
-            @currency,
-            @revenueRange,
-            @createdAt,
-            @updatedAt,
-            @lastSyncedAt,
-            @ownerId
-          )
-        `,
-        );
+        const stmt = this.db.prepare(businessUpsertSql);
 
         for (const b of data.businesses) {
-          stmt.run(
-            sanitize({
-              id: b.id,
-              name: b.name ?? null,
-              slug: b.slug ?? null,
-              status: b.status ?? "active",
-              logoUrl: b.logoUrl ?? null,
-              country: b.country ?? null,
-              businessType: b.businessType ?? null,
-              address: b.address ?? null,
-              currency: b.currency ?? null,
-              revenueRange: b.revenueRange ?? null,
-              createdAt: b.createdAt ?? null,
-              updatedAt: b.updatedAt ?? null,
-              lastSyncedAt: b.lastSyncedAt ?? null,
-              ownerId: b.ownerId ?? null,
-            }),
-          );
+          stmt.run(sanitize(buildBusinessUpsertParams(b)));
         }
       }
 
       if (Array.isArray(data.outlets) && data.outlets.length > 0) {
-        const stmt = this.db.prepare(
-          `
-          INSERT OR REPLACE INTO business_outlet (
-            id,
-            name,
-            description,
-            address,
-            state,
-            email,
-            postalCode,
-            phoneNumber,
-            whatsappNumber,
-            currency,
-            revenueRange,
-            country,
-            storeCode,
-            localInventoryRef,
-            centralInventoryRef,
-            outletRef,
-            isMainLocation,
-            businessType,
-            isActive,
-            whatsappChannel,
-            emailChannel,
-            isDeleted,
-            isOnboarded,
-            operatingHours,
-            logoUrl,
-            taxSettings,
-            serviceCharges,
-            paymentMethods,
-            priceTier,
-            receiptSettings,
-            labelSettings,
-            invoiceSettings,
-            generalSettings,
-            createdAt,
-            updatedAt,
-            lastSyncedAt,
-            businessId,
-            bankDetails
-          ) VALUES (
-            @id,
-            @name,
-            @description,
-            @address,
-            @state,
-            @email,
-            @postalCode,
-            @phoneNumber,
-            @whatsappNumber,
-            @currency,
-            @revenueRange,
-            @country,
-            @storeCode,
-            @localInventoryRef,
-            @centralInventoryRef,
-            @outletRef,
-            @isMainLocation,
-            @businessType,
-            @isActive,
-            @whatsappChannel,
-            @emailChannel,
-            @isDeleted,
-            @isOnboarded,
-            @operatingHours,
-            @logoUrl,
-            @taxSettings,
-            @serviceCharges,
-            @paymentMethods,
-            @priceTier,
-            @receiptSettings,
-            @labelSettings,
-            @invoiceSettings,
-            @generalSettings,
-            @createdAt,
-            @updatedAt,
-            @lastSyncedAt,
-            @businessId,
-            @bankDetails
-          )
-        `,
-        );
+        const stmt = this.db.prepare(businessOutletUpsertSql);
 
         for (const o of data.outlets) {
-          stmt.run(
-            sanitize({
-              id: o.id,
-              name: o.name ?? null,
-              description: o.description ?? null,
-              address: o.address ?? null,
-              state: o.state ?? null,
-              email: o.email ?? null,
-              postalCode: o.postalCode ?? null,
-              phoneNumber: o.phoneNumber ?? null,
-              whatsappNumber: o.whatsappNumber ?? null,
-              currency: o.currency ?? null,
-              revenueRange: o.revenueRange ?? null,
-              country: o.country ?? null,
-              storeCode: o.storeCode ?? null,
-              localInventoryRef: o.localInventoryRef ?? null,
-              centralInventoryRef: o.centralInventoryRef ?? null,
-              outletRef: o.outletRef ?? null,
-              isMainLocation: o.isMainLocation ? 1 : 0,
-              businessType: o.businessType ?? null,
-              isActive: o.isActive ? 1 : 0,
-              whatsappChannel: o.whatsappChannel ? 1 : 0,
-              emailChannel: o.emailChannel ? 1 : 0,
-              isDeleted: o.isDeleted ? 1 : 0,
-              isOnboarded: o.isOnboarded ? 1 : 0,
-              operatingHours: o.operatingHours ?? null,
-              logoUrl: o.logoUrl ?? null,
-              taxSettings:
-                o.taxSettings && typeof o.taxSettings === "object"
-                  ? JSON.stringify(o.taxSettings)
-                  : (o.taxSettings ?? null),
-              serviceCharges:
-                o.serviceCharges && typeof o.serviceCharges === "object"
-                  ? JSON.stringify(o.serviceCharges)
-                  : (o.serviceCharges ?? null),
-              paymentMethods:
-                o.paymentMethods && typeof o.paymentMethods === "object"
-                  ? JSON.stringify(o.paymentMethods)
-                  : (o.paymentMethods ?? null),
-              priceTier:
-                o.priceTier && typeof o.priceTier === "object"
-                  ? JSON.stringify(o.priceTier)
-                  : (o.priceTier ?? null),
-              receiptSettings:
-                o.receiptSettings && typeof o.receiptSettings === "object"
-                  ? JSON.stringify(o.receiptSettings)
-                  : (o.receiptSettings ?? null),
-              labelSettings:
-                o.labelSettings && typeof o.labelSettings === "object"
-                  ? JSON.stringify(o.labelSettings)
-                  : (o.labelSettings ?? null),
-              invoiceSettings:
-                o.invoiceSettings && typeof o.invoiceSettings === "object"
-                  ? JSON.stringify(o.invoiceSettings)
-                  : (o.invoiceSettings ?? null),
-              generalSettings:
-                o.generalSettings && typeof o.generalSettings === "object"
-                  ? JSON.stringify(o.generalSettings)
-                  : (o.generalSettings ?? null),
-              createdAt: o.createdAt ?? null,
-              updatedAt: o.updatedAt ?? null,
-              lastSyncedAt: o.lastSyncedAt ?? null,
-              businessId: o.businessId ?? null,
-              bankDetails:
-                o.bankDetails && typeof o.bankDetails === "object"
-                  ? JSON.stringify(o.bankDetails)
-                  : (o.bankDetails ?? null),
-            }),
-          );
+          stmt.run(sanitize(buildBusinessOutletUpsertParams(o)));
         }
       }
 
       if (Array.isArray(data.products) && data.products.length > 0) {
-        const stmt = this.db.prepare(
-          `
-          INSERT OR REPLACE INTO product (
-            id,
-            name,
-            isActive,
-            description,
-            category,
-            price,
-            preparationArea,
-            weight,
-            productCode,
-            weightScale,
-            productAvailableStock,
-            packagingMethod,
-            priceTierId,
-            allergenList,
-            logoUrl,
-            logoHash,
-            leadTime,
-            availableAtStorefront,
-            createdAtStorefront,
-            isDeleted,
-            createdAt,
-            updatedAt,
-            lastSyncedAt,
-            outletId
-          ) VALUES (
-            @id,
-            @name,
-            @isActive,
-            @description,
-            @category,
-            @price,
-            @preparationArea,
-            @weight,
-            @productCode,
-            @weightScale,
-            @productAvailableStock,
-            @packagingMethod,
-            @priceTierId,
-            @allergenList,
-            @logoUrl,
-            @logoHash,
-            @leadTime,
-            @availableAtStorefront,
-            @createdAtStorefront,
-            @isDeleted,
-            @createdAt,
-            @updatedAt,
-            @lastSyncedAt,
-            @outletId
-          )
-        `,
-        );
+        const stmt = this.db.prepare(productUpsertSql);
 
         for (const p of data.products) {
-          stmt.run(
-            sanitize({
-              id: p.id,
-              name: p.name ?? null,
-              isActive: p.isActive ? 1 : 1,
-              description: p.description ?? null,
-              category: p.category ?? null,
-              price: p.price ?? null,
-              preparationArea: p.preparationArea ?? null,
-              weight: p.weight ?? null,
-              productCode: p.productCode ?? null,
-              weightScale: p.weightScale ?? null,
-              productAvailableStock: p.productAvailableStock ?? null,
-              packagingMethod: p.packagingMethod
-                ? JSON.stringify(p.packagingMethod)
-                : null,
-              priceTierId: p.priceTierId ? JSON.stringify(p.priceTierId) : null,
-              allergenList:
-                p.allergenList && p.allergenList.length > 0
-                  ? JSON.stringify(p.allergenList)
-                  : null,
-              logoUrl: p.logoUrl ?? null,
-              logoHash: p.logoHash ?? null,
-              leadTime: p.leadTime ?? null,
-              availableAtStorefront: p.availableAtStorefront ? 1 : 0,
-              createdAtStorefront: p.createdAtStorefront ? 1 : 0,
-              isDeleted: p.isDeleted ? 1 : 0,
-              createdAt: p.createdAt ?? null,
-              updatedAt: p.updatedAt ?? null,
-              lastSyncedAt: p.lastSyncedAt ?? null,
-              outletId: p.outletId ?? null,
-            }),
-          );
+          stmt.run(sanitize(buildProductUpsertParams(p)));
         }
       }
     });
