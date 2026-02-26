@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, protocol } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { DatabaseService } from "./services/DatabaseService";
@@ -8,6 +8,20 @@ import { P2PService } from "./services/P2PService";
 import { UpdateService } from "./services/UpdateService";
 import { AssetService } from "./services/AssetService";
 import { SyncService } from "./services/SyncService";
+
+// Register custom protocol privileges
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "asset",
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      bypassCSP: true,
+    },
+  },
+]);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -94,9 +108,10 @@ app.whenReady().then(() => {
   syncService = new SyncService(dbService, networkService, p2pService);
 
   // IPC Handlers
-  ipcMain.on("auth:storeTokens", (_event, payload) =>
-    authService.storeTokens(payload),
-  );
+  ipcMain.on("auth:storeTokens", async (_event, payload) => {
+    await authService.storeTokens(payload);
+    syncService.triggerSync();
+  });
   ipcMain.on("auth:clearTokens", () => authService.clearTokens());
   ipcMain.handle("auth:getTokens", () => authService.getTokens());
   ipcMain.handle(
@@ -119,24 +134,29 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("db:getUser", () => authService.getUser());
-  ipcMain.handle("db:saveUser", (_event, payload) =>
-    authService.saveUser(payload),
-  );
+  ipcMain.handle("db:saveUser", (_event, payload) => {
+    authService.saveUser(payload);
+    syncService.triggerSync();
+  });
 
   ipcMain.handle("cache:get", (_event, key) => dbService.getCache(key));
   ipcMain.handle("cache:put", (_event, key, value) =>
     dbService.putCache(key, value),
   );
 
-  ipcMain.handle(
-    "db:saveOutletOnboarding",
-    (_event, payload: { outletId: string; data: any }) =>
-      dbService.saveOutletOnboarding(payload),
+  ipcMain.handle("db:saveOutletOnboarding", (_event, payload) =>
+    dbService.saveOutletOnboarding(payload),
+  );
+
+  ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>
+    dbService.query(sql, params),
   );
 
   ipcMain.handle("assets:import", (_event, filePath) =>
     assetService.importLocalAsset(filePath),
   );
+
+  ipcMain.on("sync:trigger", () => syncService.triggerSync());
 
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
   ipcMain.handle("queue:list", () => dbService.getQueue());

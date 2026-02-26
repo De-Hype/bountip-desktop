@@ -2,6 +2,7 @@ import { app, protocol, net } from "electron";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { pathToFileURL } from "url";
 import { P2PService } from "./P2PService";
 
 const ASSET_EXTENSIONS = [
@@ -50,7 +51,7 @@ export class AssetService {
     const filename = `${hash}${ext}`;
     const destPath = path.join(ASSET_DIR, filename);
     fs.copyFileSync(sourcePath, destPath);
-    return `file://${destPath}`;
+    return `asset:///${filename}`;
   }
 
   private initP2P() {
@@ -102,6 +103,32 @@ export class AssetService {
   }
 
   private initProtocol() {
+    protocol.handle("asset", async (request) => {
+      try {
+        const urlObj = new URL(request.url);
+        // Handle asset:///filename or asset://filename
+        let filename = urlObj.pathname.replace(/^\//, "");
+        if (!filename && urlObj.host) {
+          filename = urlObj.host;
+        }
+
+        // Safety check: filename should be a hash + ext
+        // But for flexibility, just ensure it's in ASSET_DIR
+        const filePath = path.join(ASSET_DIR, filename);
+
+        // Prevent directory traversal
+        if (!filePath.startsWith(ASSET_DIR)) {
+          return new Response("Forbidden", { status: 403 });
+        }
+
+        const fileUrl = pathToFileURL(filePath).toString();
+        return net.fetch(fileUrl);
+      } catch (e) {
+        console.error("Asset protocol error:", e);
+        return new Response("Not Found", { status: 404 });
+      }
+    });
+
     // We only want to intercept strict static assets.
     // WARNING: This is a powerful API.
     protocol.handle("https", async (request) => {
@@ -120,7 +147,7 @@ export class AssetService {
       if (fs.existsSync(filePath)) {
         console.log(`[AssetService] Serving from cache: ${url}`);
         // Convert file path to file:// URL which net.fetch handles correctly
-        const fileUrl = `file://${filePath}`;
+        const fileUrl = pathToFileURL(filePath).toString();
         return net.fetch(fileUrl);
       }
 

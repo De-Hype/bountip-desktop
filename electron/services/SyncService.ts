@@ -28,6 +28,12 @@ export class SyncService {
     this.init();
   }
 
+  public async triggerSync() {
+    console.log("[SyncService] Triggering manual sync...");
+    this.lastPullAt = 0; // Force pull
+    await this.checkLeaderAndSync();
+  }
+
   private init() {
     this.network.onStatusChange((online) => {
       if (online) {
@@ -36,6 +42,9 @@ export class SyncService {
     });
 
     setInterval(() => this.checkLeaderAndSync(), 60000);
+
+    // Initial sync check on startup
+    this.checkLeaderAndSync();
   }
 
   private async checkLeaderAndSync() {

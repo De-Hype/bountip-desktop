@@ -1,6 +1,7 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { Upload, Loader2, X } from "lucide-react";
 import { useUploadImageMutation } from "@/redux/app";
+import { useNetworkStore } from "@/stores/useNetworkStore";
 
 interface ImageUploaderProps {
   value?: string | null;
@@ -30,6 +31,11 @@ const ImageHandler: React.FC<ImageUploaderProps> = ({
   const [fileName, setFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadImage] = useUploadImageMutation();
+  const { isOnline } = useNetworkStore();
+
+  useEffect(() => {
+    setPreview(value || null);
+  }, [value]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -45,12 +51,13 @@ const ImageHandler: React.FC<ImageUploaderProps> = ({
       setUploading(true);
       setFileName(file.name);
 
-      if (!navigator.onLine) {
+      if (!isOnline) {
         // Offline handling
         const w = window as any;
-        if (w.electronAPI && file.path) {
+        const fileWithPath = file as any;
+        if (w.electronAPI && fileWithPath.path) {
           try {
-            const localUrl = await w.electronAPI.importAsset(file.path);
+            const localUrl = await w.electronAPI.importAsset(fileWithPath.path);
             setPreview(localUrl);
             onChange?.({ url: localUrl });
             setUploading(false);
@@ -80,7 +87,7 @@ const ImageHandler: React.FC<ImageUploaderProps> = ({
     } catch (err) {
       console.error(err);
       onError?.(
-        err instanceof Error ? err.message : "Image upload failed, try again."
+        err instanceof Error ? err.message : "Image upload failed, try again.",
       );
     } finally {
       setUploading(false);

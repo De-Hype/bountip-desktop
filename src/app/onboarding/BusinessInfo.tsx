@@ -89,7 +89,6 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
   // const [isAddingNew, setIsAddingNew] = useState(false);
   const [revenueRange, setRevenueRange] = useState("50000-100000");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currencySearchTerm, setCurrencySearchTerm] = useState("");
 
@@ -138,11 +137,6 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
     setIsCurrencyOpen(false);
   };
 
-  const handleImageUpload = (file: File) => {
-    setLogoFile(file);
-    console.log("[BusinessInfo] 🖼️ Image file selected:", file.name);
-  };
-
   const handleRevenueRangeChange = (range: string) => {
     setRevenueRange(range);
     console.log("[BusinessInfo] 💰 Revenue range changed:", range);
@@ -158,7 +152,7 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
       address: businessAddress,
       currency: selectedCurrency?.code,
       revenueRange,
-      hasLogo: !!logoFile,
+      hasLogo: !!logoUrl,
       businessId: businessData?.data?.id,
     });
 
@@ -196,8 +190,14 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
       if (!isOnline) {
         // If we have an outlet to onboard, we must do so locally
         if (needsOutletOnboarding && outletIdParam && api) {
-          const isOfflineImage = logoUrl.startsWith("file://") ? 1 : 0;
-          const localLogoPath = logoUrl.startsWith("file://") ? logoUrl : null;
+          const isOfflineImage =
+            logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
+              ? 1
+              : 0;
+          const localLogoPath =
+            logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
+              ? logoUrl
+              : null;
 
           await api.saveOutletOnboarding({
             outletId: outletIdParam,
@@ -398,8 +398,6 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
           <div className="w-full">
             <BusinessRevenueComponent
               onRevenueRangeChange={handleRevenueRangeChange}
-              onFileUpload={handleImageUpload}
-              onImageUpload={() => {}}
               selectedCurrency={selectedCurrency}
             />
 

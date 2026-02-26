@@ -123,6 +123,20 @@ export class DatabaseService {
     }
   }
 
+  query(sql: string, params: any[] = []) {
+    try {
+      const stmt = this.db.prepare(sql);
+      if (stmt.reader) {
+        return stmt.all(params);
+      } else {
+        return stmt.run(params);
+      }
+    } catch (error) {
+      console.error("DB Query Error:", error);
+      throw error;
+    }
+  }
+
   // Identity Methods
   getIdentity(): any {
     const row = this.db

@@ -213,6 +213,12 @@ const Dashboard = () => {
       path: "/dashboard/settings",
       available: true,
     },
+    {
+      icon: AssetsFiles.settings,
+      title: "Database Viewer",
+      path: "/dashboard/debug/database",
+      available: true,
+    },
     // {
     //   icon: AssetsFiles.DistributionIcon,
     //   title: "Distribution",

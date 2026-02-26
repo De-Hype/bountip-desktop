@@ -23,7 +23,10 @@ import { appApi } from "@/redux/app";
 import { authApi } from "@/redux/auth";
 import { WifiOff } from "lucide-react";
 import { UpdateNotifier } from "@/components/UpdateNotifier";
-import { initializeNetworkListeners, useNetworkStore } from "@/stores/useNetworkStore";
+import {
+  initializeNetworkListeners,
+  useNetworkStore,
+} from "@/stores/useNetworkStore";
 
 const PUBLIC_PATHS = ["/auth", "/reset-password", "/verify"];
 
@@ -38,7 +41,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const SYNC_INTERVAL_MS = Number(
-    import.meta.env.VITE_SYNC_INTERVAL_MS || 300000
+    import.meta.env.VITE_SYNC_INTERVAL_MS || 300000,
   );
 
   /**
@@ -149,13 +152,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
     if (!isAuthenticated && !isPublic) {
-      if (!pathname.startsWith("/auth")) navigate("/auth");
+      if (!pathname.startsWith("/auth")) {
+        // Pass current path as state to preserve it after login
+        navigate("/auth", {
+          state: { from: pathname + location.search + location.hash },
+        });
+      }
       return;
     }
 
     const onAuthPage = pathname.startsWith("/auth");
     if (isAuthenticated && onAuthPage) {
-      navigate("/dashboard");
+      // Check if there is a 'from' path in location state
+      const state = location.state as { from?: string } | null;
+      if (state?.from) {
+        navigate(state.from);
+      } else {
+        navigate("/dashboard");
+      }
     }
   }, [isAuthenticated, location.pathname, isBootstrapping, navigate]);
 
@@ -212,9 +226,9 @@ function ReduxProvider({ children }: { children: React.ReactNode }) {
         gDM().concat(
           outletApi.middleware,
           appApi.middleware,
-          authApi.middleware
+          authApi.middleware,
         ),
-    })
+    }),
   );
 
   return <Provider store={store}>{children}</Provider>;

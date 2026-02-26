@@ -1,6 +1,6 @@
 import require$$1$3, { app, BrowserWindow, net, protocol, ipcMain, nativeImage } from "electron";
 import path from "path";
-import require$$4$1, { fileURLToPath } from "url";
+import require$$4$1, { pathToFileURL, fileURLToPath } from "url";
 import Database from "better-sqlite3";
 import fs$1 from "fs";
 import keytar from "keytar";
@@ -979,6 +979,19 @@ class DatabaseService {
       if (!e.message.includes("duplicate column name")) {
         console.error("Migration error (localLogoPath):", e);
       }
+    }
+  }
+  query(sql, params = []) {
+    try {
+      const stmt = this.db.prepare(sql);
+      if (stmt.reader) {
+        return stmt.all(params);
+      } else {
+        return stmt.run(params);
+      }
+    } catch (error2) {
+      console.error("DB Query Error:", error2);
+      throw error2;
     }
   }
   // Identity Methods
@@ -18883,7 +18896,7 @@ class AssetService {
     const filename = `${hash}${ext}`;
     const destPath = path.join(ASSET_DIR, filename);
     fs$1.copyFileSync(sourcePath, destPath);
-    return `file://${destPath}`;
+    return `asset:///${filename}`;
   }
   initP2P() {
     this.p2pService.onMessage((payload) => {
@@ -18925,6 +18938,24 @@ class AssetService {
     }
   }
   initProtocol() {
+    protocol.handle("asset", async (request) => {
+      try {
+        const urlObj = new URL(request.url);
+        let filename = urlObj.pathname.replace(/^\//, "");
+        if (!filename && urlObj.host) {
+          filename = urlObj.host;
+        }
+        const filePath = path.join(ASSET_DIR, filename);
+        if (!filePath.startsWith(ASSET_DIR)) {
+          return new Response("Forbidden", { status: 403 });
+        }
+        const fileUrl = pathToFileURL(filePath).toString();
+        return net.fetch(fileUrl);
+      } catch (e) {
+        console.error("Asset protocol error:", e);
+        return new Response("Not Found", { status: 404 });
+      }
+    });
     protocol.handle("https", async (request) => {
       const url = request.url;
       const cleanUrl = url.split("?")[0].toLowerCase();
@@ -18935,7 +18966,7 @@ class AssetService {
       const filePath = this.getFilePath(url);
       if (fs$1.existsSync(filePath)) {
         console.log(`[AssetService] Serving from cache: ${url}`);
-        const fileUrl = `file://${filePath}`;
+        const fileUrl = pathToFileURL(filePath).toString();
         return net.fetch(fileUrl);
       }
       try {
@@ -18996,6 +19027,11 @@ class SyncService {
     this.p2p = p2p;
     this.init();
   }
+  async triggerSync() {
+    console.log("[SyncService] Triggering manual sync...");
+    this.lastPullAt = 0;
+    await this.checkLeaderAndSync();
+  }
   init() {
     this.network.onStatusChange((online) => {
       if (online) {
@@ -19003,6 +19039,7 @@ class SyncService {
       }
     });
     setInterval(() => this.checkLeaderAndSync(), 6e4);
+    this.checkLeaderAndSync();
   }
   async checkLeaderAndSync() {
     const online = this.network.getStatus().online;
@@ -19189,6 +19226,18 @@ class SyncService {
     }
   }
 }
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "asset",
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      bypassCSP: true
+    }
+  }
+]);
 const __filename$1 = fileURLToPath(import.meta.url);
 const __dirname$1 = path.dirname(__filename$1);
 let dbService;
@@ -19197,6 +19246,7 @@ let networkService;
 let p2pService;
 let updateService;
 let assetService;
+let syncService;
 function generateDeviceId() {
   return "dev-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
@@ -19251,11 +19301,11 @@ app.whenReady().then(() => {
   p2pService = new P2PService(deviceId);
   p2pService.start();
   assetService = new AssetService(p2pService);
-  new SyncService(dbService, networkService, p2pService);
-  ipcMain.on(
-    "auth:storeTokens",
-    (_event, payload) => authService.storeTokens(payload)
-  );
+  syncService = new SyncService(dbService, networkService, p2pService);
+  ipcMain.on("auth:storeTokens", async (_event, payload) => {
+    await authService.storeTokens(payload);
+    syncService.triggerSync();
+  });
   ipcMain.on("auth:clearTokens", () => authService.clearTokens());
   ipcMain.handle("auth:getTokens", () => authService.getTokens());
   ipcMain.handle(
@@ -19275,10 +19325,10 @@ app.whenReady().then(() => {
     (_event, pin) => authService.verifyPinHash(pin)
   );
   ipcMain.handle("db:getUser", () => authService.getUser());
-  ipcMain.handle(
-    "db:saveUser",
-    (_event, payload) => authService.saveUser(payload)
-  );
+  ipcMain.handle("db:saveUser", (_event, payload) => {
+    authService.saveUser(payload);
+    syncService.triggerSync();
+  });
   ipcMain.handle("cache:get", (_event, key) => dbService.getCache(key));
   ipcMain.handle(
     "cache:put",
@@ -19289,9 +19339,14 @@ app.whenReady().then(() => {
     (_event, payload) => dbService.saveOutletOnboarding(payload)
   );
   ipcMain.handle(
+    "db:query",
+    (_event, sql, params) => dbService.query(sql, params)
+  );
+  ipcMain.handle(
     "assets:import",
     (_event, filePath) => assetService.importLocalAsset(filePath)
   );
+  ipcMain.on("sync:trigger", () => syncService.triggerSync());
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
   ipcMain.handle("queue:list", () => dbService.getQueue());
   ipcMain.handle("queue:clear", () => dbService.clearQueue());

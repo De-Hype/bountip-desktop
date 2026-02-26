@@ -144,7 +144,7 @@ const UserProfile = ({
 
     // Only force onboarding flow when we're not already on the customization page
     if (needsOnboarding && !isCustomizationRoute) {
-      navigate(`/onboarding?outletId=${outlet.id}/`);
+      navigate(`/onboarding?outletId=${outlet.id}`);
     }
   };
 

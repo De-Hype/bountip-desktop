@@ -1,14 +1,10 @@
-import { Upload, CheckCircle, Loader2, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Range from "rc-slider"; // Import the Range component
 import "rc-slider/assets/index.css"; // Import default styles (we'll override with Tailwind)
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
-import { useUploadImageMutation } from "@/redux/app";
 
 interface BusinessRevenueComponentProps {
   onRevenueRangeChange?: (range: string) => void;
-  onFileUpload?: (file: File) => void;
-  onImageUpload?: (url: string) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   selectedCurrency?: any;
 }
@@ -19,21 +15,12 @@ const STEP_REVENUE = 1000;
 
 const BusinessRevenueComponent: React.FC<BusinessRevenueComponentProps> = ({
   onRevenueRangeChange,
-  onFileUpload,
-  onImageUpload,
   selectedCurrency,
 }) => {
   const [revenueRange, setRevenueRange] = useState<[number, number]>([
     MIN_REVENUE,
     MAX_REVENUE,
   ]);
-  const [isDragOver, setIsDragOver] = useState<boolean>(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>("");
-  const [uploadError, setUploadError] = useState<string>("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [triggerUploadImage] = useUploadImageMutation();
 
   const formatCurrency = (value: number): string => {
     const currencyCode = selectedCurrency?.code || "USD";
@@ -57,105 +44,6 @@ const BusinessRevenueComponent: React.FC<BusinessRevenueComponentProps> = ({
       const rangeString = `${values[0]}-${values[1]}`;
       onRevenueRangeChange?.(rangeString);
     }
-  };
-
-  const handleImageUpload = async (file: File) => {
-    setIsUploading(true);
-    setUploadError("");
-
-    try {
-      if (!navigator.onLine) {
-        setUploadError("You are offline. Connect to the internet to upload.");
-        setUploadedFile(null);
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await triggerUploadImage(formData).unwrap();
-
-      const url = response?.data?.url;
-      if (url) {
-        setUploadedImageUrl(url);
-        onImageUpload?.(url);
-      } else {
-        throw new Error("No URL returned from upload service");
-      }
-    } catch (error) {
-      console.error("Upload failed:", error);
-      setUploadError("Failed to upload image. Please try again.");
-      setUploadedImageUrl("");
-      setUploadedFile(null);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleFileSelect = async (file: File) => {
-    setUploadError("");
-    setUploadedImageUrl("");
-    setUploadedFile(null);
-
-    const allowedTypes = ["image/jpeg", "image/png", "image/svg+xml"];
-
-    if (!allowedTypes.includes(file.type)) {
-      setUploadError("Please select a valid file type (JPG, PNG, SVG)");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("File size must be less than 5MB");
-      return;
-    }
-
-    setUploadedFile(file);
-    onFileUpload?.(file);
-
-    await handleImageUpload(file);
-  };
-
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragOver(false);
-
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileSelect(files[0]);
-    }
-  };
-
-  const handleFileInputChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      handleFileSelect(files[0]);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const handleUploadClick = () => {
-    if (!isUploading) {
-      setUploadError("");
-      fileInputRef.current?.click();
-    }
-  };
-
-  const dismissError = () => {
-    setUploadError("");
   };
 
   return (
@@ -208,8 +96,6 @@ const BusinessRevenueComponent: React.FC<BusinessRevenueComponentProps> = ({
           <span>{formatCurrency(MAX_REVENUE)}</span>
         </div>
       </div>
-
-      {/* File Upload Section - Remains unchanged */}
     </div>
   );
 };

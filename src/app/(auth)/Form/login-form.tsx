@@ -128,7 +128,16 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
               try {
                 await businessService.loadAllOutlet();
               } catch {}
-              navigate("/dashboard");
+              // Check if there is a 'from' path in location state
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const state = (window.history.state as any)?.usr?.state as {
+                from?: string;
+              } | null;
+              if (state?.from) {
+                navigate(state.from);
+              } else {
+                navigate("/dashboard");
+              }
               return;
             }
           }
@@ -194,7 +203,16 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         await businessService.loadAllOutlet();
       } catch {}
 
-      navigate("/dashboard");
+      // Check if there is a 'from' path in location state
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const state = (window.history.state as any)?.usr?.state as {
+        from?: string;
+      } | null;
+      if (state?.from) {
+        navigate(state.from);
+      } else {
+        navigate("/dashboard");
+      }
     } catch (error: any) {
       console.log(error, "This is the error");
 
@@ -379,7 +397,17 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       try {
         await businessService.loadAllOutlet();
       } catch {}
-      navigate("/dashboard/");
+
+      // Check if there is a 'from' path in location state
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const state = (window.history.state as any)?.usr?.state as {
+        from?: string;
+      } | null;
+      if (state?.from) {
+        navigate(state.from);
+      } else {
+        navigate("/dashboard/");
+      }
     } catch (error: any) {
       const message = error?.message || "Unable to sign in with PIN.";
       showToast("error", "Sign in failed", message);

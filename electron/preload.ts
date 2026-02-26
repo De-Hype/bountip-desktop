@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   saveOutletOnboarding: async (payload: any) =>
     ipcRenderer.invoke("db:saveOutletOnboarding", payload),
+  dbQuery: async (sql: string, params: any[] = []) =>
+    ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>
     ipcRenderer.invoke("assets:import", filePath),
   getNetworkStatus: async () => {
