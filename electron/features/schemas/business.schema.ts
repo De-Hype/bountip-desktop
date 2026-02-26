@@ -92,6 +92,7 @@ export const businessSchema: TableSchema = {
   name: "business",
   create: businessCreateSql,
   indexes: [
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_business_id ON business(id);`,
     `CREATE INDEX IF NOT EXISTS idx_business_status ON business(status);`,
     `CREATE INDEX IF NOT EXISTS idx_business_slug ON business(slug);`,
     `CREATE INDEX IF NOT EXISTS idx_business_lastSyncedAt ON business(lastSyncedAt);`,

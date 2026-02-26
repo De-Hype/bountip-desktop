@@ -32,6 +32,7 @@ type BusinessState = {
   };
   fetchBusinessData: () => Promise<void>;
   selectOutlet: (id: string) => void;
+  updateOutletLocal: (id: string, changes: Partial<Outlet>) => void;
 };
 
 export const useBusinessStore = create<BusinessState>((set, get) => ({
@@ -75,6 +76,7 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
         : typeof navigator !== "undefined"
         ? navigator.onLine
         : true;
+        console.log("Online status", online)
       if (api && !online) {
         const outletId = get().selectedOutletId || get().outlets?.[0]?.id;
         if (outletId) {
@@ -326,6 +328,40 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
               weightScale: toVal(weightScale),
             },
           });
+        } catch {}
+      })();
+    }
+  },
+  updateOutletLocal: (id: string, changes: Partial<Outlet>) => {
+    const api = getElectronAPI();
+    const current = get().outlets;
+    const updatedOutlets = current.map((o) =>
+      o.id === id ? ({ ...o, ...changes } as Outlet) : o,
+    );
+    const selectedOutletId = get().selectedOutletId;
+    const selectedOutlet =
+      selectedOutletId === id
+        ? (updatedOutlets.find((o) => o.id === id) ?? null)
+        : get().selectedOutlet;
+
+    set({
+      outlets: updatedOutlets,
+      selectedOutlet,
+    });
+
+    if (api) {
+      (async () => {
+        try {
+          await api.cachePut("business:outlets", updatedOutlets);
+          if (selectedOutletId)
+            await api.cachePut("business:selectedOutletId", selectedOutletId);
+          if (selectedOutlet)
+            await api.cachePut("business:selectedOutlet", selectedOutlet);
+          const ts = Date.now();
+          const outlet = updatedOutlets.find((o) => o.id === id);
+          if (outlet) {
+            await api.cachePut(`outlet:${id}`, { data: outlet, ts });
+          }
         } catch {}
       })();
     }

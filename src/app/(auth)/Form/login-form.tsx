@@ -103,6 +103,48 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   };
 
   const handleSignin = async (data: SigninFormValues) => {
+    // Offline Login Check
+    const api = (window as any).electronAPI;
+    const isOffline =
+      typeof navigator !== "undefined" ? !navigator.onLine : false;
+
+    if (isOffline) {
+      if (api?.verifyLoginHash) {
+        try {
+          const isValid = await api.verifyLoginHash(data.email, data.password);
+          if (isValid) {
+            const user = await api.getUser();
+            if (user) {
+              setAuth({
+                user: {
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  status: user.status,
+                  isEmailVerified: user.isEmailVerified,
+                },
+                tokens: { accessToken: "offline", refreshToken: "offline" },
+              });
+              try {
+                await businessService.loadAllOutlet();
+              } catch {}
+              navigate("/dashboard");
+              return;
+            }
+          }
+          showToast("error", "Sign in failed", "Invalid credentials (Offline)");
+          return;
+        } catch (err) {
+          console.error("Offline login verification failed", err);
+          showToast("error", "Sign in failed", "Offline login unavailable");
+          return;
+        }
+      } else {
+        showToast("error", "Offline", "Connect to the internet to sign in.");
+        return;
+      }
+    }
+
     if (isLocked) {
       showToast(
         "error",
@@ -138,6 +180,15 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         },
         tokens,
       });
+
+      // Save Login hash for future offline login
+      const api = (window as any).electronAPI;
+      if (api?.saveLoginHash) {
+        api.saveLoginHash(data.email, data.password);
+      }
+      if (api?.saveUser) {
+        api.saveUser(user);
+      }
 
       try {
         await businessService.loadAllOutlet();
@@ -232,10 +283,53 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
 
   const handlePinLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!navigator.onLine) {
-      showToast("error", "Offline", "Connect to the internet to sign in.");
-      return;
+
+    // Offline Login Check
+    const api = (window as any).electronAPI;
+    const isOffline =
+      typeof navigator !== "undefined" ? !navigator.onLine : false;
+
+    if (isOffline) {
+      if (api?.verifyPinHash) {
+        try {
+          const isValid = await api.verifyPinHash(pin);
+          if (isValid) {
+            // Get cached user and tokens if possible, or just user
+            // Ideally we need tokens to be authenticated, but offline we might just need user data
+            // For now, let's try to load user from DB
+            const user = await api.getUser();
+            if (user) {
+              setAuth({
+                user: {
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  status: user.status,
+                  isEmailVerified: user.isEmailVerified,
+                },
+                tokens: { accessToken: "offline", refreshToken: "offline" }, // Mock tokens
+              });
+              try {
+                // Try to load cached data
+                await businessService.loadAllOutlet();
+              } catch {}
+              navigate("/dashboard/");
+              return;
+            }
+          }
+          showToast("error", "Sign in failed", "Invalid PIN (Offline)");
+          return;
+        } catch (err) {
+          console.error("Offline PIN verification failed", err);
+          showToast("error", "Sign in failed", "Offline login unavailable");
+          return;
+        }
+      } else {
+        showToast("error", "Offline", "Connect to the internet to sign in.");
+        return;
+      }
     }
+
     if (pin.length < 4) return;
     const emailCookie = getCookie<string | { email?: string }>(
       COOKIE_NAMES.TOKEN_USER_EMAIL,
@@ -272,6 +366,16 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         },
         tokens,
       });
+
+      // Save PIN hash for future offline login
+      const api = (window as any).electronAPI;
+      if (api?.savePinHash) {
+        api.savePinHash(pin);
+      }
+      if (api?.saveUser) {
+        api.saveUser(user);
+      }
+
       try {
         await businessService.loadAllOutlet();
       } catch {}

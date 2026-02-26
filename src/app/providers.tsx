@@ -23,6 +23,7 @@ import { appApi } from "@/redux/app";
 import { authApi } from "@/redux/auth";
 import { WifiOff } from "lucide-react";
 import { UpdateNotifier } from "@/components/UpdateNotifier";
+import { initializeNetworkListeners, useNetworkStore } from "@/stores/useNetworkStore";
 
 const PUBLIC_PATHS = ["/auth", "/reset-password", "/verify"];
 
@@ -33,7 +34,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const toast = useToastStore();
 
   const [isBootstrapping, setIsBootstrapping] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
+  const { isOnline } = useNetworkStore();
   const [isSyncing, setIsSyncing] = useState(false);
 
   const SYNC_INTERVAL_MS = Number(
@@ -84,41 +85,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const api = (window as any).electronAPI;
-    if (!api) return;
-
-    // 1. Initial Fetch from Main Process
-    api
-      .getNetworkStatus()
-      .then(({ online }: any) => {
-        console.log("[Providers] Initial network status:", online);
-        setIsOnline(online);
-      })
-      .catch((err: any) => {
-        console.error("[Providers] Failed to get network status:", err);
-        // Fallback to false if IPC fails, forcing offline mode until update
-        setIsOnline(false);
-      });
-
-    // 2. Listen for Updates from Main Process
-    const removeListener = api.onNetworkStatus(({ online }: any) => {
-      console.log("[Providers] Network status updated:", online);
-      setIsOnline(online);
-    });
-
-    // 3. Notify Main Process of Browser Events (Optional but helpful)
-    // We strictly trust the Main Process response, but we can hint it to check.
-    const handleBrowserOnline = () => api.setNetworkStatus(true);
-    const handleBrowserOffline = () => api.setNetworkStatus(false);
-
-    window.addEventListener("online", handleBrowserOnline);
-    window.addEventListener("offline", handleBrowserOffline);
-
-    return () => {
-      window.removeEventListener("online", handleBrowserOnline);
-      window.removeEventListener("offline", handleBrowserOffline);
-      if (removeListener) removeListener();
-    };
+    // Use the centralized network listener
+    const cleanup = initializeNetworkListeners();
+    return cleanup;
   }, []);
 
   /**

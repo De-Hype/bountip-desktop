@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("auth:saveLoginHash", email, password),
   verifyLoginHash: async (email: string, password: string) =>
     ipcRenderer.invoke("auth:verifyLoginHash", email, password),
+  savePinHash: async (pin: string) =>
+    ipcRenderer.invoke("auth:savePinHash", pin),
+  verifyPinHash: async (pin: string) =>
+    ipcRenderer.invoke("auth:verifyPinHash", pin),
   saveUser: async (user: any) => {
     try {
       return await ipcRenderer.invoke("db:saveUser", user);
@@ -32,6 +36,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
       return null;
     }
   },
+  saveOutletOnboarding: async (payload: any) =>
+    ipcRenderer.invoke("db:saveOutletOnboarding", payload),
+  importAsset: async (filePath: string) =>
+    ipcRenderer.invoke("assets:import", filePath),
   getNetworkStatus: async () => {
     try {
       return await ipcRenderer.invoke("network:getStatus");
@@ -88,4 +96,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("updater:status", handler);
     return () => ipcRenderer.removeListener("updater:status", handler);
   },
+  factoryReset: () => ipcRenderer.send("system:factoryReset"),
 });

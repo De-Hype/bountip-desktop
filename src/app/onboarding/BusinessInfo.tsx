@@ -17,6 +17,35 @@ import {
   useOnboardBusinessMutation,
 } from "@/redux/auth";
 import useToastStore from "@/stores/toastStore";
+import { useNetworkStore } from "@/stores/useNetworkStore";
+
+type ElectronAPI = {
+  cacheGet: (key: string) => Promise<any>;
+  cachePut: (key: string, value: any) => Promise<void>;
+  saveOutletOnboarding: (payload: {
+    outletId: string;
+    data: {
+      country: string;
+      address: string;
+      businessType: string;
+      currency: string;
+      revenueRange: string;
+      logoUrl: string;
+      isOfflineImage?: number;
+      localLogoPath?: string;
+    };
+  }) => Promise<void>;
+  importAsset: (filePath: string) => Promise<string>;
+  savePinHash: (pin: string) => Promise<void>;
+  verifyPinHash: (pin: string) => Promise<boolean>;
+  factoryReset: () => void;
+};
+
+const getElectronAPI = (): ElectronAPI | null => {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { electronAPI?: ElectronAPI };
+  return w.electronAPI ?? null;
+};
 
 const countries = Country.getAllCountries();
 const currencies = C.codes()
@@ -66,7 +95,8 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
 
   const [logoUrl, setLogoUrl] = useState("");
   const [searchParams] = useSearchParams();
-  const { outlets } = useBusinessStore();
+  const { outlets, updateOutletLocal } = useBusinessStore();
+  const { isOnline } = useNetworkStore();
   const outletIdParam = searchParams.get("outletId") || "";
   const outlet = outlets.find((o) => o.id === outletIdParam) as unknown as
     | {
@@ -81,7 +111,7 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
   console.log(businessType, selectedCountry, selectedCurrency);
 
   const filteredCountries = countries.filter((country) =>
-    country.name.toLowerCase().includes(searchTerm.toLowerCase())
+    country.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const filteredCurrencies = currencies.filter(
@@ -90,7 +120,7 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
       currency.currency
         .toLowerCase()
         .includes(currencySearchTerm.toLowerCase()) ||
-      currency.code.toLowerCase().includes(currencySearchTerm.toLowerCase())
+      currency.code.toLowerCase().includes(currencySearchTerm.toLowerCase()),
   );
 
   const handleBusinessTypeSelect = (type: { value: string; label: string }) => {
@@ -138,15 +168,10 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
       showToast(
         "error",
         "Missing Fields",
-        "Please select business type, location, and currency."
+        "Please select business type, location, and currency.",
       );
       return;
     }
-    if (!navigator.onLine) {
-      showToast("error", "Offline", "Connect to the internet to continue.");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const payload = {
@@ -158,10 +183,110 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
         revenueRange,
         logoUrl: logoUrl || "",
         logoHash: logoUrl ? "updated" : undefined,
-        ...(outlet && outlet.isOnboarded === false && outletIdParam
+        ...(outlet && !outlet.isOnboarded && outletIdParam
           ? { outletId: outletIdParam }
           : {}),
       };
+
+      const api = getElectronAPI();
+      const needsOutletOnboarding =
+        outlet && !outlet.isOnboarded && outletIdParam;
+
+      // Offline Handling
+      if (!isOnline) {
+        // If we have an outlet to onboard, we must do so locally
+        if (needsOutletOnboarding && outletIdParam && api) {
+          const isOfflineImage = logoUrl.startsWith("file://") ? 1 : 0;
+          const localLogoPath = logoUrl.startsWith("file://") ? logoUrl : null;
+
+          await api.saveOutletOnboarding({
+            outletId: outletIdParam,
+            data: {
+              country: payload.country,
+              address: payload.address,
+              businessType: payload.businessType,
+              currency: payload.currency,
+              revenueRange: payload.revenueRange,
+              logoUrl: payload.logoUrl,
+              isOfflineImage,
+              localLogoPath: localLogoPath || undefined,
+            },
+          });
+          updateOutletLocal(outletIdParam, {
+            country: payload.country,
+            address: payload.address,
+            businessType: payload.businessType,
+            currency: payload.currency,
+            revenueRange: payload.revenueRange,
+            logoUrl: payload.logoUrl,
+            isOnboarded: true,
+            isOfflineImage,
+            localLogoPath: localLogoPath || undefined,
+          });
+          showToast(
+            "success",
+            "Setup complete (Offline)",
+            "Business details saved locally.",
+          );
+          onNext();
+          return;
+        } else if (needsOutletOnboarding && !outletIdParam) {
+          showToast(
+            "error",
+            "Offline",
+            "Cannot save business details offline without an outlet.",
+          );
+          setIsSubmitting(false);
+          return;
+        } else {
+          // If there is NO outlet to onboard (just business details update?), allow it or handle differently.
+          // Assuming if we are here, we might just be updating business info locally if supported.
+          // For now, let's treat it as success if we aren't required to onboard an outlet.
+          showToast(
+            "success",
+            "Setup complete (Offline)",
+            "Business details saved locally.",
+          );
+          onNext();
+          return;
+        }
+      }
+
+      if (needsOutletOnboarding && outletIdParam && api) {
+        // await api.saveOutletOnboarding({
+        //   outletId: outletIdParam,
+        //   data: {
+        //     country: payload.country,
+        //     address: payload.address,
+        //     businessType: payload.businessType,
+        //     currency: payload.currency,
+        //     revenueRange: payload.revenueRange,
+        //     logoUrl: payload.logoUrl,
+        //   },
+        // });
+        updateOutletLocal(outletIdParam, {
+          country: payload.country,
+          address: payload.address,
+          businessType: payload.businessType,
+          currency: payload.currency,
+          revenueRange: payload.revenueRange,
+          logoUrl: payload.logoUrl,
+          isOnboarded: true,
+        });
+      }
+
+      if (!isOnline && needsOutletOnboarding && outletIdParam) {
+        // When you are ready to sync outlet onboarding to the server,
+        // enqueue the server operation here (e.g. via queueAdd or a dedicated IPC).
+
+        showToast(
+          "success",
+          "Setup complete",
+          "Business details saved locally.",
+        );
+        onNext();
+        return;
+      }
 
       const res = await onboardBusiness(payload).unwrap();
       if (res?.status) {
@@ -182,6 +307,19 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleReset = () => {
+    if (
+      confirm(
+        "Are you sure you want to reset the application? This will clear all data and cannot be undone.",
+      )
+    ) {
+      localStorage.clear();
+      sessionStorage.clear();
+      const api = getElectronAPI();
+      api?.factoryReset();
     }
   };
 
@@ -293,6 +431,16 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
               "Continue"
             )}
           </button>
+
+          <div className="flex justify-center pt-4">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-xs text-red-500 hover:text-red-600 hover:underline transition-colors"
+            >
+              Factory Reset (Clear all data)
+            </button>
+          </div>
         </div>
       </form>
     </>

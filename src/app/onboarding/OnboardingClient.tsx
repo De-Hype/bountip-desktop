@@ -23,6 +23,13 @@ const OnboardingClient = () => {
   const skipPin = outlet && outlet.isOnboarded === false;
 
   const handleNextStep = useCallback(() => {
+    // If we are onboarding a specific outlet (outletId present), skip the PIN step
+    if (outletId) {
+      navigate("/dashboard");
+      return;
+    }
+
+    // Original logic: skip if outlet is already onboarded (legacy/general check)
     if (skipPin) {
       navigate("/dashboard");
       return;
@@ -30,9 +37,9 @@ const OnboardingClient = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("step", "pin");
     setSearchParams(params);
-  }, [searchParams, skipPin, navigate, setSearchParams]);
+  }, [searchParams, skipPin, navigate, setSearchParams, outletId]);
 
-  const isPinStep = !skipPin && currentStep === "pin";
+  const isPinStep = !outletId && !skipPin && currentStep === "pin";
   const isBusinessStep = currentStep === "business";
 
   return (
@@ -49,7 +56,7 @@ const OnboardingClient = () => {
             {/* Sticky Progress Bar */}
             <div className="sticky top-0 bg-white z-10 py-2 mb-4">
               <SplitedProgressBar
-                length={skipPin ? 1 : 2}
+                length={outletId || skipPin ? 1 : 2}
                 filled={isPinStep ? 2 : 1}
                 color="#15BA5C"
               />

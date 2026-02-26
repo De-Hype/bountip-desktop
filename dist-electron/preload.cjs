@@ -14,6 +14,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   },
   saveLoginHash: async (email, password) => electron.ipcRenderer.invoke("auth:saveLoginHash", email, password),
   verifyLoginHash: async (email, password) => electron.ipcRenderer.invoke("auth:verifyLoginHash", email, password),
+  savePinHash: async (pin) => electron.ipcRenderer.invoke("auth:savePinHash", pin),
+  verifyPinHash: async (pin) => electron.ipcRenderer.invoke("auth:verifyPinHash", pin),
   saveUser: async (user) => {
     try {
       return await electron.ipcRenderer.invoke("db:saveUser", user);
@@ -29,6 +31,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
       return null;
     }
   },
+  saveOutletOnboarding: async (payload) => electron.ipcRenderer.invoke("db:saveOutletOnboarding", payload),
+  importAsset: async (filePath) => electron.ipcRenderer.invoke("assets:import", filePath),
   getNetworkStatus: async () => {
     try {
       return await electron.ipcRenderer.invoke("network:getStatus");
@@ -79,5 +83,6 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
     const handler = (_e, text) => cb(text);
     electron.ipcRenderer.on("updater:status", handler);
     return () => electron.ipcRenderer.removeListener("updater:status", handler);
-  }
+  },
+  factoryReset: () => electron.ipcRenderer.send("system:factoryReset")
 });

@@ -36,6 +36,25 @@ export class DatabaseService {
     this.initSchema();
   }
 
+  clearAllData() {
+    try {
+      if (this.db) {
+        this.db.close();
+      }
+      const userDataPath = app.getPath("userData");
+      const dbPath = path.join(userDataPath, "bountip.db");
+      if (fs.existsSync(dbPath)) {
+        fs.unlinkSync(dbPath);
+      }
+
+      // Re-initialize for subsequent use if app doesn't restart immediately
+      // But typically we restart the app after this.
+    } catch (error) {
+      console.error("Failed to clear database:", error);
+      throw error;
+    }
+  }
+
   private initSchema() {
     // Identity Table
     this.db.exec(`
@@ -75,6 +94,31 @@ export class DatabaseService {
         for (const index of schema.indexes) {
           this.db.exec(index);
         }
+      }
+    }
+
+    this.runMigrations();
+  }
+
+  private runMigrations() {
+    // Migration: Add offline image columns to business_outlet
+    try {
+      this.db.exec(
+        "ALTER TABLE business_outlet ADD COLUMN isOfflineImage INTEGER DEFAULT 0",
+      );
+    } catch (e: any) {
+      // Ignore if column already exists
+      if (!e.message.includes("duplicate column name")) {
+        console.error("Migration error (isOfflineImage):", e);
+      }
+    }
+
+    try {
+      this.db.exec("ALTER TABLE business_outlet ADD COLUMN localLogoPath TEXT");
+    } catch (e: any) {
+      // Ignore if column already exists
+      if (!e.message.includes("duplicate column name")) {
+        console.error("Migration error (localLogoPath):", e);
       }
     }
   }
@@ -208,6 +252,25 @@ export class DatabaseService {
     }
   }
 
+  savePinHash(hash: string) {
+    this.db
+      .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
+      .run("pin_hash", JSON.stringify({ hash }));
+  }
+
+  getPinHash(): string | null {
+    const row = this.db
+      .prepare("SELECT value FROM identity WHERE key = ?")
+      .get("pin_hash") as { value: string } | undefined;
+    if (!row) return null;
+    try {
+      const parsed = JSON.parse(row.value) as { hash?: string };
+      return parsed.hash ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   // Cache Methods
   getCache(key: string): any {
     const row = this.db
@@ -286,6 +349,73 @@ export class DatabaseService {
 
     transaction(list);
     return true;
+  }
+
+  saveOutletOnboarding(payload: {
+    outletId: string;
+    data: {
+      country: string;
+      address: string;
+      businessType: string;
+      currency: string;
+      revenueRange: string;
+      logoUrl: string;
+      isOfflineImage?: number;
+      localLogoPath?: string;
+    };
+  }) {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `
+        UPDATE business_outlet
+        SET
+          country = COALESCE(@country, country),
+          address = COALESCE(@address, address),
+          businessType = COALESCE(@businessType, businessType),
+          currency = COALESCE(@currency, currency),
+          revenueRange = COALESCE(@revenueRange, revenueRange),
+          logoUrl = COALESCE(@logoUrl, logoUrl),
+          isOfflineImage = COALESCE(@isOfflineImage, isOfflineImage),
+          localLogoPath = COALESCE(@localLogoPath, localLogoPath),
+          isOnboarded = 1,
+          updatedAt = COALESCE(@updatedAt, updatedAt)
+        WHERE id = @outletId
+      `,
+      )
+      .run({
+        outletId: payload.outletId,
+        country: payload.data.country,
+        address: payload.data.address,
+        businessType: payload.data.businessType,
+        currency: payload.data.currency,
+        revenueRange: payload.data.revenueRange,
+        logoUrl: payload.data.logoUrl,
+        isOfflineImage: payload.data.isOfflineImage,
+        localLogoPath: payload.data.localLogoPath,
+        updatedAt: now,
+      });
+  }
+
+  getOfflineImages() {
+    return this.db
+      .prepare("SELECT * FROM business_outlet WHERE isOfflineImage = 1")
+      .all() as any[];
+  }
+
+  updateOfflineImage(id: string, logoUrl: string) {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        "UPDATE business_outlet SET logoUrl = ?, isOfflineImage = 0, localLogoPath = NULL, updatedAt = ? WHERE id = ?",
+      )
+      .run(logoUrl, now, id);
+  }
+
+  getOutlet(id: string) {
+    return this.db
+      .prepare("SELECT * FROM business_outlet WHERE id = ?")
+      .get(id) as any;
   }
 
   applyPullData(payload: { currentTimestamp: string; data: any }) {

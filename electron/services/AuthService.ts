@@ -64,4 +64,16 @@ export class AuthService {
     const hash = crypto.createHash("sha256").update(raw).digest("hex");
     return stored === hash;
   }
+
+  savePinHash(pin: string) {
+    const hash = crypto.createHash("sha256").update(pin).digest("hex");
+    this.db.savePinHash(hash);
+  }
+
+  verifyPinHash(pin: string): boolean {
+    const stored = this.db.getPinHash();
+    if (!stored) return false;
+    const hash = crypto.createHash("sha256").update(pin).digest("hex");
+    return stored === hash;
+  }
 }

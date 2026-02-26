@@ -44,6 +44,11 @@ export interface Outlet {
   state?: string | null;
   city?: string | null;
   businessType?: string | null;
+  currency?: string | null;
+  revenueRange?: string | null;
+  logoUrl?: string | null;
+  isOfflineImage?: number;
+  localLogoPath?: string | null;
   operatingHours?: any;
   paymentMethods?: any;
   receiptSettings?: any;

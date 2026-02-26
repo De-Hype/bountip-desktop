@@ -7,6 +7,16 @@ import { useSetPinMutation } from "@/redux/auth";
 import PinInput from "./PinInput";
 import useToastStore from "@/stores/toastStore";
 
+type ElectronAPI = {
+  savePinHash: (pin: string) => Promise<void>;
+};
+
+const getElectronAPI = (): ElectronAPI | null => {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { electronAPI?: ElectronAPI };
+  return w.electronAPI ?? null;
+};
+
 const SetUpPin = () => {
   const navigate = useNavigate();
   const pin = useAuthStore((state) => state.pin);
@@ -22,6 +32,12 @@ const SetUpPin = () => {
         const response = await setPin({ pin }).unwrap();
 
         console.log("SetUserPin response:", response);
+
+        // Save PIN hash locally for offline login
+        const api = getElectronAPI();
+        if (api) {
+          await api.savePinHash(pin);
+        }
 
         showToast(
           "success",

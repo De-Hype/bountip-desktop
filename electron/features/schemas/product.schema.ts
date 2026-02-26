@@ -145,6 +145,7 @@ export const productSchema: TableSchema = {
   name: "product",
   create: productCreateSql,
   indexes: [
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_product_id ON product(id);`,
     `CREATE INDEX IF NOT EXISTS idx_product_outlet ON product(outletId);`,
     `CREATE INDEX IF NOT EXISTS idx_product_category ON product(category);`,
     `CREATE INDEX IF NOT EXISTS idx_product_isActive ON product(isActive);`,

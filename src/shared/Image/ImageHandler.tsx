@@ -46,8 +46,26 @@ const ImageHandler: React.FC<ImageUploaderProps> = ({
       setFileName(file.name);
 
       if (!navigator.onLine) {
-        onError?.("You are offline. Connect to upload the image.");
-        return;
+        // Offline handling
+        const w = window as any;
+        if (w.electronAPI && file.path) {
+          try {
+            const localUrl = await w.electronAPI.importAsset(file.path);
+            setPreview(localUrl);
+            onChange?.({ url: localUrl });
+            setUploading(false);
+            return;
+          } catch (e) {
+            console.error("Failed to import asset locally:", e);
+            onError?.("Failed to save image offline.");
+            setUploading(false);
+            return;
+          }
+        } else {
+          onError?.("You are offline. Connect to upload the image.");
+          setUploading(false);
+          return;
+        }
       }
 
       const formData = new FormData();

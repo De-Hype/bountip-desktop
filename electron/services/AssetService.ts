@@ -41,6 +41,18 @@ export class AssetService {
     return path.join(ASSET_DIR, `${hash}${ext}`);
   }
 
+  importLocalAsset(sourcePath: string): string {
+    const ext = path.extname(sourcePath);
+    const hash = crypto
+      .createHash("md5")
+      .update(sourcePath + Date.now().toString())
+      .digest("hex");
+    const filename = `${hash}${ext}`;
+    const destPath = path.join(ASSET_DIR, filename);
+    fs.copyFileSync(sourcePath, destPath);
+    return `file://${destPath}`;
+  }
+
   private initP2P() {
     this.p2pService.onMessage((payload) => {
       if (payload.type === "REQUEST_ASSET") {

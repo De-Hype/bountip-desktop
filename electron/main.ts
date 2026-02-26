@@ -110,6 +110,14 @@ app.whenReady().then(() => {
       authService.verifyLoginHash(email, password),
   );
 
+  ipcMain.handle("auth:savePinHash", (_event, pin: string) =>
+    authService.savePinHash(pin),
+  );
+
+  ipcMain.handle("auth:verifyPinHash", (_event, pin: string) =>
+    authService.verifyPinHash(pin),
+  );
+
   ipcMain.handle("db:getUser", () => authService.getUser());
   ipcMain.handle("db:saveUser", (_event, payload) =>
     authService.saveUser(payload),
@@ -118,6 +126,16 @@ app.whenReady().then(() => {
   ipcMain.handle("cache:get", (_event, key) => dbService.getCache(key));
   ipcMain.handle("cache:put", (_event, key, value) =>
     dbService.putCache(key, value),
+  );
+
+  ipcMain.handle(
+    "db:saveOutletOnboarding",
+    (_event, payload: { outletId: string; data: any }) =>
+      dbService.saveOutletOnboarding(payload),
+  );
+
+  ipcMain.handle("assets:import", (_event, filePath) =>
+    assetService.importLocalAsset(filePath),
   );
 
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
@@ -141,6 +159,25 @@ app.whenReady().then(() => {
   // Updater IPC
   ipcMain.on("updater:check", () => updateService.checkForUpdates());
   ipcMain.on("updater:quitAndInstall", () => updateService.quitAndInstall());
+
+  // Factory Reset
+  ipcMain.on("system:factoryReset", async () => {
+    try {
+      console.log("Factory reset requested...");
+      await authService.clearTokens();
+      dbService.clearAllData();
+
+      // Optionally clear other paths if needed
+      // const userDataPath = app.getPath("userData");
+      // fs.rmdirSync(userDataPath, { recursive: true });
+
+      console.log("Factory reset complete. Relaunching...");
+      app.relaunch();
+      app.exit(0);
+    } catch (error) {
+      console.error("Factory reset failed:", error);
+    }
+  });
 
   // Check for updates
   setTimeout(() => {
