@@ -411,6 +411,10 @@ export class DatabaseService {
       });
   }
 
+  run(sql: string, params: any = []) {
+    return this.db.prepare(sql).run(params);
+  }
+
   getOfflineImages() {
     return this.db
       .prepare("SELECT * FROM business_outlet WHERE isOfflineImage = 1")
@@ -430,6 +434,10 @@ export class DatabaseService {
     return this.db
       .prepare("SELECT * FROM business_outlet WHERE id = ?")
       .get(id) as any;
+  }
+
+  getOutlets() {
+    return this.db.prepare("SELECT * FROM business_outlet").all() as any[];
   }
 
   applyPullData(payload: { currentTimestamp: string; data: any }) {

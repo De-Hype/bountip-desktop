@@ -8,6 +8,7 @@ import { P2PService } from "./services/P2PService";
 import { UpdateService } from "./services/UpdateService";
 import { AssetService } from "./services/AssetService";
 import { SyncService } from "./services/SyncService";
+import { updateBusinessDetails } from "./features/settings/businessInformation";
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -146,6 +147,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle("db:saveOutletOnboarding", (_event, payload) =>
     dbService.saveOutletOnboarding(payload),
+  );
+
+  ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
+  ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>
+    updateBusinessDetails(dbService, payload),
   );
 
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>

@@ -32,6 +32,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
     }
   },
   saveOutletOnboarding: async (payload) => electron.ipcRenderer.invoke("db:saveOutletOnboarding", payload),
+  getOutlets: async () => electron.ipcRenderer.invoke("db:getOutlets"),
+  updateBusinessDetails: async (payload) => electron.ipcRenderer.invoke("db:updateBusinessDetails", payload),
   dbQuery: async (sql, params = []) => electron.ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath) => electron.ipcRenderer.invoke("assets:import", filePath),
   getNetworkStatus: async () => {

@@ -4,14 +4,7 @@
 //@ts-nocheck
 "use client";
 import React, { useEffect, useState, useRef, useMemo } from "react";
-import {
-  Country,
-  State,
-  City,
-  ICountry,
-  IState,
-  ICity,
-} from "country-state-city";
+import { Country, State, ICountry, IState } from "country-state-city";
 import { Upload } from "lucide-react";
 import countryCurrencyMap from "country-currency-map";
 import { Check, ChevronDown, Plus, X, Loader2 } from "lucide-react";
@@ -28,6 +21,7 @@ import { useUploadImageMutation } from "@/redux/app";
 import useToastStore from "@/stores/toastStore";
 import useBusinessStore from "@/stores/useBusinessStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useNetworkStore } from "@/stores/useNetworkStore";
 
 interface BusinessDetailsModalProps {
   isOpen: boolean;
@@ -60,7 +54,6 @@ const isEqualDetails = (
     phone: string;
     country: string;
     state: string;
-    city: string;
     address: string;
     businessType: string;
     postalCode: string;
@@ -71,18 +64,16 @@ const isEqualDetails = (
     phone: string;
     country: string;
     state: string;
-    city: string;
     address: string;
     businessType: string;
     postalCode: string;
-  }
+  },
 ) =>
   a.name === b.name &&
   a.email === b.email &&
   a.phone === b.phone &&
   a.country === b.country &&
   a.state === b.state &&
-  a.city === b.city &&
   a.address === b.address &&
   a.businessType === b.businessType &&
   a.postalCode === b.postalCode;
@@ -96,7 +87,7 @@ const BusinessDetailsModal_isDirty = (
   baselineLogoUrl: string,
   selectedPhoneCountry: PhoneCountry | null,
   baselineDialCode: string,
-  isImageDeleted: boolean
+  isImageDeleted: boolean,
 ) => {
   const detailsChanged = !isEqualDetails(details, baselineDetails);
   const businessTypeChanged = businessType !== baselineBusinessType;
@@ -122,7 +113,6 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
     phone: "",
     country: "",
     state: "",
-    city: "",
     address: "",
     businessType: "",
     postalCode: "",
@@ -132,8 +122,8 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
     useBusinessStore();
   const { user: userData } = useAuthStore();
 
-  console.log(userData?.email, "This is the user");
-  console.log("Selected Outlet:", selectedOutlet);
+  //console.log(userData?.email, "This is the user");
+  // console.log("Selected Outlet:", selectedOutlet);
   const [newBusinessType, setNewBusinessType] = useState("");
   const [businessTypes, setBusinessTypes] = useState(defaultBusinessTypes);
   const [businessType, setBusinessType] = useState("");
@@ -150,7 +140,6 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
     phone: "",
     country: "",
     state: "",
-    city: "",
     address: "",
     businessType: "",
     postalCode: "",
@@ -164,18 +153,18 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
   const [updateOutlet] = useUpdateOutletMutation();
   const [uploadImage, { isLoading }] = useUploadImageMutation();
+  const { isOnline } = useNetworkStore();
 
   type ElectronAPI = {
-    getNetworkStatus: () => Promise<{ online: boolean }>;
     cachePut: (key: string, value: any) => Promise<void>;
     cacheGet: (key: string) => Promise<any>;
     broadcast: (message: any) => void;
-    queueAdd: (op: {
-      method: string;
-      path: string;
-      data?: any;
-      useAuth?: boolean;
-    }) => Promise<void>;
+
+    importAsset: (filePath: string) => Promise<string>;
+    updateBusinessDetails: (payload: {
+      outletId: string;
+      data: any;
+    }) => Promise<{ success: boolean } | void>;
   };
   const getElectronAPI = (): ElectronAPI | null => {
     if (typeof window === "undefined") return null;
@@ -196,11 +185,8 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
           return;
         }
         const api = getElectronAPI();
-        const online = await api
-          ?.getNetworkStatus()
-          .then((r) => r.online)
-          .catch(() => true);
-        if (!online) return;
+
+        if (!isOnline) return;
         const cached = await api?.cacheGet(`image:${uploadedImageUrl}`);
         if (cached && cached.data) {
           const base64 = String(cached.data);
@@ -256,9 +242,6 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
   const [stateSearchTerm, setStateSearchTerm] = useState("");
   const [availableStates, setAvailableStates] = useState<IState[]>([]);
 
-  // City dropdown states
-  const [, setAvailableCities] = useState<ICity[]>([]);
-
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -284,35 +267,10 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       }));
     }
   }, [isOpen, primaryBusiness]);
-  console.log(selectedOutlet);
+
   // Initialize details from store data
   useEffect(() => {
     if (!isOpen || !selectedOutlet) return;
-
-    // const fullNumber = outlet.phoneNumber;
-    // const phoneNumber = parsePhoneNumberFromString(String(fullNumber));
-
-    // // Set phone country based on parsed phone number
-    // let initialPhoneCountry = null;
-    // const phoneCountriesData = getPhoneCountries();
-    // if (phoneNumber && phoneNumber.countryCallingCode) {
-    //   initialPhoneCountry = phoneCountriesData.find(
-    //     (pc) => pc.dialCode.replace("+", "") === phoneNumber.countryCallingCode
-    //   );
-    // }
-
-    // // Populate form with data
-    // setDetails({
-    //   name: outlet.name || "",
-    //   address: outlet.address || "",
-    //   businessType: outlet.businessType || "",
-    //   city: outlet.city || "",
-    //   email: outlet.email || "",
-    //   country: outlet.country || "",
-    //   phone: outlet.phoneNumber || "",
-    //   postalCode: outlet.postalCode || "",
-    //   state: outlet.state || "",
-    // });
 
     const fullNumber = selectedOutlet.phoneNumber;
     const phoneNumber = parsePhoneNumberFromString(String(fullNumber));
@@ -324,7 +282,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
     if (phoneNumber && phoneNumber.countryCallingCode) {
       initialPhoneCountry = phoneCountriesData.find(
-        (pc) => pc.dialCode.replace("+", "") === phoneNumber.countryCallingCode
+        (pc) => pc.dialCode.replace("+", "") === phoneNumber.countryCallingCode,
       );
       // Extract national number (without country code)
       phoneWithoutCode = phoneNumber.nationalNumber;
@@ -334,7 +292,6 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       name: selectedOutlet.name || "",
       address: selectedOutlet.address || "",
       businessType: selectedOutlet.businessType || "",
-      city: selectedOutlet.city || "",
       email: (primaryBusiness?.owner?.email as string) || "",
       country: selectedOutlet.country || "",
       phone: phoneWithoutCode,
@@ -346,7 +303,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
     setBaselineBusinessType(selectedOutlet.businessType || "");
     setBaselineLogoUrl((selectedOutlet?.logoUrl as string) || "");
     setBaselineDialCode(
-      initialPhoneCountry ? initialPhoneCountry.dialCode : ""
+      initialPhoneCountry ? initialPhoneCountry.dialCode : "",
     );
 
     // Set country and state selections
@@ -362,12 +319,6 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
           const state = states.find((s) => s.name === selectedOutlet.state);
           if (state) {
             setSelectedState(state);
-
-            const cities = City.getCitiesOfState(
-              country.isoCode,
-              state.isoCode
-            );
-            setAvailableCities(cities);
           }
         }
       }
@@ -384,7 +335,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       const outletCountryPhone = phoneCountriesData.find(
         (pc) =>
           pc.isoCode ===
-          countries.find((c) => c.name === selectedOutlet.country)?.isoCode
+          countries.find((c) => c.name === selectedOutlet.country)?.isoCode,
       );
       if (outletCountryPhone) {
         setSelectedPhoneCountry(outletCountryPhone);
@@ -416,30 +367,13 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       // Only clear state if user manually changed country
       if (details.country !== selectedCountry.name) {
         setSelectedState(null);
-        setAvailableCities([]);
         handleChange("state", "");
-        handleChange("city", "");
       }
     } else {
       setAvailableStates([]);
       setSelectedState(null);
-      setAvailableCities([]);
     }
   }, [selectedCountry]);
-
-  // Update available cities when state changes
-  useEffect(() => {
-    if (selectedState && selectedCountry) {
-      const cities = City.getCitiesOfState(
-        selectedCountry.isoCode,
-        selectedState.isoCode
-      );
-      setAvailableCities(cities);
-      handleChange("city", "");
-    } else {
-      setAvailableCities([]);
-    }
-  }, [selectedState, selectedCountry]);
 
   useEffect(() => {
     if (details?.logoUrl) {
@@ -454,7 +388,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
     if (!details.phone) {
       if (selectedCountry) {
         const matchingPhoneCountry = phoneCountriesData.find(
-          (pc) => pc.isoCode === selectedCountry.isoCode
+          (pc) => pc.isoCode === selectedCountry.isoCode,
         );
         if (matchingPhoneCountry) {
           setSelectedPhoneCountry(matchingPhoneCountry);
@@ -479,7 +413,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
         baselineLogoUrl,
         selectedPhoneCountry,
         baselineDialCode,
-        isImageDeleted
+        isImageDeleted,
       ),
     [
       details,
@@ -491,13 +425,13 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       selectedPhoneCountry,
       baselineDialCode,
       isImageDeleted,
-    ]
+    ],
   );
 
   useEffect(() => {
     if (details.state && selectedCountry && availableStates.length > 0) {
       const matchingState = availableStates.find(
-        (s) => s.name === details.state
+        (s) => s.name === details.state,
       );
       if (matchingState && selectedState?.name !== matchingState.name) {
         setSelectedState(matchingState);
@@ -507,11 +441,11 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
   // Filter functions
   const filteredCountries = countries.filter((country) =>
-    country.name.toLowerCase().includes(countrySearchTerm.toLowerCase())
+    country.name.toLowerCase().includes(countrySearchTerm.toLowerCase()),
   );
 
   const filteredStates = availableStates.filter((state) =>
-    state.name.toLowerCase().includes(stateSearchTerm.toLowerCase())
+    state.name.toLowerCase().includes(stateSearchTerm.toLowerCase()),
   );
 
   const filteredPhoneCountries = phoneCountries.filter(
@@ -519,7 +453,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       country.name
         .toLowerCase()
         .includes(phoneCountrySearchTerm.toLowerCase()) ||
-      country.dialCode.includes(phoneCountrySearchTerm)
+      country.dialCode.includes(phoneCountrySearchTerm),
   );
 
   // Helper functions
@@ -542,224 +476,13 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
     try {
       const phoneNumber = parsePhoneNumberFromString(
         phone,
-        countryCode as import("libphonenumber-js").CountryCode
+        countryCode as import("libphonenumber-js").CountryCode,
       );
       return phoneNumber ? phoneNumber.isValid() : false;
     } catch {
       return false;
     }
   };
-
-  // Form submission
-
-  // const handleSubmit = async (e: React.FormEvent) => {
-  //   setLoading(true);
-  //   e.preventDefault();
-
-  //   if (!selectedOutlet) {
-  //     onError("Missing Outlet ID", "Outlet information is missing.");
-  //     setLoading(false);
-  //     return;
-  //   }
-
-  //   try {
-  //     const { country } = details;
-  //     let logoUrlToSend: string | undefined;
-  //     const existingLogoUrl = selectedOutlet?.logoUrl;
-
-  //     // CRITICAL: Wait for any pending upload to complete first
-  //     if (currentUploadPromiseRef.current) {
-  //       console.log("Waiting for image upload to complete...");
-  //       try {
-  //         const finalUrl = await currentUploadPromiseRef.current;
-  //         console.log("Image upload completed:", finalUrl);
-  //         setUploadedImageUrl(finalUrl);
-  //         logoUrlToSend = finalUrl;
-  //       } catch (error) {
-  //         console.error("Image upload failed:", error);
-  //         onError("Upload Failed", "Failed to upload logo. Please try again.");
-  //         setLoading(false);
-  //         return;
-  //       }
-  //     }
-
-  //     // Determine logo URL to send
-  //     if (isImageDeleted) {
-  //       logoUrlToSend = "";
-  //       console.log("Logo marked for deletion");
-  //     } else if (uploadedImageUrl && uploadedImageUrl !== existingLogoUrl) {
-  //       logoUrlToSend = uploadedImageUrl;
-  //       console.log("Using uploaded logo URL:", logoUrlToSend);
-  //     } else if (existingLogoUrl && !uploadedImageUrl) {
-  //       logoUrlToSend = existingLogoUrl;
-  //       console.log("Keeping existing logo URL");
-  //     }
-
-  //     // Handle offline synthetic logo upload
-  //     const api = getElectronAPI();
-  //     const online = await api
-  //       ?.getNetworkStatus()
-  //       .then((r) => r.online)
-  //       .catch(() => true);
-
-  //     if (
-  //       online &&
-  //       typeof logoUrlToSend === "string" &&
-  //       logoUrlToSend.startsWith("outlet-logo:") &&
-  //       selectedOutlet
-  //     ) {
-  //       console.log("Converting offline logo to online URL...");
-  //       const cached = await api?.cacheGet(`image:${logoUrlToSend}`);
-  //       if (cached && cached.data) {
-  //         const base64 = String(cached.data);
-  //         const blob = (() => {
-  //           const parts = base64.split(",");
-  //           const byteString = atob(parts[1]);
-  //           const mimeString = parts[0].match(/:(.*?);/)?.[1] || "image/png";
-  //           const ab = new ArrayBuffer(byteString.length);
-  //           const ia = new Uint8Array(ab);
-  //           for (let i = 0; i < byteString.length; i++) {
-  //             ia[i] = byteString.charCodeAt(i);
-  //           }
-  //           return new Blob([ab], { type: mimeString });
-  //         })();
-  //         const fd = new FormData();
-  //         fd.append("image", new File([blob], "logo.png", { type: blob.type }));
-
-  //         console.log("Uploading offline logo to server...");
-  //         const result = await uploadImage(fd).unwrap();
-  //         logoUrlToSend = result.data.url;
-  //         console.log("Offline logo uploaded successfully:", logoUrlToSend);
-  //         setUploadedImageUrl(result.data.url);
-  //         setIsImageDeleted(false);
-  //       }
-  //     }
-
-  //     // Prepare update data
-  //     const updateData = {
-  //       name: details.name,
-  //       address: details.address,
-  //       phoneNumber: selectedPhoneCountry?.dialCode
-  //         ? `${selectedPhoneCountry.dialCode}${details.phone}`
-  //         : details.phone,
-  //       city: details.city,
-  //       state: details.state,
-  //       country: details.country,
-  //       postalCode: details.postalCode,
-  //       businessType: businessType,
-  //       currency: getCurrencyByCountryName(country),
-  //       revenueRange: "10-500",
-  //       email: details.email,
-  //       ...(logoUrlToSend !== undefined && { logoUrl: logoUrlToSend }),
-  //     };
-
-  //     console.log("Updating outlet with data:", updateData);
-
-  //     // Perform outlet update (offline or online)
-  //     if (!online && api) {
-  //       const ts = Date.now();
-  //       console.log("Saving outlet update offline...");
-  //       try {
-  //         await api.cachePut(`outlet:${selectedOutlet.id}`, {
-  //           data: {
-  //             ...(selectedOutlet as any),
-  //             ...updateData,
-  //             lastUpdatedAt: ts,
-  //           },
-  //           ts,
-  //         });
-
-  //         api.broadcast({
-  //           kind: "outlet-update",
-  //           outletId: selectedOutlet.id,
-  //           data: { ...(selectedOutlet as any), ...updateData },
-  //           ts,
-  //         });
-
-  //         const payloadForServer = {
-  //           ...updateData,
-  //           lastUpdatedAt: ts,
-  //         } as any;
-
-  //         // If logo is still synthetic, remove it and schedule sync
-  //         if (
-  //           typeof payloadForServer.logoUrl === "string" &&
-  //           payloadForServer.logoUrl.startsWith("outlet-logo:")
-  //         ) {
-  //           delete payloadForServer.logoUrl;
-  //           setLogoSyncScheduled(true);
-  //           console.log("Logo sync scheduled for later");
-  //         }
-
-  //         await api.queueAdd({
-  //           method: "PATCH",
-  //           path: `/outlet/${selectedOutlet.id}`,
-  //           data: payloadForServer,
-  //           useAuth: true,
-  //         });
-
-  //         console.log("Offline update successful");
-  //         showToast(
-  //           "success",
-  //           "Saved Offline",
-  //           "Changes will sync automatically when online"
-  //         );
-  //       } catch (err) {
-  //         console.error("Offline save failed:", err);
-  //         showToast(
-  //           "error",
-  //           "Update Failed",
-  //           "Could not cache offline changes"
-  //         );
-  //         setLoading(false);
-  //         return;
-  //       }
-  //     } else {
-  //       console.log("Updating outlet online...");
-  //       await updateOutlet({
-  //         outletId: selectedOutlet.id,
-  //         payload: updateData,
-  //       }).unwrap();
-  //       console.log("Online update successful");
-  //       showToast(
-  //         "success",
-  //         "Update Successful!",
-  //         "Your Details have been updated successfully"
-  //       );
-  //     }
-
-  //     // Reset form state
-  //     setDetails({
-  //       name: "",
-  //       email: "",
-  //       phone: "",
-  //       country: "",
-  //       state: "",
-  //       city: "",
-  //       address: "",
-  //       postalCode: "",
-  //       businessType: "",
-  //     });
-  //     setBusinessType("");
-  //     setIsImageDeleted(false);
-  //     setUploadedImageUrl("");
-  //     setSelectedCountry(null);
-  //     setSelectedState(null);
-  //     setSelectedPhoneCountry(null);
-
-  //     await fetchBusinessData();
-  //     onClose();
-  //   } catch (error: any) {
-  //     console.error("Update failed:", error);
-  //     const errorMessage =
-  //       error?.data?.message ||
-  //       error?.message ||
-  //       "Failed to update business details";
-  //     showToast("error", "Update Failed", errorMessage);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -794,7 +517,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
           showToast(
             "error",
             "Upload Failed",
-            "Logo upload failed. Please retry."
+            "Logo upload failed. Please retry.",
           );
           setLoading(false);
           return;
@@ -823,10 +546,6 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
        * =====================================================
        */
       const api = getElectronAPI();
-      const online = await api
-        ?.getNetworkStatus()
-        .then((r) => r.online)
-        .catch(() => true);
 
       const updateData = {
         name: details.name,
@@ -834,13 +553,11 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
         phoneNumber: selectedPhoneCountry?.dialCode
           ? `${selectedPhoneCountry.dialCode}${details.phone}`
           : details.phone,
-        city: details.city,
         state: details.state,
         country: details.country,
         postalCode: details.postalCode,
         businessType,
         currency: getCurrencyByCountryName(details.country),
-        revenueRange: "10-500",
         email: details.email,
         ...(logoUrlToSend !== undefined && { logoUrl: logoUrlToSend }),
       };
@@ -850,7 +567,20 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
        * STEP 4: OFFLINE vs ONLINE UPDATE
        * =====================================================
        */
-      if (!online && api) {
+      // if (api && api.updateBusinessDetails) {
+      //   console.log("[UPDATE] Using Electron API for business details update");
+      //   await api.updateBusinessDetails({
+      //     outletId: selectedOutlet.id,
+      //     data: updateData,
+      //   });
+
+      //   showToast(
+      //     "success",
+      //     "Update Successful!",
+      //     "Your Details have been updated successfully",
+      //   );
+      // } else
+      if (!isOnline && api) {
         console.log("[OFFLINE] Saving outlet update locally");
 
         const ts = Date.now();
@@ -883,17 +613,17 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
           console.log("[OFFLINE] Logo sync scheduled");
         }
 
-        await api.queueAdd({
-          method: "PATCH",
-          path: `/outlet/${selectedOutlet.id}`,
-          data: payloadForServer,
-          useAuth: true,
+        const response = await api.updateBusinessDetails({
+          outletId: selectedOutlet.id,
+          data: updateData,
         });
+        console.log("Format", response);
+        console.log("Update data", updateData);
 
         showToast(
           "success",
           "Saved Offline",
-          "Changes will sync automatically when online"
+          "Changes will sync automatically when online",
         );
       } else {
         console.log("[ONLINE] Updating outlet");
@@ -905,7 +635,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
         showToast(
           "success",
           "Update Successful!",
-          "Your Details have been updated successfully"
+          "Your Details have been updated successfully",
         );
       }
 
@@ -916,7 +646,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       showToast(
         "error",
         "Update Failed",
-        error?.data?.message || error?.message || "Failed to update business"
+        error?.data?.message || error?.message || "Failed to update business",
       );
     } finally {
       setLoading(false);
@@ -971,15 +701,25 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
   // API call function to upload logo
   const uploadLogo = async (file: File): Promise<string> => {
     const api = getElectronAPI();
-    const online = await api
-      ?.getNetworkStatus()
-      .then((r) => r.online)
-      .catch(() => true);
 
     if (!selectedOutlet) throw new Error("Missing outlet context");
 
-    // Offline: cache base64 and broadcast to peers; return synthetic cache key
-    if (!online && api) {
+    // Offline or Electron: prefer local asset import if available
+    if (
+      (!isOnline || api?.importAsset) &&
+      api?.importAsset &&
+      (file as any).path
+    ) {
+      try {
+        const assetUrl = await api.importAsset((file as any).path);
+        return assetUrl;
+      } catch (e) {
+        console.error("Failed to import asset", e);
+      }
+    }
+
+    // Fallback to legacy offline logic if importAsset failed or not available
+    if (!isOnline && api) {
       const toBase64 = () =>
         new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -1010,7 +750,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
   // Event handlers
   const handleFileInputChange = async (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1127,7 +867,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       showToast(
         "error",
         "Failed",
-        "Please select a valid image file (JPEG, PNG, SVG)"
+        "Please select a valid image file (JPEG, PNG, SVG)",
       );
       return;
     }
@@ -1182,7 +922,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
               onChange={(e) => handleChange("name", e.target.value)}
               placeholder="Enter business name"
               className={`w-full px-4 py-3 text-left bg-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors ${getDisabledStyles(
-                details.name
+                details.name,
               )}`}
             />
           </div>
@@ -1195,7 +935,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
             onChange={(e) => handleChange("email", e.target.value)}
             placeholder="Enter Email Address"
             className={`w-full px-4 py-3 text-left bg-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors ${getDisabledStyles(
-              details.email as string
+              details.email as string,
             )}`}
           />
 
@@ -1326,7 +1066,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                   setIsCountryOpen(!isCountryOpen);
                 }}
                 className={`w-full px-4 py-3 text-left bg-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors ${getDisabledStyles(
-                  details.country
+                  details.country,
                 )}`}
               >
                 <span
@@ -1483,7 +1223,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
             onChange={(e) => handleChange("address", e.target.value)}
             placeholder="Enter street address"
             className={`w-full px-4 py-3 text-left bg-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors ${getDisabledStyles(
-              details.address
+              details.address,
             )}`}
           />
 
@@ -1500,14 +1240,14 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
                   setIsBusinessTypeOpen(!isBusinessTypeOpen);
                 }}
                 className={`w-full px-4 py-3 text-left bg-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors ${getDisabledStyles(
-                  businessType
+                  businessType,
                 )}`}
               >
                 <span
                   className={businessType ? "text-gray-900" : "text-gray-500"}
                 >
                   {businessTypesConstants.find(
-                    (val) => val.value == details?.businessType
+                    (val) => val.value == details?.businessType,
                   )?.label || details.businessType}
                 </span>
                 <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -1600,7 +1340,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
             onChange={(e) => handleChange("postalCode", e.target.value)}
             placeholder="Enter postal code"
             className={`w-full px-4 py-3 text-left bg-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors ${getDisabledStyles(
-              details.postalCode
+              details.postalCode,
             )}`}
           />
         </div>

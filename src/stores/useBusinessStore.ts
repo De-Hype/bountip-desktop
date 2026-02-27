@@ -3,11 +3,13 @@ import { create } from "zustand";
 import businessService, { Outlet } from "@/services/businessService";
 import type { Business } from "@/types/business";
 import httpService from "@/services/httpService";
+import { useNetworkStore } from "./useNetworkStore";
 
 type ElectronAPI = {
   [x: string]: any;
   cacheGet: (key: string) => Promise<any>;
   cachePut: (key: string, value: any) => Promise<void>;
+  getOutlets?: () => Promise<any[]>;
 };
 
 const getElectronAPI = (): ElectronAPI | null => {
@@ -45,12 +47,26 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   fetchBusinessData: async () => {
     set({ isLoading: true, error: null });
     const api = getElectronAPI();
+    let dbOutlets: any[] = [];
+
     if (api) {
       try {
-        const cachedOutlets = await api.cacheGet("business:outlets");
+        let cachedOutlets = await api.cacheGet("business:outlets");
+
+        // Try to get from SQLite
+        if (api.getOutlets) {
+          try {
+            const sqliteOutlets = await api.getOutlets();
+            if (Array.isArray(sqliteOutlets) && sqliteOutlets.length > 0) {
+              cachedOutlets = sqliteOutlets;
+              dbOutlets = sqliteOutlets;
+            }
+          } catch {}
+        }
+
         const cachedBusiness = await api.cacheGet("business:primary");
         const cachedSelectedId = await api.cacheGet(
-          "business:selectedOutletId"
+          "business:selectedOutletId",
         );
         if (cachedOutlets || cachedBusiness) {
           set({
@@ -65,19 +81,31 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
     }
     // If offline, avoid any network calls and serve from cache only
     try {
-      const online = api
-        ? await api
-            .cacheGet("__network__")
-            .then(() => api.getNetworkStatus())
-            .then((r) => r.online)
-            .catch(() =>
-              typeof navigator !== "undefined" ? navigator.onLine : true
-            )
-        : typeof navigator !== "undefined"
-        ? navigator.onLine
-        : true;
-        console.log("Online status", online)
-      if (api && !online) {
+      const { isOnline } = useNetworkStore();
+      if (api && !isOnline) {
+        // If we have DB data, use it as the source of truth
+        if (dbOutlets.length > 0) {
+          const mergedMap = new Map<string, Outlet>();
+          // Start with what we have in state or empty
+          const currentOutlets = get().outlets || [];
+          currentOutlets.forEach((o) => mergedMap.set(o.id, o));
+
+          // Overlay DB data
+          dbOutlets.forEach((dbo) => {
+            const existing = mergedMap.get(dbo.id);
+            if (existing) {
+              mergedMap.set(dbo.id, { ...existing, ...dbo });
+            } else {
+              mergedMap.set(dbo.id, dbo);
+            }
+          });
+
+          set({
+            outlets: Array.from(mergedMap.values()),
+            isLoading: false,
+          });
+        }
+
         const outletId = get().selectedOutletId || get().outlets?.[0]?.id;
         if (outletId) {
           const api2 = getElectronAPI();
@@ -141,10 +169,28 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
       const business = (businessRes?.data ?? null) as Business | null;
 
       // Merge any locally cached outlet updates (offline mutations) by outlet id
-      if (api && outlets.length > 0) {
+      if (api) {
         try {
-          const merged = await Promise.all(
-            outlets.map(async (o) => {
+          // 1. Map API outlets
+          const mergedMap = new Map<string, Outlet>();
+          outlets.forEach((o) => mergedMap.set(o.id, o));
+
+          // 2. Overlay SQLite data (dbOutlets)
+          if (dbOutlets && dbOutlets.length > 0) {
+            dbOutlets.forEach((dbo) => {
+              const existing = mergedMap.get(dbo.id);
+              if (existing) {
+                mergedMap.set(dbo.id, { ...existing, ...dbo });
+              } else {
+                mergedMap.set(dbo.id, dbo);
+              }
+            });
+          }
+
+          // 3. Apply legacy cache updates
+          const allOutlets = Array.from(mergedMap.values());
+          const finalOutlets = await Promise.all(
+            allOutlets.map(async (o) => {
               try {
                 const cached = await api.cacheGet(`outlet:${o.id}`);
                 if (cached && cached.data) {
@@ -153,9 +199,9 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
                 }
               } catch {}
               return o;
-            })
+            }),
           );
-          outlets = merged;
+          outlets = finalOutlets;
         } catch {}
       }
 
@@ -173,9 +219,9 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
           : null) ??
         (currentSelectedId && outlets.some((o) => o.id === currentSelectedId)
           ? currentSelectedId
-          : outlets[0]?.id ?? null);
+          : (outlets[0]?.id ?? null));
       const nextSelected = nextSelectedId
-        ? outlets.find((o) => o.id === nextSelectedId) ?? null
+        ? (outlets.find((o) => o.id === nextSelectedId) ?? null)
         : null;
 
       set({
@@ -210,11 +256,11 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
             httpService.get<any>(`/${outletId}/defaults/allergens`, true),
             httpService.get<any>(
               `/${outletId}/defaults/preparation-area`,
-              true
+              true,
             ),
             httpService.get<any>(
               `/${outletId}/defaults/packaging-method`,
-              true
+              true,
             ),
             httpService.get<any>(`/${outletId}/defaults/category`, true),
             httpService.get<any>(`/${outletId}/defaults/weight-scale`, true),
@@ -236,16 +282,16 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
               await api2.cachePut(`defaults:${outletId}:allergens`, allergens);
               await api2.cachePut(
                 `defaults:${outletId}:preparation-area`,
-                preparationArea
+                preparationArea,
               );
               await api2.cachePut(
                 `defaults:${outletId}:packaging-method`,
-                packagingMethod
+                packagingMethod,
               );
               await api2.cachePut(`defaults:${outletId}:category`, category);
               await api2.cachePut(
                 `defaults:${outletId}:weight-scale`,
-                weightScale
+                weightScale,
               );
             } catch {}
           }

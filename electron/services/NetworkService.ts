@@ -40,13 +40,15 @@ export class NetworkService {
     if (this.online !== isOnline) {
       this.online = isOnline;
       console.log(
-        `[NetworkService] Status changed to: ${isOnline ? "ONLINE" : "OFFLINE"}`
+        `[NetworkService] Status changed to: ${isOnline ? "ONLINE" : "OFFLINE"}`,
       );
       const win = BrowserWindow.getAllWindows()[0];
-      if (win) win.webContents.send("network:status", { online: this.online });
-      
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("network:status", { online: this.online });
+      }
+
       // Notify internal listeners
-      this.listeners.forEach(cb => cb(this.online));
+      this.listeners.forEach((cb) => cb(this.online));
     }
   }
 
@@ -54,18 +56,53 @@ export class NetworkService {
     // Initial check
     this.checkConnectivity();
 
-    // Check every 5 seconds
+    // Check every 10 seconds (less aggressive)
     this.checkInterval = setInterval(() => {
       this.checkConnectivity();
-    }, 5000);
+    }, 10000);
   }
 
   private checkConnectivity() {
     if (this.isChecking) return;
     this.isChecking = true;
 
-    // Use a simple HEAD request to the API root or a known stable endpoint
-    // Using a shorter timeout
+    // Use a reliable public DNS or site for connectivity check to avoid false negatives if API is down
+    const request = net.request({
+      method: "HEAD",
+      url: "https://www.google.com",
+      redirect: "follow",
+    });
+
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      request.abort();
+      this.isChecking = false;
+      // Don't immediately go offline on timeout, could be slow network
+      // Only go offline if we were online
+      if (this.online) this.checkConnectivityBackup();
+      else this.updateStatus(false);
+    }, 5000); // 5s Timeout
+
+    request.on("response", (response) => {
+      clearTimeout(timeout);
+      this.isChecking = false;
+      this.updateStatus(true);
+    });
+
+    request.on("error", () => {
+      if (!timedOut) {
+        clearTimeout(timeout);
+        this.isChecking = false;
+        // Try backup URL (API) before deciding offline
+        this.checkConnectivityBackup();
+      }
+    });
+
+    request.end();
+  }
+
+  private checkConnectivityBackup() {
     const request = net.request({
       method: "HEAD",
       url: CHECK_URL,
@@ -76,24 +113,17 @@ export class NetworkService {
     const timeout = setTimeout(() => {
       timedOut = true;
       request.abort();
-      this.isChecking = false;
       this.updateStatus(false);
-    }, 5000); // 5s Timeout
+    }, 5000);
 
-    request.on("response", (response) => {
+    request.on("response", () => {
       clearTimeout(timeout);
-      this.isChecking = false;
-
-      // Treat 2xx, 3xx, 4xx as "online" (server is reachable)
-      // Treat 5xx as "online" too (server is reachable but has error)
-      // Only network errors (DNS, timeout, connection refused) are "offline"
       this.updateStatus(true);
     });
 
     request.on("error", () => {
       if (!timedOut) {
         clearTimeout(timeout);
-        this.isChecking = false;
         this.updateStatus(false);
       }
     });

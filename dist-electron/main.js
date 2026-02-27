@@ -1153,6 +1153,9 @@ class DatabaseService {
       updatedAt: now
     });
   }
+  run(sql, params = []) {
+    return this.db.prepare(sql).run(params);
+  }
   getOfflineImages() {
     return this.db.prepare("SELECT * FROM business_outlet WHERE isOfflineImage = 1").all();
   }
@@ -1164,6 +1167,9 @@ class DatabaseService {
   }
   getOutlet(id) {
     return this.db.prepare("SELECT * FROM business_outlet WHERE id = ?").get(id);
+  }
+  getOutlets() {
+    return this.db.prepare("SELECT * FROM business_outlet").all();
   }
   applyPullData(payload) {
     const { data } = payload;
@@ -1307,7 +1313,9 @@ class NetworkService {
         `[NetworkService] Status changed to: ${isOnline ? "ONLINE" : "OFFLINE"}`
       );
       const win = BrowserWindow.getAllWindows()[0];
-      if (win) win.webContents.send("network:status", { online: this.online });
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("network:status", { online: this.online });
+      }
       this.listeners.forEach((cb) => cb(this.online));
     }
   }
@@ -1315,14 +1323,14 @@ class NetworkService {
     this.checkConnectivity();
     this.checkInterval = setInterval(() => {
       this.checkConnectivity();
-    }, 5e3);
+    }, 1e4);
   }
   checkConnectivity() {
     if (this.isChecking) return;
     this.isChecking = true;
     const request = net.request({
       method: "HEAD",
-      url: CHECK_URL,
+      url: "https://www.google.com",
       redirect: "follow"
     });
     let timedOut = false;
@@ -1330,7 +1338,8 @@ class NetworkService {
       timedOut = true;
       request.abort();
       this.isChecking = false;
-      this.updateStatus(false);
+      if (this.online) this.checkConnectivityBackup();
+      else this.updateStatus(false);
     }, 5e3);
     request.on("response", (response) => {
       clearTimeout(timeout);
@@ -1341,6 +1350,30 @@ class NetworkService {
       if (!timedOut) {
         clearTimeout(timeout);
         this.isChecking = false;
+        this.checkConnectivityBackup();
+      }
+    });
+    request.end();
+  }
+  checkConnectivityBackup() {
+    const request = net.request({
+      method: "HEAD",
+      url: CHECK_URL,
+      redirect: "follow"
+    });
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      request.abort();
+      this.updateStatus(false);
+    }, 5e3);
+    request.on("response", () => {
+      clearTimeout(timeout);
+      this.updateStatus(true);
+    });
+    request.on("error", () => {
+      if (!timedOut) {
+        clearTimeout(timeout);
         this.updateStatus(false);
       }
     });
@@ -19044,6 +19077,10 @@ class SyncService {
   async checkLeaderAndSync() {
     const online = this.network.getStatus().online;
     if (!online) return;
+    const userId = this.db.getSyncUserId();
+    if (!userId) {
+      return;
+    }
     await this.processOfflineImages();
     this.p2p.getPeers();
     const myId = this.p2p.getDeviceId();
@@ -19075,9 +19112,6 @@ class SyncService {
     try {
       const userId = this.db.getSyncUserId();
       if (!userId) {
-        console.error(
-          "[SyncService] Pull sync skipped because userId is not available in identity"
-        );
         return;
       }
       const url = new URL(PULL_ENDPOINT);
@@ -19140,7 +19174,7 @@ class SyncService {
         const fileBuffer = fs$1.readFileSync(filePath);
         const blob = new Blob([fileBuffer]);
         const formData = new FormData();
-        formData.append("file", blob, fileName);
+        formData.append("image", blob, fileName);
         console.log(
           `[SyncService] Uploading ${fileName} to ${UPLOAD_ENDPOINT}...`
         );
@@ -19226,6 +19260,74 @@ class SyncService {
     }
   }
 }
+const updateBusinessDetails = async (db, payload) => {
+  const { outletId, data } = payload;
+  console.log(data);
+  let isOfflineImage = 0;
+  let localLogoPath = void 0;
+  if (data.logoUrl && data.logoUrl.startsWith("asset://")) {
+    isOfflineImage = 1;
+    try {
+      const urlObj = new URL(data.logoUrl);
+      let filename = urlObj.pathname.replace(/^\//, "");
+      if (!filename && urlObj.host) {
+        filename = urlObj.host;
+      }
+      const userDataPath = app.getPath("userData");
+      localLogoPath = path.join(userDataPath, "assets", filename);
+    } catch (e) {
+      console.error("Failed to parse asset URL", e);
+    }
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `
+    UPDATE business_outlet
+    SET
+      name = COALESCE(@name, name),
+      email = COALESCE(@email, email),
+      phoneNumber = COALESCE(@phoneNumber, phoneNumber),
+      country = COALESCE(@country, country),
+      state = COALESCE(@state, state),
+      address = COALESCE(@address, address),
+      postalCode = COALESCE(@postalCode, postalCode),
+      businessType = COALESCE(@businessType, businessType),
+      currency = COALESCE(@currency, currency),
+
+      logoUrl = COALESCE(@logoUrl, logoUrl),
+      isOfflineImage = COALESCE(@isOfflineImage, isOfflineImage),
+      localLogoPath = COALESCE(@localLogoPath, localLogoPath),
+      updatedAt = @updatedAt
+    WHERE id = @outletId
+  `,
+    {
+      outletId,
+      name: data.name,
+      email: data.email,
+      phoneNumber: data.phoneNumber,
+      country: data.country,
+      state: data.state,
+      address: data.address,
+      postalCode: data.postalCode,
+      businessType: data.businessType,
+      currency: data.currency,
+      logoUrl: data.logoUrl,
+      isOfflineImage,
+      localLogoPath,
+      updatedAt: now
+    }
+  );
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+  return { success: true };
+};
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "asset",
@@ -19337,6 +19439,11 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:saveOutletOnboarding",
     (_event, payload) => dbService.saveOutletOnboarding(payload)
+  );
+  ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
+  ipcMain.handle(
+    "db:updateBusinessDetails",
+    (_event, payload) => updateBusinessDetails(dbService, payload)
   );
   ipcMain.handle(
     "db:query",

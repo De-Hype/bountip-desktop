@@ -51,6 +51,12 @@ export class SyncService {
     const online = this.network.getStatus().online;
     if (!online) return;
 
+    const userId = this.db.getSyncUserId();
+    if (!userId) {
+      // Not logged in, skip everything
+      return;
+    }
+
     // 1. Process offline images first (independent of leader status?)
     // Yes, any device can upload its own offline images.
     await this.processOfflineImages();
@@ -94,9 +100,7 @@ export class SyncService {
       const userId = this.db.getSyncUserId();
 
       if (!userId) {
-        console.error(
-          "[SyncService] Pull sync skipped because userId is not available in identity",
-        );
+        // Should be handled by caller
         return;
       }
 
@@ -174,7 +178,7 @@ export class SyncService {
         const fileBuffer = fs.readFileSync(filePath);
         const blob = new Blob([fileBuffer]);
         const formData = new FormData();
-        formData.append("file", blob, fileName);
+        formData.append("image", blob, fileName);
 
         console.log(
           `[SyncService] Uploading ${fileName} to ${UPLOAD_ENDPOINT}...`,
