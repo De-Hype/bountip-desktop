@@ -4,6 +4,7 @@ import SettingFiles from "@/assets/icons/settings";
 import { Input } from "../ui/Input";
 import { Percent, Wallet } from "lucide-react";
 import useToastStore from "@/stores/toastStore";
+import { useBusinessStore } from "@/stores/useBusinessStore";
 
 interface PriceTier {
   id: string | number;
@@ -42,6 +43,7 @@ export const PriceSettingsModal: React.FC<PriceSettingsModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { selectedOutlet, updateOutletLocal } = useBusinessStore();
   const [tiers, setTiers] = useState<PriceTier[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState<{
@@ -52,13 +54,32 @@ export const PriceSettingsModal: React.FC<PriceSettingsModalProps> = ({
     [key: string | number]: boolean;
   }>({});
   const priceTierFormRef = useRef<PriceTierFormRef>(null);
-  const {showToast}=useToastStore()
+  const { showToast } = useToastStore();
 
   useEffect(() => {
-    if (!isOpen) {
-      return;
+    if (isOpen && selectedOutlet?.priceTier) {
+      try {
+        const parsedTiers =
+          typeof selectedOutlet.priceTier === "string"
+            ? JSON.parse(selectedOutlet.priceTier)
+            : selectedOutlet.priceTier;
+
+        const loadedTiers = (Array.isArray(parsedTiers) ? parsedTiers : []).map(
+          (t: any) => ({
+            ...t,
+            isActive: t.isActive ?? true,
+            isNew: false,
+          }),
+        );
+        setTiers(loadedTiers);
+      } catch (e) {
+        console.error("Failed to parse price tiers", e);
+        setTiers([]);
+      }
+    } else if (isOpen && !selectedOutlet?.priceTier) {
+      setTiers([]);
     }
-  }, [isOpen]);
+  }, [isOpen, selectedOutlet?.id]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -71,14 +92,48 @@ export const PriceSettingsModal: React.FC<PriceSettingsModalProps> = ({
     }
   }, [isOpen]);
 
-  const addTier = (tier: Omit<PriceTier, "id" | "isActive">) => {
+  const addTier = async (tier: Omit<PriceTier, "id" | "isActive">) => {
+    setIsSaving(true);
     const newTier: PriceTier = {
       ...tier,
       id: tempIdCounter--,
       isActive: true,
       isNew: true,
     };
-    setTiers((prev) => [...prev, newTier]);
+
+    try {
+      if (selectedOutlet) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { isNew, isEditing, ...rest } = newTier;
+        const result = await (window as any).electronAPI.addPaymentTier({
+          outletId: selectedOutlet.id,
+          tier: rest,
+        });
+
+        if (result.success) {
+          updateOutletLocal(selectedOutlet.id, { priceTier: result.tiers });
+          setTiers((prev) => [...prev, { ...result.tier, isNew: false }]);
+          showToast(
+            "success",
+            "Create Successful!",
+            "Price tier created successfully",
+          );
+        } else {
+          throw new Error(result.message || "Failed to create tier");
+        }
+      } else {
+        setTiers((prev) => [...prev, newTier]);
+      }
+    } catch (error: unknown) {
+      console.error("Failed to create tier:", error);
+      showToast(
+        "error",
+        "Create Failed",
+        (error as Error).message || "Failed to create price tier",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const deleteTier = async (id: string | number) => {
@@ -91,11 +146,29 @@ export const PriceSettingsModal: React.FC<PriceSettingsModalProps> = ({
         return;
       }
 
-      setTiers((prev) => prev.filter((t) => t.id !== id));
-      showToast("success","Delete Successful!", "Price tier deleted successfully");
+      if (selectedOutlet) {
+        const result = await (window as any).electronAPI.deletePaymentTier({
+          outletId: selectedOutlet.id,
+          tierId: id,
+        });
+
+        if (result.success) {
+          updateOutletLocal(selectedOutlet.id, { priceTier: result.tiers });
+          setTiers((prev) => prev.filter((t) => t.id !== id));
+          showToast(
+            "success",
+            "Delete Successful!",
+            "Price tier deleted successfully",
+          );
+          onClose();
+        } else {
+          throw new Error(result.message || "Failed to delete tier");
+        }
+      }
     } catch (error: unknown) {
       console.error("Failed to delete tier:", error);
-      showToast("error",
+      showToast(
+        "error",
         "Delete Failed",
         (error as Error).message ||
           "Failed to delete price tier. Please confirm it is not a default tier",
@@ -124,16 +197,34 @@ export const PriceSettingsModal: React.FC<PriceSettingsModalProps> = ({
     setIsUpdating((prev) => ({ ...prev, [id]: true }));
 
     try {
-      setTiers((prev) =>
-        prev.map((t) =>
-          t.id === id ? { ...t, ...updatedTier, isEditing: false } : t,
-        ),
-      );
-      setIsEditing((prev) => ({ ...prev, [id]: false }));
-      showToast("success","Update Successful!", "Price tier updated successfully");
+      if (selectedOutlet) {
+        const result = await (window as any).electronAPI.editPaymentTier({
+          outletId: selectedOutlet.id,
+          tier: { ...tier, ...updatedTier, isEditing: false },
+        });
+
+        if (result.success) {
+          updateOutletLocal(selectedOutlet.id, { priceTier: result.tiers });
+          setTiers((prev) =>
+            prev.map((t) =>
+              t.id === id ? { ...t, ...updatedTier, isEditing: false } : t,
+            ),
+          );
+          setIsEditing((prev) => ({ ...prev, [id]: false }));
+          showToast(
+            "success",
+            "Update Successful!",
+            "Price tier updated successfully",
+          );
+          onClose();
+        } else {
+          throw new Error(result.message || "Failed to update tier");
+        }
+      }
     } catch (error: unknown) {
       console.error("Failed to update tier:", error);
-      showToast("error",
+      showToast(
+        "error",
         "Update Failed",
         (error as { data?: { message?: string }; message?: string })?.data
           ?.message ||
@@ -146,78 +237,44 @@ export const PriceSettingsModal: React.FC<PriceSettingsModalProps> = ({
   };
 
   const handleSaveAll = async () => {
+    // This function might be redundant if all operations are granular now.
+    // However, if the user fills the form and clicks "Save Price Tiers" instead of "Add",
+    // we should treat it as an Add operation for the pending tier.
+    // Or if "Save Price Tiers" is meant to be a bulk update (which we are moving away from).
+
+    // For now, let's keep it but make it use granular add for pending tier,
+    // or if no pending tier, maybe just show a success message as everything is already saved.
+
     setIsSaving(true);
     try {
       const formRef = priceTierFormRef.current;
       const hasFormData = formRef?.hasFormData();
-      const tiersToSave: PriceTier[] = [];
 
       if (hasFormData) {
         const pendingTier = formRef?.addPendingTier();
-        if (!pendingTier) {
-          setIsSaving(false);
-          return;
-        }
-        setTiers((prev) => [...prev, pendingTier]);
-        tiersToSave.push(pendingTier);
-      }
-
-      const newTiers = tiers.filter((tier) => tier.isNew);
-      tiersToSave.push(...newTiers);
-
-      for (const tier of tiersToSave) {
-        const rules = tier.pricingRules;
-        const hasMarkup =
-          (typeof rules?.markupPercentage === "number" &&
-            rules.markupPercentage > 0) ||
-          (typeof rules?.fixedMarkup === "number" && rules.fixedMarkup > 0);
-        const hasDiscount =
-          (typeof rules?.discountPercentage === "number" &&
-            rules.discountPercentage > 0) ||
-          (typeof rules?.fixedDiscount === "number" && rules.fixedDiscount > 0);
-
-        if (!hasMarkup && !hasDiscount) {
-          showToast("error",
-            `Price tier "${tier.name}" must have either a markup or discount rule.`,
-            `Price tier "${tier.name}" is missing a valid pricing rule.`,
-          );
-          setIsSaving(false);
+        if (pendingTier) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, isNew, isEditing, ...rest } = pendingTier;
+          await addTier(rest);
+          formRef?.resetForm();
+          onClose();
           return;
         }
       }
 
-      if (tiersToSave.length === 0) {
-        showToast("error","No new price tiers to save.", "No new price tiers to save.");
-        setIsSaving(false);
-        return;
-      }
-
-      const savedTierIds = new Set<PriceTier["id"]>();
-      for (const tier of tiersToSave) {
-        savedTierIds.add(tier.id);
-      }
-
-      if (savedTierIds.size > 0) {
-        const allSaved = savedTierIds.size === tiersToSave.length;
-        showToast("success",
-          allSaved ? "Save Successful!" : "Partial Save Successful",
-          allSaved
-            ? "All price tiers saved successfully!"
-            : `${savedTierIds.size} of ${tiersToSave.length} price tiers saved successfully.`,
-        );
-        setTiers((prev) =>
-          prev.map((tier) =>
-            savedTierIds.has(tier.id) ? { ...tier, isNew: false } : tier,
-          ),
-        );
-        formRef?.resetForm();
-      }
+      // If no form data, we can just say saved successfully since other ops are immediate
+      showToast(
+        "success",
+        "Save Successful!",
+        "All price tiers saved successfully!",
+      );
+      onClose();
     } catch (error: unknown) {
       console.error("Failed to save tiers:", error);
       const errorMessage =
         (error as { message?: string })?.message ||
         "An error occurred while saving price tiers";
-      showToast("error","Save Failed", errorMessage);
+      showToast("error", "Save Failed", errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -336,11 +393,7 @@ export const PriceSettingsModal: React.FC<PriceSettingsModalProps> = ({
 
         <div>
           <h4 className="font-medium mb-4">Add New Price Tier</h4>
-          <PriceTierForm
-            ref={priceTierFormRef}
-            onAdd={addTier}
-
-          />
+          <PriceTierForm ref={priceTierFormRef} onAdd={addTier} />
         </div>
 
         <div className="flex flex-col gap-3">
@@ -642,7 +695,7 @@ const EditableTierForm: React.FC<EditableTierFormProps> = ({
 export const PriceTierForm = React.forwardRef<
   PriceTierFormRef,
   PriceTierFormProps
->(({ onAdd}, ref) => {
+>(({ onAdd }, ref) => {
   const [tier, setTier] = useState({
     name: "",
     description: "",
@@ -654,7 +707,7 @@ export const PriceTierForm = React.forwardRef<
   const [valueType, setValueType] = useState<"percentage" | "absolute">(
     "percentage",
   );
-  const {showToast}=useToastStore()
+  const { showToast } = useToastStore();
 
   const handleMarkupToggle = (enabled: boolean) => {
     setMarkupEnabled(enabled);
@@ -747,15 +800,12 @@ export const PriceTierForm = React.forwardRef<
       const hasRule = markupEnabled || discountEnabled;
       if (tier.name.trim() !== "" && hasRule) {
         const newTier = createTierObject();
-        onAdd({
-          name: newTier.name,
-          description: newTier.description,
-          pricingRules: newTier.pricingRules,
-        });
+        // onAdd is removed to prevent double creation when called from handleSaveAll
         resetForm();
         return newTier;
       }
-      showToast("error",
+      showToast(
+        "error",
         "Price tier must have either a markup or discount rule.",
         "Price tier must have either a markup or discount rule.",
       );
@@ -767,7 +817,8 @@ export const PriceTierForm = React.forwardRef<
 
   const handleAdd = () => {
     if (!tier.name || tier.name.trim() === "") {
-      showToast("error",
+      showToast(
+        "error",
         "Please enter a price tier name.",
         "Please enter a price tier name.",
       );
@@ -775,7 +826,8 @@ export const PriceTierForm = React.forwardRef<
     }
     const hasRule = markupEnabled || discountEnabled;
     if (!hasRule) {
-      showToast("error",
+      showToast(
+        "error",
         "Please select a pricing rule (markup or discount).",
         "Please select a pricing rule (markup or discount).",
       );

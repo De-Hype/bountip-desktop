@@ -9,6 +9,13 @@ import { UpdateService } from "./services/UpdateService";
 import { AssetService } from "./services/AssetService";
 import { SyncService } from "./services/SyncService";
 import { updateBusinessDetails } from "./features/settings/businessInformation";
+import {
+  addPaymentTier,
+  deletePaymentTier,
+  editPaymentTier,
+  updatePaymentTier,
+  bulkAddPaymentTiers,
+} from "./features/settings/paymentTier";
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -152,6 +159,26 @@ app.whenReady().then(() => {
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
   ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>
     updateBusinessDetails(dbService, payload),
+  );
+
+  ipcMain.handle("db:updatePaymentTier", (_event, payload) =>
+    updatePaymentTier(dbService, payload),
+  );
+
+  ipcMain.handle("db:addPaymentTier", (_event, payload) =>
+    addPaymentTier(dbService, payload),
+  );
+
+  ipcMain.handle("db:deletePaymentTier", (_event, payload) =>
+    deletePaymentTier(dbService, payload),
+  );
+
+  ipcMain.handle("db:editPaymentTier", (_event, payload) =>
+    editPaymentTier(dbService, payload),
+  );
+
+  ipcMain.handle("db:bulkAddPaymentTiers", (_event, payload) =>
+    bulkAddPaymentTiers(dbService, payload),
   );
 
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>

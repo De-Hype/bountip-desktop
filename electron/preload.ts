@@ -41,6 +41,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getOutlets: async () => ipcRenderer.invoke("db:getOutlets"),
   updateBusinessDetails: async (payload: any) =>
     ipcRenderer.invoke("db:updateBusinessDetails", payload),
+  updatePaymentTier: async (payload: any) =>
+    ipcRenderer.invoke("db:updatePaymentTier", payload),
+  addPaymentTier: async (payload: any) =>
+    ipcRenderer.invoke("db:addPaymentTier", payload),
+  deletePaymentTier: async (payload: any) =>
+    ipcRenderer.invoke("db:deletePaymentTier", payload),
+  editPaymentTier: async (payload: any) =>
+    ipcRenderer.invoke("db:editPaymentTier", payload),
+  bulkAddPaymentTiers: async (payload: any) =>
+    ipcRenderer.invoke("db:bulkAddPaymentTiers", payload),
   dbQuery: async (sql: string, params: any[] = []) =>
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>

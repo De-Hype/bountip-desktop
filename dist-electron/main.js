@@ -5576,10 +5576,10 @@ function requireRfc2253Parser() {
   return rfc2253Parser;
 }
 var uuid = {};
-var hasRequiredUuid;
-function requireUuid() {
-  if (hasRequiredUuid) return uuid;
-  hasRequiredUuid = 1;
+var hasRequiredUuid$1;
+function requireUuid$1() {
+  if (hasRequiredUuid$1) return uuid;
+  hasRequiredUuid$1 = 1;
   Object.defineProperty(uuid, "__esModule", { value: true });
   uuid.nil = uuid.UUID = void 0;
   const crypto_1 = crypto;
@@ -7398,9 +7398,9 @@ function requireOut() {
     Object.defineProperty(exports$1, "parseDn", { enumerable: true, get: function() {
       return rfc2253Parser_1.parseDn;
     } });
-    var uuid_1 = requireUuid();
+    var uuid_12 = requireUuid$1();
     Object.defineProperty(exports$1, "UUID", { enumerable: true, get: function() {
-      return uuid_1.UUID;
+      return uuid_12.UUID;
     } });
     var xml_1 = requireXml();
     Object.defineProperty(exports$1, "parseXml", { enumerable: true, get: function() {
@@ -19328,6 +19328,249 @@ const updateBusinessDetails = async (db, payload) => {
   }
   return { success: true };
 };
+var rng;
+var hasRequiredRng;
+function requireRng() {
+  if (hasRequiredRng) return rng;
+  hasRequiredRng = 1;
+  var crypto$1 = crypto;
+  rng = function nodeRNG() {
+    return crypto$1.randomBytes(16);
+  };
+  return rng;
+}
+var bytesToUuid_1;
+var hasRequiredBytesToUuid;
+function requireBytesToUuid() {
+  if (hasRequiredBytesToUuid) return bytesToUuid_1;
+  hasRequiredBytesToUuid = 1;
+  var byteToHex = [];
+  for (var i = 0; i < 256; ++i) {
+    byteToHex[i] = (i + 256).toString(16).substr(1);
+  }
+  function bytesToUuid(buf, offset) {
+    var i2 = offset || 0;
+    var bth = byteToHex;
+    return [
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      "-",
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      "-",
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      "-",
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      "-",
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]]
+    ].join("");
+  }
+  bytesToUuid_1 = bytesToUuid;
+  return bytesToUuid_1;
+}
+var v1_1;
+var hasRequiredV1;
+function requireV1() {
+  if (hasRequiredV1) return v1_1;
+  hasRequiredV1 = 1;
+  var rng2 = requireRng();
+  var bytesToUuid = requireBytesToUuid();
+  var _nodeId;
+  var _clockseq;
+  var _lastMSecs = 0;
+  var _lastNSecs = 0;
+  function v1(options, buf, offset) {
+    var i = buf && offset || 0;
+    var b = buf || [];
+    options = options || {};
+    var node2 = options.node || _nodeId;
+    var clockseq = options.clockseq !== void 0 ? options.clockseq : _clockseq;
+    if (node2 == null || clockseq == null) {
+      var seedBytes = rng2();
+      if (node2 == null) {
+        node2 = _nodeId = [
+          seedBytes[0] | 1,
+          seedBytes[1],
+          seedBytes[2],
+          seedBytes[3],
+          seedBytes[4],
+          seedBytes[5]
+        ];
+      }
+      if (clockseq == null) {
+        clockseq = _clockseq = (seedBytes[6] << 8 | seedBytes[7]) & 16383;
+      }
+    }
+    var msecs = options.msecs !== void 0 ? options.msecs : (/* @__PURE__ */ new Date()).getTime();
+    var nsecs = options.nsecs !== void 0 ? options.nsecs : _lastNSecs + 1;
+    var dt = msecs - _lastMSecs + (nsecs - _lastNSecs) / 1e4;
+    if (dt < 0 && options.clockseq === void 0) {
+      clockseq = clockseq + 1 & 16383;
+    }
+    if ((dt < 0 || msecs > _lastMSecs) && options.nsecs === void 0) {
+      nsecs = 0;
+    }
+    if (nsecs >= 1e4) {
+      throw new Error("uuid.v1(): Can't create more than 10M uuids/sec");
+    }
+    _lastMSecs = msecs;
+    _lastNSecs = nsecs;
+    _clockseq = clockseq;
+    msecs += 122192928e5;
+    var tl = ((msecs & 268435455) * 1e4 + nsecs) % 4294967296;
+    b[i++] = tl >>> 24 & 255;
+    b[i++] = tl >>> 16 & 255;
+    b[i++] = tl >>> 8 & 255;
+    b[i++] = tl & 255;
+    var tmh = msecs / 4294967296 * 1e4 & 268435455;
+    b[i++] = tmh >>> 8 & 255;
+    b[i++] = tmh & 255;
+    b[i++] = tmh >>> 24 & 15 | 16;
+    b[i++] = tmh >>> 16 & 255;
+    b[i++] = clockseq >>> 8 | 128;
+    b[i++] = clockseq & 255;
+    for (var n = 0; n < 6; ++n) {
+      b[i + n] = node2[n];
+    }
+    return buf ? buf : bytesToUuid(b);
+  }
+  v1_1 = v1;
+  return v1_1;
+}
+var v4_1;
+var hasRequiredV4;
+function requireV4() {
+  if (hasRequiredV4) return v4_1;
+  hasRequiredV4 = 1;
+  var rng2 = requireRng();
+  var bytesToUuid = requireBytesToUuid();
+  function v4(options, buf, offset) {
+    var i = buf && offset || 0;
+    if (typeof options == "string") {
+      buf = options === "binary" ? new Array(16) : null;
+      options = null;
+    }
+    options = options || {};
+    var rnds = options.random || (options.rng || rng2)();
+    rnds[6] = rnds[6] & 15 | 64;
+    rnds[8] = rnds[8] & 63 | 128;
+    if (buf) {
+      for (var ii = 0; ii < 16; ++ii) {
+        buf[i + ii] = rnds[ii];
+      }
+    }
+    return buf || bytesToUuid(rnds);
+  }
+  v4_1 = v4;
+  return v4_1;
+}
+var uuid_1;
+var hasRequiredUuid;
+function requireUuid() {
+  if (hasRequiredUuid) return uuid_1;
+  hasRequiredUuid = 1;
+  var v1 = requireV1();
+  var v4 = requireV4();
+  var uuid2 = v4;
+  uuid2.v1 = v1;
+  uuid2.v4 = v4;
+  uuid_1 = uuid2;
+  return uuid_1;
+}
+var uuidExports = requireUuid();
+const getTiers = (db, outletId) => {
+  const outlet = db.getOutlet(outletId);
+  if (!outlet || !outlet.priceTier) return [];
+  try {
+    return typeof outlet.priceTier === "string" ? JSON.parse(outlet.priceTier) : outlet.priceTier;
+  } catch {
+    return [];
+  }
+};
+const saveTiers = (db, outletId, priceTier) => {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const priceTierString = JSON.stringify(priceTier);
+  db.run(
+    `
+    UPDATE business_outlet
+    SET
+      priceTier = @priceTier,
+      updatedAt = @updatedAt
+    WHERE id = @outletId
+  `,
+    {
+      outletId,
+      priceTier: priceTierString,
+      updatedAt: now
+    }
+  );
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+};
+const updatePaymentTier = async (db, payload) => {
+  const { outletId, priceTier } = payload;
+  saveTiers(db, outletId, priceTier);
+  return { success: true };
+};
+const bulkAddPaymentTiers = async (db, payload) => {
+  const { outletId, tiers } = payload;
+  const currentTiers = getTiers(db, outletId);
+  const newTiers = tiers.map((tier) => ({
+    ...tier,
+    id: typeof tier.id === "number" && tier.id < 0 ? uuidExports.v4() : tier.id || uuidExports.v4(),
+    isNew: false
+  }));
+  currentTiers.push(...newTiers);
+  saveTiers(db, outletId, currentTiers);
+  return { success: true, tiers: currentTiers };
+};
+const addPaymentTier = async (db, payload) => {
+  const { outletId, tier } = payload;
+  const currentTiers = getTiers(db, outletId);
+  const newTier = {
+    ...tier,
+    id: typeof tier.id === "number" && tier.id < 0 ? uuidExports.v4() : tier.id || uuidExports.v4(),
+    isNew: false
+    // Ensure isNew is false when saving to DB
+  };
+  currentTiers.push(newTier);
+  saveTiers(db, outletId, currentTiers);
+  return { success: true, tier: newTier, tiers: currentTiers };
+};
+const deletePaymentTier = async (db, payload) => {
+  const { outletId, tierId } = payload;
+  let currentTiers = getTiers(db, outletId);
+  currentTiers = currentTiers.filter((t) => t.id !== tierId);
+  saveTiers(db, outletId, currentTiers);
+  return { success: true, tiers: currentTiers };
+};
+const editPaymentTier = async (db, payload) => {
+  const { outletId, tier } = payload;
+  const currentTiers = getTiers(db, outletId);
+  const index = currentTiers.findIndex((t) => t.id === tier.id);
+  if (index !== -1) {
+    currentTiers[index] = { ...currentTiers[index], ...tier, isNew: false };
+    saveTiers(db, outletId, currentTiers);
+    return { success: true, tier: currentTiers[index], tiers: currentTiers };
+  }
+  return { success: false, message: "Tier not found" };
+};
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "asset",
@@ -19444,6 +19687,26 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:updateBusinessDetails",
     (_event, payload) => updateBusinessDetails(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:updatePaymentTier",
+    (_event, payload) => updatePaymentTier(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:addPaymentTier",
+    (_event, payload) => addPaymentTier(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:deletePaymentTier",
+    (_event, payload) => deletePaymentTier(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:editPaymentTier",
+    (_event, payload) => editPaymentTier(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:bulkAddPaymentTiers",
+    (_event, payload) => bulkAddPaymentTiers(dbService, payload)
   );
   ipcMain.handle(
     "db:query",
