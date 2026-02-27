@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:editPaymentTier", payload),
   bulkAddPaymentTiers: async (payload: any) =>
     ipcRenderer.invoke("db:bulkAddPaymentTiers", payload),
+  updateReceiptSettings: async (payload: { outletId: string; settings: any }) =>
+    ipcRenderer.invoke("db:updateReceiptSettings", payload),
   dbQuery: async (sql: string, params: any[] = []) =>
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>

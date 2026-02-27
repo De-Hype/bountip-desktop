@@ -93,7 +93,6 @@ interface ReceiptSettingsDto {
 interface ReceiptSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  
 }
 
 const defaultFormData: ReceiptSettings = {
@@ -129,9 +128,8 @@ const defaultFormData: ReceiptSettings = {
 export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
   isOpen,
   onClose,
- 
 }) => {
-  const { selectedOutlet: outlet } = useBusinessStore();
+  const { selectedOutlet: outlet, updateOutletLocal } = useBusinessStore();
   const [formData, setFormData] = useState<ReceiptSettings>(defaultFormData);
   const [isSaving, setIsSaving] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -151,7 +149,16 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
       return;
     }
 
-    const settings = outlet.receiptSettings;
+    let settings = outlet.receiptSettings;
+    if (typeof settings === "string") {
+      try {
+        settings = JSON.parse(settings);
+      } catch (e) {
+        console.error("Failed to parse receipt settings:", e);
+        settings = {};
+      }
+    }
+
     setFormData({
       showReceiptBranding:
         settings?.showLogo ?? defaultFormData.showReceiptBranding,
@@ -272,7 +279,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
     };
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!outlet?.id) {
       const message = "Outlet information is missing.";
@@ -282,16 +289,37 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
 
     setIsSaving(true);
     const receiptSettings = mapFormDataToDto();
-    console.log("Saving receipt settings:", receiptSettings);
 
-    showToast(
-      "success",
-      "Save Successful!",
-      "Receipt settings updated successfully.",
-    );
+    try {
+      // 1. Update backend via IPC (Offline-first: updates local DB + queues sync)
+      const result = await (window as any).electronAPI.updateReceiptSettings({
+        outletId: outlet.id,
+        settings: receiptSettings,
+      });
 
-    setIsSaving(false);
-    onClose();
+      if (result.success) {
+        // 2. Update local Zustand store
+        updateOutletLocal(outlet.id, { receiptSettings });
+
+        showToast(
+          "success",
+          "Save Successful!",
+          "Receipt settings updated successfully.",
+        );
+        onClose();
+      } else {
+        throw new Error("Failed to save settings");
+      }
+    } catch (error: any) {
+      console.error("Failed to save receipt settings:", error);
+      showToast(
+        "error",
+        "Save Failed",
+        error.message || "An error occurred while saving receipt settings.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isClient) {

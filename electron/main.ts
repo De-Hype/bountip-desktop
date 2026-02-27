@@ -16,6 +16,7 @@ import {
   updatePaymentTier,
   bulkAddPaymentTiers,
 } from "./features/settings/paymentTier";
+import { updateReceiptSettings } from "./features/settings/receiptCustomization";
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -179,6 +180,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("db:bulkAddPaymentTiers", (_event, payload) =>
     bulkAddPaymentTiers(dbService, payload),
+  );
+
+  ipcMain.handle("db:updateReceiptSettings", (_event, payload) =>
+    updateReceiptSettings(dbService, payload),
   );
 
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>

@@ -19571,6 +19571,34 @@ const editPaymentTier = async (db, payload) => {
   }
   return { success: false, message: "Tier not found" };
 };
+const updateReceiptSettings = async (db, payload) => {
+  const { outletId, settings } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `
+    UPDATE business_outlet
+    SET
+      receiptSettings = @receiptSettings,
+      updatedAt = @updatedAt
+    WHERE id = @outletId
+  `,
+    {
+      outletId,
+      receiptSettings: JSON.stringify(settings),
+      updatedAt: now
+    }
+  );
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+  return { success: true, settings };
+};
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "asset",
@@ -19707,6 +19735,10 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:bulkAddPaymentTiers",
     (_event, payload) => bulkAddPaymentTiers(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:updateReceiptSettings",
+    (_event, payload) => updateReceiptSettings(dbService, payload)
   );
   ipcMain.handle(
     "db:query",
