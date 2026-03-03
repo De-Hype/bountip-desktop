@@ -37,6 +37,11 @@ export interface ElectronAPI {
     charges: any;
   }) => Promise<{ success: boolean }>;
 
+  updatePaymentMethods: (payload: {
+    outletId: string;
+    paymentMethods: any;
+  }) => Promise<{ success: boolean }>;
+
   syncTrigger: () => void;
 
   getNetworkStatus: () => Promise<{ online: boolean }>;

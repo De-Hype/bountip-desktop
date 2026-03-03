@@ -1,5 +1,8 @@
 import { DatabaseService } from "../../services/DatabaseService";
-import { buildBusinessOutletUpsertParams, businessOutletUpsertSql } from "../schemas/business_outlet.schema";
+import {
+  buildBusinessOutletUpsertParams,
+  businessOutletUpsertSql,
+} from "../schemas/business_outlet.schema";
 import { randomUUID } from "crypto";
 
 export const createOutlet = async (
@@ -26,13 +29,11 @@ export const createOutlet = async (
     phoneNumber: location.phoneNumber,
     isMainLocation: location.isMainLocation ? 1 : 0,
     isActive: 1,
-    isOnboarded: 1, // Assuming created via settings is onboarded
+    isOnboarded: 0, // Assuming created via settings is onboarded
     isDeleted: 0,
     createdAt: now,
     updatedAt: now,
     // Default values for other fields to match schema expectations or avoid nulls if strict
-    country: "Nigeria", // Default or should be passed?
-    currency: "NGN", // Default
   };
 
   const params = buildBusinessOutletUpsertParams(newOutlet);

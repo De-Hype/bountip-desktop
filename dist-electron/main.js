@@ -209,32 +209,42 @@ const productUpsertSql = `
     @outletId
   )
 `;
-const buildProductUpsertParams = (p) => ({
-  id: p.id,
-  name: p.name ?? null,
-  isActive: p.isActive ? 1 : 1,
-  description: p.description ?? null,
-  category: p.category ?? null,
-  price: p.price ?? null,
-  preparationArea: p.preparationArea ?? null,
-  weight: p.weight ?? null,
-  productCode: p.productCode ?? null,
-  weightScale: p.weightScale ?? null,
-  productAvailableStock: p.productAvailableStock ?? null,
-  packagingMethod: p.packagingMethod ? JSON.stringify(p.packagingMethod) : null,
-  priceTierId: p.priceTierId ? JSON.stringify(p.priceTierId) : null,
-  allergenList: p.allergenList && p.allergenList.length > 0 ? JSON.stringify(p.allergenList) : null,
-  logoUrl: p.logoUrl ?? null,
-  logoHash: p.logoHash ?? null,
-  leadTime: p.leadTime ?? null,
-  availableAtStorefront: p.availableAtStorefront ? 1 : 0,
-  createdAtStorefront: p.createdAtStorefront ? 1 : 0,
-  isDeleted: p.isDeleted ? 1 : 0,
-  createdAt: p.createdAt ?? null,
-  updatedAt: p.updatedAt ?? null,
-  lastSyncedAt: p.lastSyncedAt ?? null,
-  outletId: p.outletId ?? null
-});
+const buildProductUpsertParams = (p) => {
+  let allergenList = null;
+  if (Array.isArray(p.allergenList)) {
+    allergenList = JSON.stringify(p.allergenList);
+  } else if (p.allergenList && typeof p.allergenList === "object" && Array.isArray(p.allergenList.allergies)) {
+    allergenList = JSON.stringify(p.allergenList.allergies);
+  } else if (Array.isArray(p.allergens)) {
+    allergenList = JSON.stringify(p.allergens);
+  }
+  return {
+    id: p.id,
+    name: p.name ?? null,
+    isActive: p.isActive ? 1 : 1,
+    description: p.description ?? null,
+    category: p.category ?? null,
+    price: p.price ?? null,
+    preparationArea: p.preparationArea ?? null,
+    weight: p.weight ?? null,
+    productCode: p.productCode ?? null,
+    weightScale: p.weightScale ?? null,
+    productAvailableStock: p.productAvailableStock ?? null,
+    packagingMethod: p.packagingMethod ? JSON.stringify(p.packagingMethod) : null,
+    priceTierId: p.priceTierId ? JSON.stringify(p.priceTierId) : null,
+    allergenList: allergenList && allergenList !== "[]" && allergenList !== "null" ? allergenList : null,
+    logoUrl: p.logoUrl ?? null,
+    logoHash: p.logoHash ?? null,
+    leadTime: p.leadTime ?? null,
+    availableAtStorefront: p.availableAtStorefront ? 1 : 0,
+    createdAtStorefront: p.createdAtStorefront ? 1 : 0,
+    isDeleted: p.isDeleted ? 1 : 0,
+    createdAt: p.createdAt ?? null,
+    updatedAt: p.updatedAt ?? null,
+    lastSyncedAt: p.lastSyncedAt ?? null,
+    outletId: p.outletId ?? null
+  };
+};
 const productSchema = {
   name: "product",
   create: productCreateSql,
@@ -19683,6 +19693,90 @@ const updateOperatingHours = async (db, payload) => {
   }
   return { success: true, operatingHours };
 };
+const updatePaymentMethods = async (db, payload) => {
+  const { outletId, paymentMethods } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `
+    UPDATE business_outlet
+    SET
+      paymentMethods = @paymentMethods,
+      updatedAt = @updatedAt
+    WHERE id = @outletId
+  `,
+    {
+      outletId,
+      paymentMethods: JSON.stringify(paymentMethods),
+      updatedAt: now
+    }
+  );
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+  return { success: true, paymentMethods };
+};
+const updateTaxSettings = async (db, payload) => {
+  const { outletId, settings } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `
+    UPDATE business_outlet
+    SET
+      taxSettings = @taxSettings,
+      updatedAt = @updatedAt
+    WHERE id = @outletId
+  `,
+    {
+      outletId,
+      taxSettings: JSON.stringify(settings),
+      updatedAt: now
+    }
+  );
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+  return { success: true, settings };
+};
+const updateServiceCharges = async (db, payload) => {
+  const { outletId, charges } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `
+    UPDATE business_outlet
+    SET
+      serviceCharges = @serviceCharges,
+      updatedAt = @updatedAt
+    WHERE id = @outletId
+  `,
+    {
+      outletId,
+      serviceCharges: JSON.stringify(charges),
+      updatedAt: now
+    }
+  );
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+  return { success: true, charges };
+};
 const createOutlet = async (db, payload) => {
   const { businessId, location } = payload;
   const newOutletId = randomUUID();
@@ -19695,16 +19789,12 @@ const createOutlet = async (db, payload) => {
     phoneNumber: location.phoneNumber,
     isMainLocation: location.isMainLocation ? 1 : 0,
     isActive: 1,
-    isOnboarded: 1,
+    isOnboarded: 0,
     // Assuming created via settings is onboarded
     isDeleted: 0,
     createdAt: now,
-    updatedAt: now,
+    updatedAt: now
     // Default values for other fields to match schema expectations or avoid nulls if strict
-    country: "Nigeria",
-    // Default or should be passed?
-    currency: "NGN"
-    // Default
   };
   const params = buildBusinessOutletUpsertParams(newOutlet);
   db.run(businessOutletUpsertSql, params);
@@ -19927,6 +20017,18 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:updateOperatingHours",
     (_event, payload) => updateOperatingHours(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:updatePaymentMethods",
+    (_event, payload) => updatePaymentMethods(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:updateTaxSettings",
+    (_event, payload) => updateTaxSettings(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:updateServiceCharges",
+    (_event, payload) => updateServiceCharges(dbService, payload)
   );
   ipcMain.handle(
     "db:createOutlet",

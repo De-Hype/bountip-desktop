@@ -20,6 +20,7 @@ import { updateReceiptSettings } from "./features/settings/receiptCustomization"
 import { updateLabelSettings } from "./features/settings/labellingSettings";
 import { updateInvoiceSettings } from "./features/settings/invoiceCustomization";
 import { updateOperatingHours } from "./features/settings/operatingHours";
+import { updatePaymentMethods } from "./features/settings/paymentMethods";
 import { updateTaxSettings } from "./features/settings/taxSettings";
 import { updateServiceCharges } from "./features/settings/serviceCharge";
 import {
@@ -206,6 +207,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle("db:updateOperatingHours", (_event, payload) =>
     updateOperatingHours(dbService, payload),
+  );
+
+  ipcMain.handle("db:updatePaymentMethods", (_event, payload) =>
+    updatePaymentMethods(dbService, payload),
+  );
+
+  ipcMain.handle("db:updateTaxSettings", (_event, payload) =>
+    updateTaxSettings(dbService, payload),
+  );
+
+  ipcMain.handle("db:updateServiceCharges", (_event, payload) =>
+    updateServiceCharges(dbService, payload),
   );
 
   ipcMain.handle("db:createOutlet", (_event, payload) =>

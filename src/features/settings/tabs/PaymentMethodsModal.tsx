@@ -28,7 +28,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { selectedOutlet: outlet } = useBusinessStore();
+  const { selectedOutlet: outlet, updateOutletLocal } = useBusinessStore();
 
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [customName, setCustomName] = useState("");
@@ -38,8 +38,19 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    if (outlet?.paymentMethods?.methods) {
-      const outletPaymentMethods = outlet.paymentMethods.methods as Array<{
+    let currentPaymentMethods = outlet?.paymentMethods;
+
+    if (typeof currentPaymentMethods === "string") {
+      try {
+        currentPaymentMethods = JSON.parse(currentPaymentMethods);
+      } catch (e) {
+        console.error("Failed to parse paymentMethods", e);
+        currentPaymentMethods = { methods: [] };
+      }
+    }
+
+    if (currentPaymentMethods?.methods) {
+      const outletPaymentMethods = currentPaymentMethods.methods as Array<{
         id?: number;
         name: string;
         isActive: boolean;
@@ -179,9 +190,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
     setCustomName("");
   };
 
-  const handleDelete = (id?: number, name?: string) => {
-    console.log(id || name, "This is the one that is deleted");
-
+  const handleDelete = async (id?: number, name?: string) => {
     if (!outlet) {
       const errorMessage = "Store information is missing.";
       showToast("error", "Missing Store ID", errorMessage);
@@ -191,24 +200,53 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
 
     setLoading(true);
 
-    if (id || name) {
-      setMethods((prev) =>
-        id
-          ? prev.filter((m) => m.id !== id)
-          : prev.filter((m) => m.name !== name),
-      );
+    try {
+      let updatedMethods = [...methods];
+      if (id) {
+        updatedMethods = updatedMethods.filter((m) => m.id !== id);
+      } else if (name) {
+        updatedMethods = updatedMethods.filter((m) => m.name !== name);
+      }
+
+      // Prepare data for API
+      const paymentMethodsData = updatedMethods.map(({ name, isActive }) => ({
+        name,
+        isActive,
+      }));
+
+      const api = window.electronAPI;
+      if (api) {
+        await api.updatePaymentMethods({
+          outletId: outlet.id,
+          paymentMethods: { methods: paymentMethodsData },
+        });
+
+        const status = await api.getNetworkStatus();
+        if (status.online) {
+          api.syncTrigger();
+        }
+
+        updateOutletLocal(outlet.id, {
+          paymentMethods: JSON.stringify({ methods: paymentMethodsData }),
+        });
+      }
+
+      setMethods(updatedMethods);
 
       showToast(
         "success",
         "Payment Methods",
         "Payment method deleted successfully",
       );
+    } catch (error) {
+      console.error("Failed to delete payment method:", error);
+      showToast("error", "Delete Failed", "Failed to delete payment method");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!outlet) {
       const errorMessage = "Store information is missing.";
       showToast("error", "Missing Store ID", errorMessage);
@@ -218,35 +256,56 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
 
     setLoading(true);
 
-    // Include any pending custom method in the input
-    let methodsToSave = [...methods];
-    if (customName.trim()) {
-      methodsToSave = [
-        ...methods,
-        {
-          id: Math.random(),
-          name: customName.trim(),
-          isActive: false,
-        },
-      ];
+    try {
+      // Include any pending custom method in the input
+      let methodsToSave = [...methods];
+      if (customName.trim()) {
+        methodsToSave = [
+          ...methods,
+          {
+            id: Date.now(),
+            name: customName.trim(),
+            isActive: false,
+          },
+        ];
+      }
+
+      // Prepare data for API
+      const paymentMethodsData = methodsToSave.map(({ name, isActive }) => ({
+        name,
+        isActive,
+      }));
+
+      const api = window.electronAPI;
+      if (api) {
+        await api.updatePaymentMethods({
+          outletId: outlet.id,
+          paymentMethods: { methods: paymentMethodsData },
+        });
+
+        const status = await api.getNetworkStatus();
+        if (status.online) {
+          api.syncTrigger();
+        }
+
+        updateOutletLocal(outlet.id, {
+          paymentMethods: JSON.stringify({ methods: paymentMethodsData }),
+        });
+      }
+
+      showToast(
+        "success",
+        "Payment Methods",
+        "Payment Methods updated successfully",
+      );
+
+      setLoading(false);
+      onClose();
+    } catch (error) {
+      console.error("Failed to save payment methods:", error);
+      showToast("error", "Save Failed", "Failed to save payment methods");
+      setLoading(false);
     }
-
-    // Prepare data for API
-    const paymentMethodsData = methodsToSave.map(({ name, isActive }) => ({
-      name,
-      isActive,
-    }));
-
-    console.log("Saving payment methods:", paymentMethodsData);
-
-    showToast(
-      "success",
-      "Payment Methods",
-      "Payment Methods updated successfully",
-    );
-
-    setLoading(false);
-    onClose();
   };
 
   return (
