@@ -71,7 +71,7 @@ export const OperatingHoursModal: React.FC<OperatingHoursModalProps> = ({
   onClose,
 }) => {
   const { showToast } = useToastStore();
-  const { selectedOutlet: outlet } = useBusinessStore();
+  const { selectedOutlet: outlet, updateOutletLocal } = useBusinessStore();
   const [operatingHours, setOperatingHours] = useState<DayHours[]>(
     getDefaultOperatingHours(),
   );
@@ -88,7 +88,17 @@ export const OperatingHoursModal: React.FC<OperatingHoursModalProps> = ({
 
     // If we have outlet data, use it to populate the hours
     if (outlet?.operatingHours) {
-      const rawHours = outlet.operatingHours;
+      let rawHours = outlet.operatingHours;
+
+      // Handle stringified JSON from DB if necessary
+      if (typeof rawHours === "string") {
+        try {
+          rawHours = JSON.parse(rawHours);
+        } catch (e) {
+          console.error("Failed to parse operating hours:", e);
+          rawHours = {};
+        }
+      }
 
       hoursToSet = DAYS_OF_WEEK.map((day) => ({
         day: day.charAt(0).toUpperCase() + day.slice(1),
@@ -192,7 +202,7 @@ export const OperatingHoursModal: React.FC<OperatingHoursModalProps> = ({
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!outlet) {
       const errorMessage = "Store information is missing.";
       showToast("error", "Missing Store ID", errorMessage);
@@ -225,16 +235,31 @@ export const OperatingHoursModal: React.FC<OperatingHoursModalProps> = ({
       return;
     }
 
-    showToast(
-      "success",
-      "Save successful",
-      "Your Operating hours have been saved successfully",
-    );
-    setUnsaved(false);
-    setSelectAll(false);
+    try {
+      const api = (window as any).electronAPI;
+      if (api && api.updateOperatingHours) {
+        await api.updateOperatingHours({
+          outletId: outlet.id,
+          operatingHours: operatingHoursDto,
+        });
+        updateOutletLocal(outlet.id, { operatingHours: operatingHoursDto });
+      }
 
-    setTimeout(() => onClose(), 500);
-    setIsSaving(false);
+      showToast(
+        "success",
+        "Save successful",
+        "Your Operating hours have been saved successfully",
+      );
+      setUnsaved(false);
+      setSelectAll(false);
+
+      setTimeout(() => onClose(), 500);
+    } catch (error) {
+      console.error("Failed to save operating hours:", error);
+      showToast("error", "Save Failed", "Could not save operating hours.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const LoadingSpinner = () => <Loader2 className="h-4 w-4 animate-spin" />;

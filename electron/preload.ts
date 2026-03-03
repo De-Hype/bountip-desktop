@@ -57,6 +57,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:updateLabelSettings", payload),
   updateInvoiceSettings: async (payload: { outletId: string; settings: any }) =>
     ipcRenderer.invoke("db:updateInvoiceSettings", payload),
+  updateOperatingHours: async (payload: {
+    outletId: string;
+    operatingHours: any;
+  }) => ipcRenderer.invoke("db:updateOperatingHours", payload),
   dbQuery: async (sql: string, params: any[] = []) =>
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>

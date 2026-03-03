@@ -19655,6 +19655,34 @@ const updateInvoiceSettings = async (db, payload) => {
   }
   return { success: true, settings };
 };
+const updateOperatingHours = async (db, payload) => {
+  const { outletId, operatingHours } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `
+    UPDATE business_outlet
+    SET
+      operatingHours = @operatingHours,
+      updatedAt = @updatedAt
+    WHERE id = @outletId
+  `,
+    {
+      outletId,
+      operatingHours: JSON.stringify(operatingHours),
+      updatedAt: now
+    }
+  );
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+  return { success: true, operatingHours };
+};
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "asset",
@@ -19803,6 +19831,10 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:updateInvoiceSettings",
     (_event, payload) => updateInvoiceSettings(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:updateOperatingHours",
+    (_event, payload) => updateOperatingHours(dbService, payload)
   );
   ipcMain.handle(
     "db:query",

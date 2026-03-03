@@ -19,6 +19,7 @@ import {
 import { updateReceiptSettings } from "./features/settings/receiptCustomization";
 import { updateLabelSettings } from "./features/settings/labellingSettings";
 import { updateInvoiceSettings } from "./features/settings/invoiceCustomization";
+import { updateOperatingHours } from "./features/settings/operatingHours";
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -194,6 +195,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("db:updateInvoiceSettings", (_event, payload) =>
     updateInvoiceSettings(dbService, payload),
+  );
+
+  ipcMain.handle("db:updateOperatingHours", (_event, payload) =>
+    updateOperatingHours(dbService, payload),
   );
 
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>
