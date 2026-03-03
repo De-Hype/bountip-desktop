@@ -40,6 +40,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   editPaymentTier: async (payload) => electron.ipcRenderer.invoke("db:editPaymentTier", payload),
   bulkAddPaymentTiers: async (payload) => electron.ipcRenderer.invoke("db:bulkAddPaymentTiers", payload),
   updateReceiptSettings: async (payload) => electron.ipcRenderer.invoke("db:updateReceiptSettings", payload),
+  updateLabelSettings: async (payload) => electron.ipcRenderer.invoke("db:updateLabelSettings", payload),
+  updateInvoiceSettings: async (payload) => electron.ipcRenderer.invoke("db:updateInvoiceSettings", payload),
   dbQuery: async (sql, params = []) => electron.ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath) => electron.ipcRenderer.invoke("assets:import", filePath),
   getNetworkStatus: async () => {

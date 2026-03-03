@@ -64,9 +64,9 @@ const ReceiptBrandingPreview: React.FC<ReceiptBrandingPreviewProps> = ({
   const getFontFamily = (fontStyle: string): string => {
     const fontMap: Record<string, string> = {
       "Times New Roman": "'Times New Roman', Times, serif",
-      Arial: "Arial, sans-serif",
-      Helvetica: "Helvetica, Arial, sans-serif",
-      Courier: "'Courier New', 'Courier Prime', Courier, monospace",
+      Arial: "Arial, 'Helvetica Neue', Helvetica, sans-serif",
+      Helvetica: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+      Courier: "'Courier New', Courier, monospace",
     };
     // Fallback to Product Sans if no valid font is selected
     return fontMap[fontStyle] || '"Product Sans", sans-serif';

@@ -138,7 +138,7 @@ const defaultFormData: InvoiceSettings = {
 export const InvoiceCustomizationModal: React.FC<
   InvoiceCustomizationModalProps
 > = ({ isOpen, onClose }) => {
-  const { selectedOutlet: outlet } = useBusinessStore();
+  const { selectedOutlet: outlet, updateOutletLocal } = useBusinessStore();
   const [formData, setFormData] = useState<InvoiceSettings>(defaultFormData);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoadingState, setIsLoading] = useState<boolean>(false);
@@ -152,17 +152,22 @@ export const InvoiceCustomizationModal: React.FC<
 
   // Initialize form data from outlet receiptSettings (if present)
   useEffect(() => {
-    const outletWithInvoiceSettings = outlet as unknown as {
-      invoiceSettings?: InvoiceSettingsDto;
-    } | null;
-
-    if (!isOpen || !outletWithInvoiceSettings?.invoiceSettings) {
+    if (!isOpen || !outlet?.invoiceSettings) {
       setFormData(defaultFormData);
       setImageUrl(null);
       return;
     }
 
-    const settings = outletWithInvoiceSettings.invoiceSettings;
+    let settings = outlet.invoiceSettings;
+    if (typeof settings === "string") {
+      try {
+        settings = JSON.parse(settings);
+      } catch (e) {
+        console.error("Failed to parse invoice settings:", e);
+        settings = {};
+      }
+    }
+
     setFormData({
       showBakeryName: settings.showBakeryName ?? defaultFormData.showBakeryName,
       fontSize: settings.fontStyle ?? defaultFormData.fontSize,
@@ -290,7 +295,7 @@ export const InvoiceCustomizationModal: React.FC<
     };
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!outlet) {
       showToast("error", "Missing Store ID", "Store information is missing.");
@@ -299,13 +304,28 @@ export const InvoiceCustomizationModal: React.FC<
     setIsLoading(true);
     const invoiceSettings = mapFormDataToDto();
     console.log("Saving invoice settings:", invoiceSettings);
-    showToast(
-      "success",
-      "Save Successful!",
-      "Your Invoice settings have been saved successfully",
-    );
-    setIsLoading(false);
-    onClose();
+
+    try {
+      const api = (window as any).electronAPI;
+      if (api && api.updateInvoiceSettings) {
+        await api.updateInvoiceSettings({
+          outletId: outlet.id,
+          settings: invoiceSettings,
+        });
+        updateOutletLocal(outlet.id, { invoiceSettings: invoiceSettings });
+      }
+      showToast(
+        "success",
+        "Save Successful!",
+        "Your Invoice settings have been saved successfully",
+      );
+      onClose();
+    } catch (error) {
+      console.error("Failed to save invoice settings:", error);
+      showToast("error", "Save Failed", "Could not save invoice settings.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!isClient) {

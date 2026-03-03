@@ -103,26 +103,31 @@ export const LabellingSettingsModal: React.FC<LabellingSettingsModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { selectedOutlet: outlet } = useBusinessStore();
+  const { selectedOutlet: outlet, updateOutletLocal } = useBusinessStore();
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   const [isSaving, setIsSaving] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
-  const {showToast}=useToastStore()
+  const { showToast } = useToastStore();
 
   // Initialize form data from outlet labelSettings (if present)
   useEffect(() => {
-    const outletWithLabelSettings = outlet as unknown as {
-      labelSettings?: LabelSettingsDto;
-    } | null;
-
-    if (!isOpen || !outletWithLabelSettings?.labelSettings) {
+    if (!isOpen || !outlet?.labelSettings) {
       setFormData(defaultFormData);
       setImageUrl(null);
       return;
     }
 
-    const settings = outletWithLabelSettings.labelSettings;
+    let settings = outlet.labelSettings;
+    if (typeof settings === "string") {
+      try {
+        settings = JSON.parse(settings);
+      } catch (e) {
+        console.error("Failed to parse label settings:", e);
+        settings = {};
+      }
+    }
+
     setFormData({
       showBakeryName: settings.showBakeryName ?? defaultFormData.showBakeryName,
       showPaymentSuccess:
@@ -227,10 +232,10 @@ export const LabellingSettingsModal: React.FC<LabellingSettingsModalProps> = ({
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!outlet) {
-      showToast("error","Missing Store ID", "Store information is missing.");
+      showToast("error", "Missing Store ID", "Store information is missing.");
       return;
     }
 
@@ -280,9 +285,28 @@ export const LabellingSettingsModal: React.FC<LabellingSettingsModalProps> = ({
     };
 
     console.log("Saving label settings:", labelSettingsDto);
-    showToast("success","Save Successful!", "Your Label has been saved successfully");
-    setIsSaving(false);
-    onClose();
+
+    try {
+      const api = (window as any).electronAPI;
+      if (api && api.updateLabelSettings) {
+        await api.updateLabelSettings({
+          outletId: outlet.id,
+          settings: labelSettingsDto,
+        });
+        updateOutletLocal(outlet.id, { labelSettings: labelSettingsDto });
+      }
+      showToast(
+        "success",
+        "Save Successful!",
+        "Your Label has been saved successfully",
+      );
+      onClose();
+    } catch (error) {
+      console.error("Failed to save label settings:", error);
+      showToast("error", "Save Failed", "Could not save label settings.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

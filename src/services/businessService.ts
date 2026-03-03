@@ -54,6 +54,8 @@ export interface Outlet {
   receiptSettings?: any;
   serviceCharges?: any;
   priceTier?: any;
+  labelSettings?: any;
+  invoiceSettings?: any;
 }
 
 export interface OutletListResponse extends BaseResponse {

@@ -306,7 +306,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
           "Save Successful!",
           "Receipt settings updated successfully.",
         );
-        onClose();
+        
       } else {
         throw new Error("Failed to save settings");
       }

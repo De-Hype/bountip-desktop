@@ -53,6 +53,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:bulkAddPaymentTiers", payload),
   updateReceiptSettings: async (payload: { outletId: string; settings: any }) =>
     ipcRenderer.invoke("db:updateReceiptSettings", payload),
+  updateLabelSettings: async (payload: { outletId: string; settings: any }) =>
+    ipcRenderer.invoke("db:updateLabelSettings", payload),
+  updateInvoiceSettings: async (payload: { outletId: string; settings: any }) =>
+    ipcRenderer.invoke("db:updateInvoiceSettings", payload),
   dbQuery: async (sql: string, params: any[] = []) =>
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>
