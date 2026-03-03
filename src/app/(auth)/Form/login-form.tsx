@@ -18,6 +18,7 @@ import AssetsFiles from "@/assets";
 import PinInput from "./PinInput";
 import { COOKIE_NAMES, getCookie } from "@/utils/cookiesUtils";
 import { useLoginPinMutation } from "@/redux/auth";
+import { useNetworkStore } from "@/stores/useNetworkStore";
 
 export const signinSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -47,6 +48,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const { showToast } = useToastStore();
+  const { isOnline } = useNetworkStore();
   const [loginPin] = useLoginPinMutation();
 
   const {
@@ -105,10 +107,8 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   const handleSignin = async (data: SigninFormValues) => {
     // Offline Login Check
     const api = (window as any).electronAPI;
-    const isOffline =
-      typeof navigator !== "undefined" ? !navigator.onLine : false;
 
-    if (isOffline) {
+    if (!isOnline) {
       if (api?.verifyLoginHash) {
         try {
           const isValid = await api.verifyLoginHash(data.email, data.password);
@@ -304,10 +304,9 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
 
     // Offline Login Check
     const api = (window as any).electronAPI;
-    const isOffline =
-      typeof navigator !== "undefined" ? !navigator.onLine : false;
 
-    if (isOffline) {
+
+    if (!isOnline) {
       if (api?.verifyPinHash) {
         try {
           const isValid = await api.verifyPinHash(pin);

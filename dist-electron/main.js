@@ -4,7 +4,7 @@ import require$$4$1, { pathToFileURL, fileURLToPath } from "url";
 import Database from "better-sqlite3";
 import fs$1 from "fs";
 import keytar from "keytar";
-import crypto from "crypto";
+import crypto, { randomUUID } from "crypto";
 import dgram from "dgram";
 import net$1 from "net";
 import require$$0 from "constants";
@@ -19683,6 +19683,98 @@ const updateOperatingHours = async (db, payload) => {
   }
   return { success: true, operatingHours };
 };
+const createOutlet = async (db, payload) => {
+  const { businessId, location } = payload;
+  const newOutletId = randomUUID();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const newOutlet = {
+    id: newOutletId,
+    businessId,
+    name: location.name,
+    address: location.address,
+    phoneNumber: location.phoneNumber,
+    isMainLocation: location.isMainLocation ? 1 : 0,
+    isActive: 1,
+    isOnboarded: 1,
+    // Assuming created via settings is onboarded
+    isDeleted: 0,
+    createdAt: now,
+    updatedAt: now,
+    // Default values for other fields to match schema expectations or avoid nulls if strict
+    country: "Nigeria",
+    // Default or should be passed?
+    currency: "NGN"
+    // Default
+  };
+  const params = buildBusinessOutletUpsertParams(newOutlet);
+  db.run(businessOutletUpsertSql, params);
+  db.addToQueue({
+    table: "business_outlet",
+    action: "CREATE",
+    // or UPDATE since we use Upsert logic, but CREATE is semantically correct for sync
+    data: newOutlet,
+    id: newOutletId
+  });
+  return { success: true, outlet: newOutlet };
+};
+const updateOutlet = async (db, payload) => {
+  const { outletId, data } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const fields = [];
+  const params = { outletId, updatedAt: now };
+  if (data.name !== void 0) {
+    fields.push("name = @name");
+    params.name = data.name;
+  }
+  if (data.address !== void 0) {
+    fields.push("address = @address");
+    params.address = data.address;
+  }
+  if (data.phoneNumber !== void 0) {
+    fields.push("phoneNumber = @phoneNumber");
+    params.phoneNumber = data.phoneNumber;
+  }
+  if (data.isMainLocation !== void 0) {
+    fields.push("isMainLocation = @isMainLocation");
+    params.isMainLocation = data.isMainLocation ? 1 : 0;
+  }
+  if (fields.length === 0) return { success: true };
+  const sql = `
+    UPDATE business_outlet
+    SET ${fields.join(", ")}, updatedAt = @updatedAt
+    WHERE id = @outletId
+  `;
+  db.run(sql, params);
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+  return { success: true, outlet: fullOutlet };
+};
+const deleteOutlet = async (db, payload) => {
+  const { outletId } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run(
+    `UPDATE business_outlet SET isDeleted = 1, updatedAt = @updatedAt WHERE id = @outletId`,
+    { outletId, updatedAt: now }
+  );
+  const fullOutlet = db.getOutlet(outletId);
+  if (fullOutlet) {
+    db.addToQueue({
+      table: "business_outlet",
+      action: "UPDATE",
+      // Sync usually handles soft delete as an update to isDeleted flag
+      data: fullOutlet,
+      id: outletId
+    });
+  }
+  return { success: true };
+};
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "asset",
@@ -19835,6 +19927,18 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:updateOperatingHours",
     (_event, payload) => updateOperatingHours(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:createOutlet",
+    (_event, payload) => createOutlet(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:updateOutlet",
+    (_event, payload) => updateOutlet(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:deleteOutlet",
+    (_event, payload) => deleteOutlet(dbService, payload)
   );
   ipcMain.handle(
     "db:query",

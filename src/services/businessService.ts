@@ -36,10 +36,15 @@ export interface PrimaryBusinessResponse extends BaseResponse {
 
 export interface Outlet {
   id: string;
+  businessId?: string;
   name?: string;
+  email?: string | null;
   address?: string | null;
   phoneNumber?: string | null;
-  isOnboarded?: boolean;
+  isMainLocation?: boolean | number;
+  isActive?: boolean | number;
+  isDeleted?: boolean | number;
+  isOnboarded?: boolean | number;
   country?: string | null;
   state?: string | null;
   city?: string | null;
@@ -56,6 +61,8 @@ export interface Outlet {
   priceTier?: any;
   labelSettings?: any;
   invoiceSettings?: any;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface OutletListResponse extends BaseResponse {

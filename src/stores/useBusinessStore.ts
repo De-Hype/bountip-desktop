@@ -35,6 +35,8 @@ type BusinessState = {
   fetchBusinessData: () => Promise<void>;
   selectOutlet: (id: string) => void;
   updateOutletLocal: (id: string, changes: Partial<Outlet>) => void;
+  addOutletLocal: (outlet: Outlet) => void;
+  removeOutletLocal: (id: string) => void;
 };
 
 export const useBusinessStore = create<BusinessState>((set, get) => ({
@@ -44,6 +46,49 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   selectedOutlet: null,
   isLoading: false,
   error: null,
+  addOutletLocal: (outlet) => {
+    const api = getElectronAPI();
+    const current = get().outlets;
+    const updatedOutlets = [...current, outlet];
+
+    set({ outlets: updatedOutlets });
+
+    if (api) {
+      (async () => {
+        try {
+          await api.cachePut("business:outlets", updatedOutlets);
+          const ts = Date.now();
+          await api.cachePut(`outlet:${outlet.id}`, { data: outlet, ts });
+        } catch {}
+      })();
+    }
+  },
+  removeOutletLocal: (id) => {
+    const api = getElectronAPI();
+    const current = get().outlets;
+    const updatedOutlets = current.filter((o) => o.id !== id);
+    const selectedOutletId = get().selectedOutletId;
+    const selectedOutlet =
+      selectedOutletId === id ? null : get().selectedOutlet;
+
+    set({
+      outlets: updatedOutlets,
+      selectedOutlet: selectedOutletId === id ? null : selectedOutlet,
+      selectedOutletId: selectedOutletId === id ? null : selectedOutletId,
+    });
+
+    if (api) {
+      (async () => {
+        try {
+          await api.cachePut("business:outlets", updatedOutlets);
+          if (selectedOutletId === id) {
+            await api.cachePut("business:selectedOutletId", null);
+            await api.cachePut("business:selectedOutlet", null);
+          }
+        } catch {}
+      })();
+    }
+  },
   fetchBusinessData: async () => {
     set({ isLoading: true, error: null });
     const api = getElectronAPI();

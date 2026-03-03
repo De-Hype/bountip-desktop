@@ -20,6 +20,13 @@ import { updateReceiptSettings } from "./features/settings/receiptCustomization"
 import { updateLabelSettings } from "./features/settings/labellingSettings";
 import { updateInvoiceSettings } from "./features/settings/invoiceCustomization";
 import { updateOperatingHours } from "./features/settings/operatingHours";
+import { updateTaxSettings } from "./features/settings/taxSettings";
+import { updateServiceCharges } from "./features/settings/serviceCharge";
+import {
+  createOutlet,
+  updateOutlet,
+  deleteOutlet,
+} from "./features/settings/locationSettings";
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -199,6 +206,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle("db:updateOperatingHours", (_event, payload) =>
     updateOperatingHours(dbService, payload),
+  );
+
+  ipcMain.handle("db:createOutlet", (_event, payload) =>
+    createOutlet(dbService, payload),
+  );
+
+  ipcMain.handle("db:updateOutlet", (_event, payload) =>
+    updateOutlet(dbService, payload),
+  );
+
+  ipcMain.handle("db:deleteOutlet", (_event, payload) =>
+    deleteOutlet(dbService, payload),
   );
 
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>

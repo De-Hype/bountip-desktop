@@ -3,26 +3,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Loader2, Trash2 } from "lucide-react";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
-import { create } from "zustand";
-
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
 import SettingFiles from "@/assets/icons/settings";
 import { getPhoneCountries, PhoneCountry } from "@/utils/getPhoneCountries";
 import useToastStore from "@/stores/toastStore";
+import {
+  useLocationStore,
+  BusinessLocation,
+  generateNewLocationId,
+} from "@/stores/locationStore";
+import { useBusinessStore } from "@/stores/useBusinessStore";
 
 interface LocationSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-type BusinessLocation = {
-  id: string;
-  name: string;
-  address: string;
-  phoneNumber: string;
-  isDefault: boolean;
-};
 
 type LocationForm = Pick<
   BusinessLocation,
@@ -36,9 +32,6 @@ type NewLocationForm = {
   phoneNumber: string;
 };
 
-const generateNewLocationId = () =>
-  `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
 const createEmptyNewLocation = (): NewLocationForm => ({
   id: generateNewLocationId(),
   name: "",
@@ -46,53 +39,20 @@ const createEmptyNewLocation = (): NewLocationForm => ({
   phoneNumber: "",
 });
 
-type LocationStoreState = {
-  locations: BusinessLocation[];
-  addLocation: (
-    location: Omit<BusinessLocation, "id"> & {
-      id?: BusinessLocation["id"];
-    },
-  ) => void;
-  updateLocation: (
-    id: BusinessLocation["id"],
-    updated: Partial<Omit<BusinessLocation, "id">>,
-  ) => void;
-  deleteLocation: (id: BusinessLocation["id"]) => void;
-};
-
-const useLocationStore = create<LocationStoreState>((set) => ({
-  locations: [],
-  addLocation: (location) =>
-    set((state: LocationStoreState) => {
-      const id = location.id ?? generateNewLocationId();
-      const next: BusinessLocation = {
-        id,
-        name: location.name,
-        address: location.address,
-        phoneNumber: location.phoneNumber,
-        isDefault: location.isDefault ?? false,
-      };
-      return { locations: [...state.locations, next] };
-    }),
-  updateLocation: (id, updated) =>
-    set((state: LocationStoreState) => ({
-      locations: state.locations.map((location) =>
-        location.id === id ? { ...location, ...updated } : location,
-      ),
-    })),
-  deleteLocation: (id) =>
-    set((state: LocationStoreState) => ({
-      locations: state.locations.filter((location) => location.id !== id),
-    })),
-}));
-
 export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
   isOpen,
   onClose,
 }) => {
   const { showToast } = useToastStore();
-  const { locations, addLocation, updateLocation, deleteLocation } =
-    useLocationStore();
+  const {
+    locations,
+    addLocation,
+    updateLocation,
+    deleteLocation,
+    setLocations,
+  } = useLocationStore();
+  const { addOutletLocal, removeOutletLocal, updateOutletLocal } =
+    useBusinessStore();
 
   const [phoneCountries, setPhoneCountries] = useState<PhoneCountry[]>([]);
   const [selectedPhoneCountries, setSelectedPhoneCountries] = useState<
@@ -109,9 +69,9 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
   const [newLocations, setNewLocations] = useState<NewLocationForm[]>([
     createEmptyNewLocation(),
   ]);
-  const [editingLocations, setEditingLocations] = useState<
-    Record<string, boolean>
-  >({});
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(
+    null,
+  );
   const [savingLocationId, setSavingLocationId] = useState<string | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(
     null,
@@ -333,6 +293,26 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
   }, [newLocations, getFallbackPhoneCountry, phoneCountries]);
 
   useEffect(() => {
+    if (isOpen) {
+      // Fetch outlets from DB
+      if (window.electronAPI) {
+        window.electronAPI.getOutlets().then((outlets: any[]) => {
+          const mapped = outlets
+            .filter((o) => !o.isDeleted)
+            .map((o) => ({
+              id: o.id,
+              name: o.name,
+              address: o.address,
+              phoneNumber: o.phoneNumber,
+              isDefault: !!o.isMainLocation,
+            }));
+          setLocations(mapped);
+        });
+      }
+    }
+  }, [isOpen, setLocations]);
+
+  useEffect(() => {
     if (!isOpen || phoneCountries.length === 0) return;
 
     const initialForms: Record<string, LocationForm> = {};
@@ -350,7 +330,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
     });
 
     setLocationForms(initialForms);
-    setEditingLocations({});
+    setEditingLocationId(null);
     setSelectedPhoneCountries((prev) => {
       const preservedExistingEntries = Object.fromEntries(
         Object.entries(prev).filter(([key]) => !key.startsWith("new-")),
@@ -429,10 +409,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
   const toggleEditLocation = (id: string) => {
     setOpenPhonePickerFor(null);
     setPhoneCountrySearchTerm("");
-    setEditingLocations((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
+    setEditingLocationId(id);
   };
 
   const resetLocationForm = (id: string) => {
@@ -454,10 +431,10 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
       ...prev,
       [id]: country,
     }));
-    setEditingLocations((prev) => ({ ...prev, [id]: false }));
+    setEditingLocationId(null);
   };
 
-  const handleSaveExistingLocation = (locationId: string) => {
+  const handleSaveExistingLocation = async (locationId: string) => {
     const form = locationForms[locationId];
     const trimmedForm = {
       name: form?.name?.trim() ?? "",
@@ -468,7 +445,6 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
     if (!trimmedForm.name || !trimmedForm.address || !trimmedForm.phoneNumber) {
       showToast(
         "error",
-
         "Missing Information",
         "Please complete all fields before saving the location.",
       );
@@ -497,22 +473,45 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
       ? `${selectedCountry.dialCode}${trimmedForm.phoneNumber}`
       : trimmedForm.phoneNumber;
 
-    updateLocation(locationId, {
-      name: trimmedForm.name,
-      address: trimmedForm.address,
-      phoneNumber: phoneWithDialCode,
-    });
+    try {
+      if (window.electronAPI) {
+        await window.electronAPI.updateOutlet({
+          outletId: locationId,
+          location: {
+            name: trimmedForm.name,
+            address: trimmedForm.address,
+            phoneNumber: phoneWithDialCode,
+          },
+        });
+      }
 
-    setEditingLocations((prev) => ({ ...prev, [locationId]: false }));
-    showToast(
-      "success",
-      "Location Updated",
-      "Business location updated successfully.",
-    );
-    setSavingLocationId(null);
+      updateLocation(locationId, {
+        name: trimmedForm.name,
+        address: trimmedForm.address,
+        phoneNumber: phoneWithDialCode,
+      });
+
+      updateOutletLocal(locationId, {
+        name: trimmedForm.name,
+        address: trimmedForm.address,
+        phoneNumber: phoneWithDialCode,
+      });
+
+      setEditingLocationId(null);
+      showToast(
+        "success",
+        "Location Updated",
+        "Business location updated successfully.",
+      );
+    } catch (error) {
+      console.error(error);
+      showToast("error", "Error", "Failed to update location.");
+    } finally {
+      setSavingLocationId(null);
+    }
   };
 
-  const handleDeleteExistingLocation = (location: BusinessLocation) => {
+  const handleDeleteExistingLocation = async (location: BusinessLocation) => {
     if (location.isDefault) {
       showToast(
         "error",
@@ -523,39 +522,48 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
     }
 
     setDeletingLocationId(location.id);
-    deleteLocation(location.id);
 
-    setLocationForms((prev) => {
-      const updated = { ...prev };
-      delete updated[location.id];
-      return updated;
-    });
+    try {
+      if (window.electronAPI) {
+        await window.electronAPI.deleteOutlet({ outletId: location.id });
+      }
 
-    setEditingLocations((prev) => {
-      const updated = { ...prev };
-      delete updated[location.id];
-      return updated;
-    });
+      deleteLocation(location.id);
+      removeOutletLocal(location.id);
 
-    setSelectedPhoneCountries((prev) => {
-      const updated = { ...prev };
-      delete updated[location.id];
-      return updated;
-    });
+      setLocationForms((prev) => {
+        const updated = { ...prev };
+        delete updated[location.id];
+        return updated;
+      });
 
-    setDeletingLocationId(null);
-    showToast(
-      "success",
-      "Location Deleted",
-      "The business location has been removed.",
-    );
+      if (editingLocationId === location.id) {
+        setEditingLocationId(null);
+      }
+
+      setSelectedPhoneCountries((prev) => {
+        const updated = { ...prev };
+        delete updated[location.id];
+        return updated;
+      });
+
+      showToast(
+        "success",
+        "Location Deleted",
+        "The business location has been removed.",
+      );
+    } catch (error) {
+      console.error(error);
+      showToast("error", "Error", "Failed to delete location.");
+    } finally {
+      setDeletingLocationId(null);
+    }
   };
 
-  const handleSaveNewLocations = () => {
+  const handleSaveNewLocations = async () => {
     if (newLocations.length === 0) {
       showToast(
         "error",
-
         "No Locations to Save",
         "Add at least one new location before saving.",
       );
@@ -565,7 +573,6 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
     if (!canSaveNewLocations) {
       showToast(
         "error",
-
         "Incomplete Locations",
         "Ensure every new location has a name, address and phone number.",
       );
@@ -574,35 +581,113 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
 
     setIsSavingNewLocations(true);
 
-    const hasExistingLocations = parsedLocations.length > 0;
+    try {
+      if (!window.electronAPI) {
+        // Fallback for dev/browser without electron
+        const hasExistingLocations = parsedLocations.length > 0;
+        newLocations.forEach((location, index) => {
+          const key = `new-${location.id}`;
+          const selectedCountry = selectedPhoneCountries[key];
+          const phoneWithDialCode = selectedCountry?.dialCode
+            ? `${selectedCountry.dialCode}${location.phoneNumber.trim()}`
+            : location.phoneNumber.trim();
 
-    newLocations.forEach((location, index) => {
-      const key = `new-${location.id}`;
-      const selectedCountry = selectedPhoneCountries[key];
-      const phoneWithDialCode = selectedCountry?.dialCode
-        ? `${selectedCountry.dialCode}${location.phoneNumber.trim()}`
-        : location.phoneNumber.trim();
+          addLocation({
+            id: location.id,
+            name: location.name.trim(),
+            address: location.address.trim(),
+            phoneNumber: phoneWithDialCode,
+            isDefault: hasExistingLocations ? false : index === 0,
+          });
+        });
+        setNewLocations([createEmptyNewLocation()]);
+        showToast(
+          "success",
+          "Locations Added",
+          "New business locations have been added successfully.",
+        );
+        setIsSavingNewLocations(false);
+        return;
+      }
 
-      addLocation({
-        id: location.id,
-        name: location.name.trim(),
-        address: location.address.trim(),
-        phoneNumber: phoneWithDialCode,
-        isDefault: hasExistingLocations ? false : index === 0,
-      });
-    });
+      // Fetch business ID
+      const businesses = await window.electronAPI.dbQuery(
+        "SELECT id FROM business LIMIT 1",
+      );
+      const businessId = businesses[0]?.id;
 
-    setNewLocations([createEmptyNewLocation()]);
-    showToast(
-      "success",
-      "Locations Added",
-      "New business locations have been added successfully.",
-    );
-    setIsSavingNewLocations(false);
+      if (!businessId) {
+        showToast("error", "Error", "No business found.");
+        setIsSavingNewLocations(false);
+        return;
+      }
+
+      const hasExistingLocations = parsedLocations.length > 0;
+
+      for (let i = 0; i < newLocations.length; i++) {
+        const location = newLocations[i];
+        const key = `new-${location.id}`;
+        const selectedCountry = selectedPhoneCountries[key];
+        const phoneWithDialCode = selectedCountry?.dialCode
+          ? `${selectedCountry.dialCode}${location.phoneNumber.trim()}`
+          : location.phoneNumber.trim();
+
+        const isDefault = hasExistingLocations ? false : i === 0;
+
+        const res = await window.electronAPI.createOutlet({
+          businessId,
+          location: {
+            name: location.name.trim(),
+            address: location.address.trim(),
+            phoneNumber: phoneWithDialCode,
+            isMainLocation: isDefault,
+          },
+        });
+
+        if (res && res.success) {
+          addLocation({
+            id: res.outlet.id,
+            name: res.outlet.name,
+            address: res.outlet.address,
+            phoneNumber: res.outlet.phoneNumber,
+            isDefault: res.outlet.isMainLocation === 1,
+          });
+
+          addOutletLocal({
+            id: res.outlet.id,
+            name: res.outlet.name,
+            address: res.outlet.address,
+            phoneNumber: res.outlet.phoneNumber,
+            businessId: businessId,
+            email: "",
+            isMainLocation: res.outlet.isMainLocation === 1,
+            isActive: 1,
+            isOnboarded: true,
+            isDeleted: 0,
+            createdAt: res.outlet.createdAt,
+            updatedAt: res.outlet.updatedAt,
+            country: "Nigeria",
+            currency: "NGN",
+          });
+        }
+      }
+
+      setNewLocations([createEmptyNewLocation()]);
+      showToast(
+        "success",
+        "Locations Added",
+        "New business locations have been added successfully.",
+      );
+    } catch (error) {
+      console.error(error);
+      showToast("error", "Error", "Failed to save locations.");
+    } finally {
+      setIsSavingNewLocations(false);
+    }
   };
 
   const renderLocationCard = (location: BusinessLocation) => {
-    const isEditing = editingLocations[location.id];
+    const isEditing = editingLocationId === location.id;
     const form = locationForms[location.id];
     const isSaving = savingLocationId === location.id;
     const isDeleting = deletingLocationId === location.id;
@@ -646,7 +731,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
                 placeholder="Enter Address"
               />
             </div>
-            <div className="col-span-12 lg:col-span-4 mb-4">
+            <div className="col-span-12 lg:col-span-3 mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Phone Number
               </label>
@@ -668,7 +753,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
                 />
               </div>
             </div>
-            <div className="col-span-12 lg:col-span-1 flex flex-col gap-2 justify-center items-stretch">
+            <div className="col-span-12 lg:col-span-2 flex flex-col gap-2 justify-center items-stretch">
               <button
                 type="button"
                 onClick={() => handleSaveExistingLocation(location.id)}
@@ -838,7 +923,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
                   />
                 </div>
               </div>
-              <div className="col-span-12 lg:col-span-1 flex justify-end">
+              <div className="col-span-12 lg:col-span-1 mb-5 flex justify-end">
                 <button
                   type="button"
                   onClick={() => removeNewLocation(index)}

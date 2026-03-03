@@ -43,6 +43,9 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   updateLabelSettings: async (payload) => electron.ipcRenderer.invoke("db:updateLabelSettings", payload),
   updateInvoiceSettings: async (payload) => electron.ipcRenderer.invoke("db:updateInvoiceSettings", payload),
   updateOperatingHours: async (payload) => electron.ipcRenderer.invoke("db:updateOperatingHours", payload),
+  createOutlet: async (payload) => electron.ipcRenderer.invoke("db:createOutlet", payload),
+  updateOutlet: async (payload) => electron.ipcRenderer.invoke("db:updateOutlet", payload),
+  deleteOutlet: async (payload) => electron.ipcRenderer.invoke("db:deleteOutlet", payload),
   dbQuery: async (sql, params = []) => electron.ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath) => electron.ipcRenderer.invoke("assets:import", filePath),
   getNetworkStatus: async () => {
@@ -66,6 +69,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   queueClear: async () => electron.ipcRenderer.invoke("queue:clear"),
   queueSet: async (list) => electron.ipcRenderer.invoke("queue:set", list),
   getPeers: async () => electron.ipcRenderer.invoke("p2p:getPeers"),
+  syncTrigger: () => electron.ipcRenderer.send("sync:trigger"),
   onPeers: (cb) => {
     const handler = (_e, list) => cb(list);
     electron.ipcRenderer.on("p2p:peers", handler);

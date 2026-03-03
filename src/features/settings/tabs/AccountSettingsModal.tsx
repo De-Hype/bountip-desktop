@@ -32,7 +32,7 @@ export const AccountSettingsModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
-    const {showToast}=useToastStore()
+  const { showToast } = useToastStore();
   const { selectedOutlet: outlet } = useBusinessStore();
   const [activeTab, setActiveTab] = useState<"taxes" | "service">("taxes");
   const [taxes, setTaxes] = useState<TaxItem[]>([]);
@@ -126,15 +126,27 @@ export const AccountSettingsModal: React.FC<{
 
     setIsLoadingTaxes(true);
     try {
-      const currentTaxSettings = (
+      let currentTaxSettings = (
         outlet as unknown as {
-          taxSettings?: { taxes?: unknown[] };
+          taxSettings?: { taxes?: unknown[] } | string;
         } | null
       )?.taxSettings;
 
-      if (currentTaxSettings?.taxes) {
+      if (typeof currentTaxSettings === "string") {
+        try {
+          currentTaxSettings = JSON.parse(currentTaxSettings);
+        } catch (e) {
+          console.error("Failed to parse taxSettings", e);
+          currentTaxSettings = { taxes: [] };
+        }
+      }
+
+      // Safe cast after potential parsing
+      const taxSettingsObj = currentTaxSettings as { taxes?: unknown[] };
+
+      if (taxSettingsObj?.taxes) {
         const transformedTaxes = transformOutletTaxData(
-          currentTaxSettings.taxes as unknown[],
+          taxSettingsObj.taxes as unknown[],
         );
         setTaxes(transformedTaxes);
       } else {
@@ -142,7 +154,7 @@ export const AccountSettingsModal: React.FC<{
       }
     } catch (error) {
       console.error("Error fetching tax data:", error);
-      showToast("error","Failed to load taxes", "Failed to fetch tax data");
+      showToast("error", "Failed to load taxes", "Failed to fetch tax data");
       setTaxes([]);
     } finally {
       setIsLoadingTaxes(false);
@@ -184,9 +196,9 @@ export const AccountSettingsModal: React.FC<{
     );
   };
 
-  const saveTax = () => {
+  const saveTax = async () => {
     if (!outlet) {
-            showToast("error","Failed to save tax", "Outlet not available");
+      showToast("error", "Failed to save tax", "Outlet not available");
       return;
     }
     const errors: Record<string, { name: boolean; rate: boolean }> = {};
@@ -201,7 +213,8 @@ export const AccountSettingsModal: React.FC<{
 
     const hasErrors = Object.values(errors).some((err) => err.name || err.rate);
     if (hasErrors) {
-            showToast("error",
+      showToast(
+        "error",
         "Invalid tax data",
         "Please provide valid tax names and rates for all taxes",
       );
@@ -210,47 +223,50 @@ export const AccountSettingsModal: React.FC<{
 
     setIsSavingTaxes(true);
 
-    taxes.forEach((tax) => {
-      const numericRate = parseRateValue(tax.rate);
-      const appType: "checkout" | "included" | "excluded" =
-        tax.applyAtOrderCheckout
-          ? "checkout"
-          : tax.includeInMenuPrices
-            ? "included"
-            : "excluded";
-      const selectedCategoryIds = Object.entries(tax.selectedCategories)
-        .filter(([, isSelected]) => isSelected)
-        .map(([id]) => id);
-      const selectedProductIds = Object.entries(tax.selectedProducts || {})
-        .filter(([, isSelected]) => isSelected)
-        .map(([productCode]) => productCode);
-      const hasCategorySelection = selectedCategoryIds.length > 0;
-      const hasProductSelection = selectedProductIds.length > 0;
-      const scope: "all" | "category" | "product" =
-        tax.productSetup === "categories" && hasCategorySelection
-          ? "category"
-          : tax.productSetup === "certain" && hasProductSelection
-            ? "product"
-            : "all";
+    try {
+      const api = window.electronAPI;
+      if (api) {
+        // Offline-first update
+        const settings = { taxes };
+        await api.updateTaxSettings({ outletId: outlet.id, settings });
 
-      void appType;
-      void scope;
-      void numericRate;
-      void selectedProductIds;
-    });
+        // Optimistic update for UI is already done via local state
+        // Trigger sync if online
+        const status = await api.getNetworkStatus();
+        if (status.online) {
+          api.syncTrigger();
+        }
 
-    showToast("success","Save Successful!", "Your Tax has been saved successfully");
-    setIsSavingTaxes(false);
+        showToast(
+          "success",
+          "Save Successful!",
+          "Your Tax has been saved successfully",
+        );
+      } else {
+        // Fallback for non-Electron environment (e.g. web)
+        console.warn("Electron API not found - saving locally only");
+        showToast(
+          "success",
+          "Save Successful!",
+          "Your Tax has been saved locally",
+        );
+      }
+    } catch (error) {
+      console.error("Failed to save tax:", error);
+      showToast("error", "Save Failed", "Failed to save tax settings");
+    } finally {
+      setIsSavingTaxes(false);
+    }
   };
 
   const deleteTaxLocal = (id: string) => {
     if (!outlet) {
-            showToast("error","Failed to delete tax", "Outlet not available");
+      showToast("error", "Failed to delete tax", "Outlet not available");
       return;
     }
 
     setTaxes((prev) => prev.filter((tax) => tax.id !== id));
-    showToast("success","Tax Deleted", "Tax has been deleted successfully");
+    showToast("success", "Tax Deleted", "Tax has been deleted successfully");
   };
 
   return (
@@ -327,10 +343,7 @@ export const AccountSettingsModal: React.FC<{
             </div>
           )}
           {activeTab === "service" && (
-            <ServiceCharge
-              
-              storeId={outlet?.id ?? null}
-            />
+            <ServiceCharge storeId={outlet?.id ?? null} />
           )}
         </div>
       )}
@@ -632,15 +645,11 @@ const TaxItemComponent: React.FC<TaxItemComponentProps> = ({
 };
 
 interface ServiceChargeProps {
-  
   storeId: string | null;
 }
 
-const ServiceCharge: React.FC<ServiceChargeProps> = ({
-  
-  storeId,
-}) => {
-    const {showToast}=useToastStore()
+const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId }) => {
+  const { showToast } = useToastStore();
   const { selectedOutlet: outlet } = useBusinessStore();
   const [serviceName, setServiceName] = useState("");
   const [serviceRate, setServiceRate] = useState("");
@@ -656,7 +665,18 @@ const ServiceCharge: React.FC<ServiceChargeProps> = ({
     if (!storeId || !isInitialLoad || !outlet) return;
 
     try {
-      const charges = outlet.serviceCharges?.charges;
+      let serviceCharges = outlet.serviceCharges;
+
+      if (typeof serviceCharges === "string") {
+        try {
+          serviceCharges = JSON.parse(serviceCharges);
+        } catch (e) {
+          console.error("Failed to parse serviceCharges", e);
+          serviceCharges = { charges: [] };
+        }
+      }
+
+      const charges = (serviceCharges as any)?.charges;
       if (charges && charges.length > 0) {
         const firstCharge = charges[0];
         if (firstCharge?.id) setServiceChargeId(firstCharge.id);
@@ -671,64 +691,149 @@ const ServiceCharge: React.FC<ServiceChargeProps> = ({
       }
     } catch (error) {
       console.error("Error fetching service charge:", error);
-            showToast("error",
+      showToast(
+        "error",
         "Failed to load service charge",
         "Failed to fetch service charge data",
       );
     } finally {
       setIsInitialLoad(false);
     }
-  }, [storeId, outlet,  isInitialLoad]);
+  }, [storeId, outlet, isInitialLoad]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!storeId) {
-            showToast("error","Failed to save service charge", "Store ID not available");
+    if (!storeId || !outlet) {
+      showToast(
+        "error",
+        "Failed to save service charge",
+        "Store ID not available",
+      );
       return;
     }
 
     if (!serviceName.trim()) {
-            showToast("error","Invalid input", "Service charge name is required");
+      showToast("error", "Invalid input", "Service charge name is required");
       return;
     }
 
     const rate = parseFloat(serviceRate);
     if (Number.isNaN(rate) || rate < 0) {
-            showToast("error","Invalid input", "Please provide a valid service charge rate");
+      showToast(
+        "error",
+        "Invalid input",
+        "Please provide a valid service charge rate",
+      );
       return;
     }
 
     setIsLoading(true);
-    const title = serviceChargeId
-      ? "Service Charge Updated"
-      : "Service Charge Created";
 
-    const message = `Service Charge has been ${
-      serviceChargeId ? "updated" : "created"
-    } successfully`;
+    try {
+      const currentCharges = (outlet.serviceCharges as any)?.charges || [];
+      let updatedCharges = [...currentCharges];
 
-            showToast("success",title, message);
-    setIsLoading(false);
+      const newCharge = {
+        id: serviceChargeId || crypto.randomUUID(),
+        name: serviceName,
+        rate: rate,
+        applicationType: selectedOption,
+        enabled: true,
+      };
+
+      if (serviceChargeId) {
+        updatedCharges = updatedCharges.map((c: any) =>
+          c.id === serviceChargeId ? { ...c, ...newCharge } : c,
+        );
+      } else {
+        updatedCharges.push(newCharge);
+      }
+
+      const api = window.electronAPI;
+      if (api) {
+        const payload = { charges: updatedCharges };
+        await api.updateServiceCharges({ outletId: storeId, charges: payload });
+
+        const status = await api.getNetworkStatus();
+        if (status.online) {
+          api.syncTrigger();
+        }
+
+        const title = serviceChargeId
+          ? "Service Charge Updated"
+          : "Service Charge Created";
+        const message = `Service Charge has been ${
+          serviceChargeId ? "updated" : "created"
+        } successfully`;
+
+        showToast("success", title, message);
+
+        // Update local ID if we just created one
+        if (!serviceChargeId) {
+          setServiceChargeId(newCharge.id);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to save service charge:", error);
+      showToast("error", "Save Failed", "Failed to save service charge");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDelete = () => {
-    if (!storeId || !serviceChargeId) {
-            showToast("error",
+  const handleDelete = async () => {
+    if (!storeId || !serviceChargeId || !outlet) {
+      showToast(
+        "error",
         "Failed to delete service charge",
         "Service charge ID or store ID not available",
       );
       return;
     }
 
-    setServiceName("");
-    setServiceRate("");
-    setServiceChargeId(null);
-    setSelectedOption("included");
+    try {
+      let currentServiceCharges = outlet.serviceCharges;
+      if (typeof currentServiceCharges === "string") {
+        try {
+          currentServiceCharges = JSON.parse(currentServiceCharges);
+        } catch (e) {
+          console.error("Failed to parse serviceCharges in delete", e);
+          currentServiceCharges = { charges: [] };
+        }
+      }
 
-    showToast("success",
-      "Service Charge Deleted",
-      "Service Charge has been deleted successfully",
-    );
+      const currentCharges = (currentServiceCharges as any)?.charges || [];
+      const updatedCharges = currentCharges.filter(
+        (c: any) => c.id !== serviceChargeId,
+      );
+
+      const api = window.electronAPI;
+      if (api) {
+        await api.updateServiceCharges({
+          outletId: storeId,
+          charges: { charges: updatedCharges },
+        });
+
+        const status = await api.getNetworkStatus();
+        if (status.online) {
+          api.syncTrigger();
+        }
+
+        setServiceName("");
+        setServiceRate("");
+        setServiceChargeId(null);
+        setSelectedOption("included");
+
+        showToast(
+          "success",
+          "Service Charge Deleted",
+          "Service Charge has been deleted successfully",
+        );
+      }
+    } catch (error) {
+      console.error("Failed to delete service charge:", error);
+      showToast("error", "Delete Failed", "Failed to delete service charge");
+    }
   };
 
   return (

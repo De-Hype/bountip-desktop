@@ -564,69 +564,58 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
 
       /**
        * =====================================================
-       * STEP 4: OFFLINE vs ONLINE UPDATE
+       * STEP 4: UPDATE (OFFLINE-FIRST PATTERN)
        * =====================================================
        */
-      // if (api && api.updateBusinessDetails) {
-      //   console.log("[UPDATE] Using Electron API for business details update");
-      //   await api.updateBusinessDetails({
-      //     outletId: selectedOutlet.id,
-      //     data: updateData,
-      //   });
+      if (api) {
+        console.log("[UPDATE] Using Offline-First Update Pattern");
 
-      //   showToast(
-      //     "success",
-      //     "Update Successful!",
-      //     "Your Details have been updated successfully",
-      //   );
-      // } else
-      if (!isOnline && api) {
-        console.log("[OFFLINE] Saving outlet update locally");
-
+        // 1. Optimistic Cache Update & Broadcast
         const ts = Date.now();
+        const optimisticData = {
+          ...(selectedOutlet as any),
+          ...updateData,
+          lastUpdatedAt: ts,
+        };
 
-        await api.cachePut(`outlet:${selectedOutlet.id}`, {
-          data: {
-            ...(selectedOutlet as any),
-            ...updateData,
-            lastUpdatedAt: ts,
-          },
-          ts,
-        });
-
-        api.broadcast({
-          kind: "outlet-update",
-          outletId: selectedOutlet.id,
-          data: { ...(selectedOutlet as any), ...updateData },
-          ts,
-        });
-
-        const payloadForServer = { ...updateData, lastUpdatedAt: ts } as any;
-
-        // 🕒 Schedule logo sync ONLY if needed
-        if (
-          typeof payloadForServer.logoUrl === "string" &&
-          payloadForServer.logoUrl.startsWith("outlet-logo:")
-        ) {
-          delete payloadForServer.logoUrl;
-          setLogoSyncScheduled(true);
-          console.log("[OFFLINE] Logo sync scheduled");
+        try {
+          await api.cachePut(`outlet:${selectedOutlet.id}`, {
+            data: optimisticData,
+            ts,
+          });
+          api.broadcast({
+            kind: "outlet-update",
+            outletId: selectedOutlet.id,
+            data: optimisticData,
+            ts,
+          });
+        } catch (e) {
+          console.error("Cache update failed", e);
         }
 
-        const response = await api.updateBusinessDetails({
+        // 2. Local DB Update (Queues Sync automatically)
+        await api.updateBusinessDetails({
           outletId: selectedOutlet.id,
           data: updateData,
         });
-        console.log("Format", response);
-        console.log("Update data", updateData);
+
+        // 3. Trigger Sync if Online
+        if (isOnline) {
+          console.log("[UPDATE] Online: Triggering sync...");
+          api.syncTrigger();
+        } else {
+          console.log("[UPDATE] Offline: Changes saved to queue.");
+        }
 
         showToast(
           "success",
-          "Saved Offline",
-          "Changes will sync automatically when online",
+          "Update Saved",
+          isOnline
+            ? "Your Details have been updated successfully"
+            : "Changes saved locally and will sync automatically",
         );
       } else {
-        console.log("[ONLINE] Updating outlet");
+        console.log("[ONLINE] Web Environment Update");
         await updateOutlet({
           outletId: selectedOutlet.id,
           payload: updateData,

@@ -61,6 +61,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     outletId: string;
     operatingHours: any;
   }) => ipcRenderer.invoke("db:updateOperatingHours", payload),
+  createOutlet: async (payload: { businessId: string; location: any }) =>
+    ipcRenderer.invoke("db:createOutlet", payload),
+  updateOutlet: async (payload: { outletId: string; location: any }) =>
+    ipcRenderer.invoke("db:updateOutlet", payload),
+  deleteOutlet: async (payload: { outletId: string }) =>
+    ipcRenderer.invoke("db:deleteOutlet", payload),
   dbQuery: async (sql: string, params: any[] = []) =>
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>
@@ -88,6 +94,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   queueClear: async () => ipcRenderer.invoke("queue:clear"),
   queueSet: async (list: any[]) => ipcRenderer.invoke("queue:set", list),
   getPeers: async () => ipcRenderer.invoke("p2p:getPeers"),
+  syncTrigger: () => ipcRenderer.send("sync:trigger"),
   onPeers: (cb: (list: any[]) => void) => {
     const handler = (_e: any, list: any[]) => cb(list);
     ipcRenderer.on("p2p:peers", handler);

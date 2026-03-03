@@ -92,7 +92,9 @@ const UserProfile = ({
     }
   };
 
-  const outletList: OutletView[] = (outlets as OutletView[]) || [];
+  const outletList: OutletView[] = ((outlets as OutletView[]) || []).filter(
+    (outlet) => !outlet.isDeleted,
+  );
 
   // Once outlets are loaded, sync with Redux ONLY on initial load
   useEffect(() => {
