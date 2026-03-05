@@ -4,11 +4,13 @@ import { P2PService } from "./P2PService";
 import { net } from "electron";
 import fs from "fs";
 import path from "path";
+import { SYNC_ACTIONS } from "../types/action.types";
 
 const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
-const SYNC_ENDPOINT = `${API_URL}/sync`;
+const SYNC_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync";
 const UPLOAD_ENDPOINT = `${API_URL}/upload`; // Assumed endpoint
-const PULL_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync/pull";
+const PUSH_ENDPOINT = `${SYNC_ENDPOINT}/push`;
+const PULL_ENDPOINT = `${SYNC_ENDPOINT}/pull`;
 const MIN_PULL_INTERVAL_MS = 5 * 60 * 1000;
 
 export class SyncService {
@@ -108,6 +110,11 @@ export class SyncService {
 
       url.searchParams.set("userId", String(userId));
 
+      const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
+      if (lastSyncTimestamp) {
+        url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
+      }
+
       console.log(`[SyncService] Pulling data from ${url.toString()}...`);
 
       const response = await net.fetch(url.toString(), {
@@ -131,10 +138,14 @@ export class SyncService {
         return;
       }
       console.log("Pulled stuff", json);
+
       this.db.applyPullData({
         currentTimestamp: json.currentTimestamp,
         data: json.data,
       });
+
+      // Update last sync timestamp
+      this.db.putCache("last_sync_timestamp", json.currentTimestamp);
     } catch (e) {
       console.error("[SyncService] Pull sync error:", e);
     } finally {
@@ -147,17 +158,15 @@ export class SyncService {
     this.isUploading = true;
 
     try {
-      const offlineImages = this.db.getOfflineImages();
-      if (offlineImages.length === 0) return;
+      const pendingImages = this.db.getPendingImageUploads();
+      if (pendingImages.length === 0) return;
 
       console.log(
-        `[SyncService] Found ${offlineImages.length} offline images to upload...`,
+        `[SyncService] Found ${pendingImages.length} offline images to upload...`,
       );
 
-      for (const outlet of offlineImages) {
-        if (!outlet.localLogoPath) continue;
-
-        let filePath = outlet.localLogoPath;
+      for (const item of pendingImages) {
+        let filePath = item.localPath;
         if (filePath.startsWith("file://")) {
           filePath = filePath.replace("file://", "");
         }
@@ -171,6 +180,8 @@ export class SyncService {
           console.error(
             `[SyncService] Local image file not found: ${filePath}`,
           );
+          // Mark as failed so we don't retry infinitely in a tight loop
+          this.db.failImageUpload(item.id, "File not found");
           continue;
         }
 
@@ -192,34 +203,56 @@ export class SyncService {
         if (!response.ok) {
           const txt = await response.text();
           console.error(
-            `[SyncService] Upload failed for ${outlet.id}: ${response.status} ${txt}`,
+            `[SyncService] Upload failed for ${item.id}: ${response.status} ${txt}`,
           );
           continue;
         }
 
         const data = (await response.json()) as any;
-        // Assuming response format: { url: "..." } or { data: { url: "..." } }
-        const newLogoUrl = data.url || data.data?.url;
+        const newUrl = data.url || data.data?.url;
 
-        if (newLogoUrl) {
-          console.log(`[SyncService] Upload successful. URL: ${newLogoUrl}`);
-          this.db.updateOfflineImage(outlet.id, newLogoUrl);
+        if (newUrl) {
+          console.log(`[SyncService] Upload successful. URL: ${newUrl}`);
 
-          // Queue sync op for the updated outlet
-          const fullOutlet = this.db.getOutlet(outlet.id);
+          // 1. Update the record with the new URL
+          this.db.updateRecordColumn(
+            item.tableName,
+            item.recordId,
+            item.columnName,
+            newUrl,
+          );
 
-          // Construct sync operation
-          // We wrap it in a structure that the backend sync endpoint understands.
-          // Assuming it accepts a list of changes or a single change object.
-          // Based on attemptSync logic: sends op as JSON body.
-          const syncOp = {
-            table: "business_outlet",
-            action: "UPDATE",
-            data: fullOutlet,
-            id: outlet.id,
-          };
+          // 2. Special handling for business_outlet logo to clear offline flag
+          if (
+            item.tableName === "business_outlet" &&
+            item.columnName === "logoUrl"
+          ) {
+            this.db.run(
+              "UPDATE business_outlet SET isOfflineImage = 0, localLogoPath = NULL WHERE id = ?",
+              [item.recordId],
+            );
+          }
 
-          this.db.addToQueue(syncOp);
+          // 3. Mark as uploaded
+          this.db.markImageAsUploaded(item.id);
+
+          // 4. Queue Sync for the updated record
+          // We fetch the latest record state to sync
+          const records = this.db.query(
+            `SELECT * FROM ${item.tableName} WHERE id = ?`,
+            [item.recordId],
+          ) as any[];
+
+          if (records && records.length > 0) {
+            const record = records[0];
+            const syncOp = {
+              table: item.tableName,
+              action: SYNC_ACTIONS.UPDATE,
+              data: record,
+              id: item.recordId,
+            };
+            this.db.addToQueue(syncOp);
+          }
         } else {
           console.error(`[SyncService] Upload response missing URL`, data);
         }
@@ -243,39 +276,49 @@ export class SyncService {
       }
 
       console.log(
-        `[SyncService] Syncing ${itemsToSync.length} items to ${SYNC_ENDPOINT}...`,
+        `[SyncService] Syncing ${itemsToSync.length} items to ${PUSH_ENDPOINT}...`,
       );
 
-      for (const item of itemsToSync) {
-        const queueItem = item as any;
-        try {
-          const payload = JSON.parse(queueItem.op);
+      const deviceId = this.db.getIdentity()?.deviceId || "unknown-device";
+      console.log("Device", this.db.getIdentity());
 
-          const response = await net.fetch(SYNC_ENDPOINT, {
-            method: "POST",
-            body: JSON.stringify(payload),
-            headers: { "Content-Type": "application/json" },
-          });
+      const records = itemsToSync.map((item: any) => {
+        const op = JSON.parse(item.op);
+        // Map local queue format to API expected format
+        return {
+          id: item.id,
+          tableName: op.tableName || op.table,
+          recordId: op.recordId || op.id,
+          recordData: JSON.stringify(op.data),
+          sourceDeviceId: deviceId,
+          action: op.action,
+          timestamp: item.created_at,
+          version: 1,
+          syncedTo: [],
+          createdAt: item.created_at,
+          updatedAt: item.created_at,
+        };
+      });
+      console.log("Recordss stuff", records);
 
-          if (response.ok) {
-            this.db.markAsSynced([queueItem.id]);
-          } else {
-            const txt = await response.text();
-            console.error(
-              `[SyncService] Sync failed for ${queueItem.id}: ${txt}`,
-            );
-            this.db.markAsFailed(
-              queueItem.id,
-              `HTTP ${response.status}: ${txt}`,
-            );
-          }
-        } catch (e: any) {
-          console.error(
-            `[SyncService] Error processing item ${queueItem.id}:`,
-            e,
-          );
-          this.db.markAsFailed(queueItem.id, e.message);
-        }
+      const payload = { records: records };
+      console.log(payload)
+
+      const response = await net.fetch(PUSH_ENDPOINT, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (response.ok) {
+        const ids = itemsToSync.map((i: any) => i.id);
+        this.db.markAsSynced(ids);
+        console.log(`[SyncService] Successfully synced ${ids.length} items.`);
+      } else {
+        const txt = await response.text();
+        console.error(`[SyncService] Sync failed: ${response.status} ${txt}`);
+        // We don't mark individual items as failed here since it's a batch failure.
+        // They remain pending and will be retried.
       }
     } catch (e) {
       console.error("[SyncService] Sync process error:", e);

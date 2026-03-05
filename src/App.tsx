@@ -16,6 +16,7 @@ import PrivacyPolicyPage from "./app/privacy-policy/page";
 import TermsPage from "./app/terms-and-conditions/page";
 import ProductManagementPage from "./app/dashboard/product-management/page";
 import RecipeManagementPage from "./app/dashboard/recipe-management/page";
+import InventoryPage from "./app/dashboard/inventory/page";
 import DatabaseViewerPage from "./app/dashboard/debug/database/page";
 
 const DashboardLayoutWrapper = () => (
@@ -54,6 +55,7 @@ export default function App() {
               path="recipe-management"
               element={<RecipeManagementPage />}
             />
+            <Route path="inventory" element={<InventoryPage />} />
             <Route
               path="product-management"
               element={<ProductManagementPage />}

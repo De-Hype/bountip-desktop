@@ -125,9 +125,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
                 },
                 tokens: { accessToken: "offline", refreshToken: "offline" },
               });
-              try {
-                await businessService.loadAllOutlet();
-              } catch {}
+
               // Check if there is a 'from' path in location state
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const state = (window.history.state as any)?.usr?.state as {
@@ -198,10 +196,6 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       if (api?.saveUser) {
         api.saveUser(user);
       }
-
-      try {
-        await businessService.loadAllOutlet();
-      } catch {}
 
       // Check if there is a 'from' path in location state
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -305,7 +299,6 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     // Offline Login Check
     const api = (window as any).electronAPI;
 
-
     if (!isOnline) {
       if (api?.verifyPinHash) {
         try {
@@ -326,10 +319,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
                 },
                 tokens: { accessToken: "offline", refreshToken: "offline" }, // Mock tokens
               });
-              try {
-                // Try to load cached data
-                await businessService.loadAllOutlet();
-              } catch {}
+
               navigate("/dashboard/");
               return;
             }

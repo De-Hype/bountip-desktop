@@ -179,18 +179,25 @@ const Dashboard = () => {
       available: false,
     },
     {
+      icon: AssetsFiles.phusers,
+      title: "Customer Management",
+      path: "/customer-management",
+      available: true,
+    },
+
+    {
       icon: AssetsFiles.noodlebowl,
       title: "Recipe Management",
       path: "/dashboard/recipe-management",
-     // badge: "Coming Soon",
+      // badge: "Coming Soon",
       available: true,
     },
     {
       icon: AssetsFiles.inventory,
       title: "Inventory",
-      path: "/inventory",
-      badge: "Coming Soon",
-      available: false,
+      path: "/dashboard/inventory",
+      // badge: "Coming Soon",
+      available: true,
     },
 
     {

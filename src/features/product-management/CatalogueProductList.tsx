@@ -8,10 +8,13 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import NotFound from "./NotFound";
-import { useBusinessStore } from "@/stores/useBusinessStore";
+import useBusinessStore from "@/stores/useBusinessStore";
 import { Switch } from "@/features/settings/ui/Switch";
 import { Pagination } from "@/shared/Pagination/pagination";
 import ProductAssets from "@/assets/images/products";
+import ProductFilters, {
+  FilterState,
+} from "@/features/product-management/ProductFilters";
 
 interface Product {
   id: string;
@@ -24,7 +27,11 @@ interface Product {
   logoUrl: string | null;
 }
 
-const CatalogueProductList = () => {
+interface CatalogueProductListProps {
+  lastUpdated?: number;
+}
+
+const CatalogueProductList = ({ lastUpdated }: CatalogueProductListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [hideImages, setHideImages] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -35,6 +42,61 @@ const CatalogueProductList = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
 
   const { selectedOutlet } = useBusinessStore();
+
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filterBounds, setFilterBounds] = useState<{
+    minPrice: number;
+    maxPrice: number;
+    categories: string[];
+  }>({ minPrice: 0, maxPrice: 1000, categories: [] });
+  const [activeFilters, setActiveFilters] = useState<FilterState>({
+    priceRange: [0, 1000],
+    category: "All Categories",
+    availability: "All",
+  });
+  const [filtersInitialized, setFiltersInitialized] = useState(false);
+
+  // Fetch filter stats (bounds)
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!selectedOutlet?.id) return;
+      try {
+        const api = window.electronAPI;
+        if (api && api.dbQuery) {
+          // Get Min/Max Price
+          const priceRes = await api.dbQuery(
+            "SELECT MIN(CAST(price AS REAL)) as minPrice, MAX(CAST(price AS REAL)) as maxPrice FROM product WHERE outletId = ? AND isDeleted = 0",
+            [selectedOutlet.id],
+          );
+          const min = priceRes[0]?.minPrice || 0;
+          const max = priceRes[0]?.maxPrice || 1000;
+
+          // Get Categories
+          const catRes = await api.dbQuery(
+            "SELECT DISTINCT category FROM product WHERE outletId = ? AND isDeleted = 0 AND category IS NOT NULL AND category != '' ORDER BY category ASC",
+            [selectedOutlet.id],
+          );
+          const cats = Array.isArray(catRes)
+            ? catRes.map((c: any) => c.category)
+            : [];
+
+          setFilterBounds({ minPrice: min, maxPrice: max, categories: cats });
+
+          // Initialize filters only once or when bounds change significantly if needed
+          if (!filtersInitialized) {
+            setActiveFilters((prev) => ({
+              ...prev,
+              priceRange: [min, max],
+            }));
+            setFiltersInitialized(true);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch product stats:", error);
+      }
+    };
+    fetchStats();
+  }, [selectedOutlet?.id, lastUpdated]);
 
   // Debounce search term
   useEffect(() => {
@@ -133,7 +195,40 @@ const CatalogueProductList = () => {
             params.push(`%${debouncedSearchTerm}%`, `%${debouncedSearchTerm}%`);
           }
 
-          query += " ORDER BY name ASC";
+          // Apply Filters
+          if (filtersInitialized) {
+            // Price Range
+            if (
+              activeFilters.priceRange &&
+              activeFilters.priceRange.length === 2
+            ) {
+              query +=
+                " AND CAST(price AS REAL) >= ? AND CAST(price AS REAL) <= ?";
+              params.push(
+                activeFilters.priceRange[0],
+                activeFilters.priceRange[1],
+              );
+            }
+
+            // Category
+            if (activeFilters.category !== "All Categories") {
+              query += " AND category = ?";
+              params.push(activeFilters.category);
+            }
+
+            // Availability
+            if (activeFilters.availability !== "All") {
+              const isAvailable =
+                activeFilters.availability === "Available" ? 1 : 0;
+              query += " AND availableAtStorefront = ?";
+              params.push(isAvailable);
+            }
+          }
+
+          // Use COLLATE NOCASE for case-insensitive sorting to ensure products
+          // like "apple" and "Apple" are grouped together, and prevent
+          // new products from appearing at the top/bottom incorrectly due to case.
+          query += " ORDER BY name COLLATE NOCASE ASC";
 
           const result = await api.dbQuery(query, params);
 
@@ -166,7 +261,13 @@ const CatalogueProductList = () => {
     };
 
     fetchProducts();
-  }, [selectedOutlet?.id, debouncedSearchTerm]);
+  }, [
+    selectedOutlet?.id,
+    debouncedSearchTerm,
+    lastUpdated,
+    filtersInitialized,
+    activeFilters,
+  ]);
 
   const totalPages = Math.ceil(products.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -224,6 +325,7 @@ const CatalogueProductList = () => {
 
           <button
             type="button"
+            onClick={() => setIsFilterOpen(true)}
             className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-[10px] border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-[#1C1B20]"
           >
             <SlidersHorizontal className="w-4 h-4" />
@@ -466,6 +568,19 @@ const CatalogueProductList = () => {
           }}
         />
       )}
+
+      {/* Filters Modal */}
+      <ProductFilters
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        onApply={(filters) => {
+          setActiveFilters(filters);
+          setIsFilterOpen(false);
+        }}
+        minPrice={filterBounds.minPrice}
+        maxPrice={filterBounds.maxPrice}
+        categories={filterBounds.categories}
+      />
     </section>
   );
 };

@@ -1,7 +1,9 @@
 import CatalogueProductList from "@/features/product-management/CatalogueProductList";
 import CreateProduct from "@/features/product-management/CreateProduct";
+import BulkUploadData from "@/features/product-management/BulkUploadModal";
 import { Download, Plus, ChevronDown, Upload, CloudUpload } from "lucide-react";
 import { useState } from "react";
+import useBusinessStore from "@/stores/useBusinessStore";
 
 const ProductManagementPage = () => {
   const [activeTab, setActiveTab] = useState<"catalogue" | "basket">(
@@ -9,6 +11,13 @@ const ProductManagementPage = () => {
   );
   const [isBulkMenuOpen, setIsBulkMenuOpen] = useState(false);
   const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const { selectedOutlet } = useBusinessStore();
+  const [lastUpdated, setLastUpdated] = useState(0);
+
+  const refreshProducts = () => {
+    setLastUpdated(Date.now());
+  };
 
   return (
     <section className="flex flex-col gap-4">
@@ -64,7 +73,10 @@ const ProductManagementPage = () => {
                 <div className="absolute right-0 mt-2 w-48 rounded-[10px] border border-gray-200 bg-white shadow-lg py-2 z-10">
                   <button
                     type="button"
-                    onClick={() => setIsBulkMenuOpen(false)}
+                    onClick={() => {
+                      setIsBulkMenuOpen(false);
+                      setIsBulkUploadOpen(true);
+                    }}
                     className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     <Upload className="w-4 h-4" />
@@ -115,11 +127,21 @@ const ProductManagementPage = () => {
           </div>
         )}
       </div>
-      {activeTab === "catalogue" && <CatalogueProductList />}
-      
+      {activeTab === "catalogue" && (
+        <CatalogueProductList lastUpdated={lastUpdated} />
+      )}
+
       <CreateProduct
         isOpen={isCreateProductOpen}
         onClose={() => setIsCreateProductOpen(false)}
+        onSuccess={refreshProducts}
+      />
+
+      <BulkUploadData
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        storeCode={selectedOutlet?.id || ""}
+        onUploadSuccess={refreshProducts}
       />
     </section>
   );

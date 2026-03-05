@@ -47,6 +47,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   createOutlet: async (payload) => electron.ipcRenderer.invoke("db:createOutlet", payload),
   updateOutlet: async (payload) => electron.ipcRenderer.invoke("db:updateOutlet", payload),
   deleteOutlet: async (payload) => electron.ipcRenderer.invoke("db:deleteOutlet", payload),
+  createProduct: async (payload) => electron.ipcRenderer.invoke("db:createProduct", payload),
+  bulkCreateProducts: async (payload) => electron.ipcRenderer.invoke("db:bulkCreateProducts", payload),
   dbQuery: async (sql, params = []) => electron.ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath) => electron.ipcRenderer.invoke("assets:import", filePath),
   getNetworkStatus: async () => {

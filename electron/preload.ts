@@ -71,6 +71,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:updateOutlet", payload),
   deleteOutlet: async (payload: { outletId: string }) =>
     ipcRenderer.invoke("db:deleteOutlet", payload),
+  createProduct: async (payload: any) =>
+    ipcRenderer.invoke("db:createProduct", payload),
+  bulkCreateProducts: async (payload: any) =>
+    ipcRenderer.invoke("db:bulkCreateProducts", payload),
   dbQuery: async (sql: string, params: any[] = []) =>
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>

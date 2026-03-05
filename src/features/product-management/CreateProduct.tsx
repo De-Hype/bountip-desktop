@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Check } from "lucide-react";
 import AssetsFiles from "@/assets";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
 import useBusinessStore from "@/stores/useBusinessStore";
+import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 
 type ProductCreatePayload = {
   name: string;
@@ -44,10 +45,16 @@ type ProductCategory = {
 };
 
 type PriceTier = {
-  id: number;
+  id: number | string;
   name: string;
   value: string;
   active: boolean;
+  pricingRules?: {
+    markupPercentage?: number;
+    discountPercentage?: number;
+    fixedMarkup?: number;
+    fixedDiscount?: number;
+  };
 };
 
 type PreparationAreaOption = {
@@ -74,6 +81,7 @@ type PackagingMethod = {
 type CreateProductProps = {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 };
 
 type AddEntityModalProps = {
@@ -96,10 +104,7 @@ const initialPreparationAreas: PreparationAreaOption[] = [
   { id: 2, name: "Kitchen" },
 ];
 
-const initialPriceTiers: PriceTier[] = [
-  { id: 1, name: "Retail Price Tier", value: "£40", active: true },
-  { id: 2, name: "Wholesale Price Tier", value: "£35", active: false },
-];
+const initialPriceTiers: PriceTier[] = [];
 
 const initialAllergens: Allergen[] = [
   { id: 1, name: "Cereals", selected: true },
@@ -224,9 +229,9 @@ const AddEntityModal = ({
   );
 };
 
-const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
+const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
   const [activeTab, setActiveTab] = useState<"basic" | "modifiers">("basic");
-  const { selectedOutletId } = useBusinessStore();
+  const { selectedOutletId, selectedOutlet } = useBusinessStore();
   const [productName, setProductName] = useState("");
   const [categories, setCategories] =
     useState<ProductCategory[]>(initialCategories);
@@ -265,6 +270,111 @@ const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
   const [isAddAllergenModalOpen, setIsAddAllergenModalOpen] = useState(false);
   const [isAddWeightUnitModalOpen, setIsAddWeightUnitModalOpen] =
     useState(false);
+
+  const currencySymbol = selectedOutlet?.currency
+    ? getCurrencySymbol(selectedOutlet.currency)
+    : "";
+
+  useEffect(() => {
+    if (selectedOutlet?.priceTier) {
+      try {
+        const parsedTiers =
+          typeof selectedOutlet.priceTier === "string"
+            ? JSON.parse(selectedOutlet.priceTier)
+            : selectedOutlet.priceTier;
+
+        const tiers = (Array.isArray(parsedTiers) ? parsedTiers : []).map(
+          (t: any) => ({
+            id: t.id,
+            name: t.name,
+            value: "", // Not used for state, calculated on render
+            active: false,
+            pricingRules: t.pricingRules,
+          }),
+        );
+        setPriceTiers(tiers);
+      } catch (e) {
+        console.error("Failed to parse price tiers", e);
+        setPriceTiers([]);
+      }
+    } else {
+      setPriceTiers([]);
+    }
+  }, [selectedOutlet]);
+
+  const calculateTierPrice = (rules?: PriceTier["pricingRules"]) => {
+    const price = parseFloat(defaultPrice);
+    if (isNaN(price)) return "0.00";
+
+    let finalPrice = price;
+    if (rules) {
+      if (rules.markupPercentage) {
+        finalPrice += price * (Number(rules.markupPercentage) / 100);
+      }
+      if (rules.fixedMarkup) {
+        finalPrice += Number(rules.fixedMarkup);
+      }
+      if (rules.discountPercentage) {
+        finalPrice -= price * (Number(rules.discountPercentage) / 100);
+      }
+      if (rules.fixedDiscount) {
+        finalPrice -= Number(rules.fixedDiscount);
+      }
+    }
+    return finalPrice.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const renderPricingRuleBadges = (rules?: PriceTier["pricingRules"]) => {
+    if (!rules) return null;
+    const badges = [];
+
+    if (rules.markupPercentage) {
+      badges.push(
+        <span
+          key="markup-pct"
+          className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+        >
+          +{rules.markupPercentage}% Markup
+        </span>,
+      );
+    }
+    if (rules.fixedMarkup) {
+      badges.push(
+        <span
+          key="markup-fixed"
+          className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+        >
+          +{currencySymbol}
+          {Number(rules.fixedMarkup).toLocaleString("en-US")} Markup
+        </span>,
+      );
+    }
+    if (rules.discountPercentage) {
+      badges.push(
+        <span
+          key="discount-pct"
+          className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700"
+        >
+          -{rules.discountPercentage}% Discount
+        </span>,
+      );
+    }
+    if (rules.fixedDiscount) {
+      badges.push(
+        <span
+          key="discount-fixed"
+          className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700"
+        >
+          -{currencySymbol}
+          {Number(rules.fixedDiscount).toLocaleString("en-US")} Discount
+        </span>,
+      );
+    }
+    return <div className="flex flex-wrap gap-1">{badges}</div>;
+  };
 
   const handleSaveProduct = async () => {
     const api = getElectronAPI();
@@ -323,6 +433,7 @@ const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
 
     try {
       await api.createProduct(payload);
+      onSuccess?.();
       onClose();
     } catch {}
   };
@@ -561,7 +672,7 @@ const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
                       className="flex-1 bg-transparent outline-none placeholder-[#A6A6A6]"
                     />
                     <span className="text-xs font-semibold text-[#15BA5C]">
-                      GBP
+                      {currencySymbol}
                     </span>
                   </div>
                 </div>
@@ -606,11 +717,11 @@ const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#15BA5C] text-[#15BA5C]">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6]">
                               <svg
-                                width="30"
-                                height="30"
-                                viewBox="0 0 33 33"
+                                width="32"
+                                height="32"
+                                viewBox="0 0 32 32"
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg"
                               >
@@ -620,9 +731,18 @@ const CreateProduct = ({ isOpen, onClose }: CreateProductProps) => {
                                 />
                               </svg>
                             </div>
-                            <span>
-                              {tier.name} – Value: {tier.value}
-                            </span>
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-gray-900">
+                                  {tier.name}
+                                </span>
+                                {renderPricingRuleBadges(tier.pricingRules)}
+                              </div>
+                              <span className="text-sm font-bold text-gray-900">
+                                {currencySymbol}
+                                {calculateTierPrice(tier.pricingRules)}
+                              </span>
+                            </div>
                           </div>
                           <div
                             className={`flex h-5 w-5 items-center justify-center rounded-[4px] border ${

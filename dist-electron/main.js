@@ -3,8 +3,8 @@ import path from "path";
 import require$$4$1, { pathToFileURL, fileURLToPath } from "url";
 import Database from "better-sqlite3";
 import fs$1 from "fs";
-import keytar from "keytar";
 import crypto, { randomUUID } from "crypto";
+import keytar from "keytar";
 import dgram from "dgram";
 import net$1 from "net";
 import require$$0 from "constants";
@@ -916,6 +916,263 @@ const schemas = [
   syncTableLogSchema,
   notificationsSchema
 ];
+function createProductRecord(db, payload, id, now) {
+  const stmt = db.prepare(`
+      INSERT OR REPLACE INTO product (
+        id,
+        name,
+        isActive,
+        description,
+        category,
+        price,
+        preparationArea,
+        weight,
+        productCode,
+        weightScale,
+        productAvailableStock,
+        packagingMethod,
+        priceTierId,
+        allergenList,
+        logoUrl,
+        logoHash,
+        leadTime,
+        availableAtStorefront,
+        createdAtStorefront,
+        isDeleted,
+        createdAt,
+        updatedAt,
+        lastSyncedAt,
+        outletId
+      ) VALUES (
+        @id,
+        @name,
+        @isActive,
+        @description,
+        @category,
+        @price,
+        @preparationArea,
+        @weight,
+        @productCode,
+        @weightScale,
+        @productAvailableStock,
+        @packagingMethod,
+        @priceTierId,
+        @allergenList,
+        @logoUrl,
+        @logoHash,
+        @leadTime,
+        @availableAtStorefront,
+        @createdAtStorefront,
+        @isDeleted,
+        @createdAt,
+        @updatedAt,
+        @lastSyncedAt,
+        @outletId
+      )
+    `);
+  const effectiveAllergenList = payload.allergenList && payload.allergenList.length > 0 ? payload.allergenList : payload.allergens && payload.allergens.length > 0 ? payload.allergens : [];
+  const row = {
+    id,
+    name: payload.name,
+    isActive: payload.isActive ?? 1,
+    description: payload.description ?? null,
+    category: payload.category ?? null,
+    price: payload.price ?? null,
+    preparationArea: payload.preparationArea ?? null,
+    weight: payload.weight ?? null,
+    productCode: payload.productCode ?? null,
+    weightScale: payload.weightScale ?? null,
+    productAvailableStock: payload.productAvailableStock ?? null,
+    packagingMethod: payload.packagingMethod ? JSON.stringify(payload.packagingMethod) : null,
+    priceTierId: payload.priceTierId ? JSON.stringify(payload.priceTierId) : null,
+    allergenList: effectiveAllergenList.length > 0 ? JSON.stringify(effectiveAllergenList) : null,
+    logoUrl: payload.logoUrl ?? null,
+    logoHash: payload.logoHash ?? null,
+    leadTime: payload.leadTime ?? null,
+    availableAtStorefront: payload.availableAtStorefront ?? 1,
+    createdAtStorefront: payload.createdAtStorefront ?? 1,
+    isDeleted: payload.isDeleted ?? 0,
+    createdAt: payload.createdAt ?? now,
+    updatedAt: payload.updatedAt ?? now,
+    lastSyncedAt: payload.lastSyncedAt ?? null,
+    outletId: payload.outletId ?? null
+  };
+  stmt.run(row);
+  return row;
+}
+function buildProductSyncOp(row, id, ts) {
+  return {
+    type: "product",
+    op: "upsert",
+    id,
+    outletId: row.outletId,
+    data: row,
+    ts
+  };
+}
+var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
+function getDefaultExportFromCjs(x) {
+  return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
+}
+var rng;
+var hasRequiredRng;
+function requireRng() {
+  if (hasRequiredRng) return rng;
+  hasRequiredRng = 1;
+  var crypto$1 = crypto;
+  rng = function nodeRNG() {
+    return crypto$1.randomBytes(16);
+  };
+  return rng;
+}
+var bytesToUuid_1;
+var hasRequiredBytesToUuid;
+function requireBytesToUuid() {
+  if (hasRequiredBytesToUuid) return bytesToUuid_1;
+  hasRequiredBytesToUuid = 1;
+  var byteToHex = [];
+  for (var i = 0; i < 256; ++i) {
+    byteToHex[i] = (i + 256).toString(16).substr(1);
+  }
+  function bytesToUuid(buf, offset) {
+    var i2 = offset || 0;
+    var bth = byteToHex;
+    return [
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      "-",
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      "-",
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      "-",
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      "-",
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]],
+      bth[buf[i2++]]
+    ].join("");
+  }
+  bytesToUuid_1 = bytesToUuid;
+  return bytesToUuid_1;
+}
+var v1_1;
+var hasRequiredV1;
+function requireV1() {
+  if (hasRequiredV1) return v1_1;
+  hasRequiredV1 = 1;
+  var rng2 = requireRng();
+  var bytesToUuid = requireBytesToUuid();
+  var _nodeId;
+  var _clockseq;
+  var _lastMSecs = 0;
+  var _lastNSecs = 0;
+  function v1(options, buf, offset) {
+    var i = buf && offset || 0;
+    var b = buf || [];
+    options = options || {};
+    var node2 = options.node || _nodeId;
+    var clockseq = options.clockseq !== void 0 ? options.clockseq : _clockseq;
+    if (node2 == null || clockseq == null) {
+      var seedBytes = rng2();
+      if (node2 == null) {
+        node2 = _nodeId = [
+          seedBytes[0] | 1,
+          seedBytes[1],
+          seedBytes[2],
+          seedBytes[3],
+          seedBytes[4],
+          seedBytes[5]
+        ];
+      }
+      if (clockseq == null) {
+        clockseq = _clockseq = (seedBytes[6] << 8 | seedBytes[7]) & 16383;
+      }
+    }
+    var msecs = options.msecs !== void 0 ? options.msecs : (/* @__PURE__ */ new Date()).getTime();
+    var nsecs = options.nsecs !== void 0 ? options.nsecs : _lastNSecs + 1;
+    var dt = msecs - _lastMSecs + (nsecs - _lastNSecs) / 1e4;
+    if (dt < 0 && options.clockseq === void 0) {
+      clockseq = clockseq + 1 & 16383;
+    }
+    if ((dt < 0 || msecs > _lastMSecs) && options.nsecs === void 0) {
+      nsecs = 0;
+    }
+    if (nsecs >= 1e4) {
+      throw new Error("uuid.v1(): Can't create more than 10M uuids/sec");
+    }
+    _lastMSecs = msecs;
+    _lastNSecs = nsecs;
+    _clockseq = clockseq;
+    msecs += 122192928e5;
+    var tl = ((msecs & 268435455) * 1e4 + nsecs) % 4294967296;
+    b[i++] = tl >>> 24 & 255;
+    b[i++] = tl >>> 16 & 255;
+    b[i++] = tl >>> 8 & 255;
+    b[i++] = tl & 255;
+    var tmh = msecs / 4294967296 * 1e4 & 268435455;
+    b[i++] = tmh >>> 8 & 255;
+    b[i++] = tmh & 255;
+    b[i++] = tmh >>> 24 & 15 | 16;
+    b[i++] = tmh >>> 16 & 255;
+    b[i++] = clockseq >>> 8 | 128;
+    b[i++] = clockseq & 255;
+    for (var n = 0; n < 6; ++n) {
+      b[i + n] = node2[n];
+    }
+    return buf ? buf : bytesToUuid(b);
+  }
+  v1_1 = v1;
+  return v1_1;
+}
+var v4_1;
+var hasRequiredV4;
+function requireV4() {
+  if (hasRequiredV4) return v4_1;
+  hasRequiredV4 = 1;
+  var rng2 = requireRng();
+  var bytesToUuid = requireBytesToUuid();
+  function v4(options, buf, offset) {
+    var i = buf && offset || 0;
+    if (typeof options == "string") {
+      buf = options === "binary" ? new Array(16) : null;
+      options = null;
+    }
+    options = options || {};
+    var rnds = options.random || (options.rng || rng2)();
+    rnds[6] = rnds[6] & 15 | 64;
+    rnds[8] = rnds[8] & 63 | 128;
+    if (buf) {
+      for (var ii = 0; ii < 16; ++ii) {
+        buf[i + ii] = rnds[ii];
+      }
+    }
+    return buf || bytesToUuid(rnds);
+  }
+  v4_1 = v4;
+  return v4_1;
+}
+var uuid_1;
+var hasRequiredUuid$1;
+function requireUuid$1() {
+  if (hasRequiredUuid$1) return uuid_1;
+  hasRequiredUuid$1 = 1;
+  var v1 = requireV1();
+  var v4 = requireV4();
+  var uuid2 = v4;
+  uuid2.v1 = v1;
+  uuid2.v4 = v4;
+  uuid_1 = uuid2;
+  return uuid_1;
+}
+var uuidExports = requireUuid$1();
 class DatabaseService {
   constructor() {
     const userDataPath = app.getPath("userData");
@@ -957,6 +1214,19 @@ class DatabaseService {
       CREATE TABLE IF NOT EXISTS sync_queue (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         op TEXT,
+        status TEXT DEFAULT 'pending',
+        retry_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_error TEXT
+      );
+    `);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS image_upload_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        localPath TEXT,
+        tableName TEXT,
+        recordId TEXT,
+        columnName TEXT,
         status TEXT DEFAULT 'pending',
         retry_count INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1089,6 +1359,34 @@ class DatabaseService {
   }
   putCache(key, value) {
     this.db.prepare("INSERT OR REPLACE INTO cache (key, value) VALUES (?, ?)").run(key, JSON.stringify(value));
+  }
+  // Image Queue Methods
+  addToImageQueue(item) {
+    this.db.prepare(
+      "INSERT INTO image_upload_queue (localPath, tableName, recordId, columnName, status) VALUES (@localPath, @tableName, @recordId, @columnName, 'pending')"
+    ).run(item);
+  }
+  getPendingImageUploads() {
+    return this.db.prepare("SELECT * FROM image_upload_queue WHERE status = 'pending'").all();
+  }
+  markImageAsUploaded(id) {
+    this.db.prepare("DELETE FROM image_upload_queue WHERE id = ?").run(id);
+  }
+  failImageUpload(id, error2) {
+    this.db.prepare(
+      "UPDATE image_upload_queue SET status = 'failed', last_error = ? WHERE id = ?"
+    ).run(error2, id);
+  }
+  updateRecordColumn(tableName, recordId, columnName, value) {
+    if (/[^a-zA-Z0-9_]/.test(tableName) || /[^a-zA-Z0-9_]/.test(columnName)) {
+      console.error(
+        `[DatabaseService] Invalid table/column name: ${tableName}.${columnName}`
+      );
+      return;
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const sql = `UPDATE ${tableName} SET ${columnName} = ?, updatedAt = ? WHERE id = ?`;
+    this.db.prepare(sql).run(value, now, recordId);
   }
   // Queue Methods
   addToQueue(op) {
@@ -1226,6 +1524,31 @@ class DatabaseService {
       }
     });
     tx();
+  }
+  createProduct(payload) {
+    const id = payload.id || uuidExports.v4();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const row = createProductRecord(this.db, payload, id, now);
+    const syncOp = buildProductSyncOp(row, id, now);
+    this.addToQueue(syncOp);
+    return { id };
+  }
+  bulkCreateProducts(payload) {
+    const { outletId, data } = payload;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const createdIds = [];
+    const tx = this.db.transaction(() => {
+      for (const p of data) {
+        const id = p.id || uuidExports.v4();
+        const productPayload = { ...p, outletId };
+        const row = createProductRecord(this.db, productPayload, id, now);
+        const syncOp = buildProductSyncOp(row, id, now);
+        this.addToQueue(syncOp);
+        createdIds.push(id);
+      }
+    });
+    tx();
+    return { ids: createdIds, status: "success", count: createdIds.length };
   }
 }
 const SERVICE_NAME = "bountip-desktop";
@@ -1529,10 +1852,6 @@ class P2PService {
       client.on("error", reject);
     });
   }
-}
-var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
-function getDefaultExportFromCjs(x) {
-  return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
 }
 var main$2 = {};
 var fs = {};
@@ -5586,10 +5905,10 @@ function requireRfc2253Parser() {
   return rfc2253Parser;
 }
 var uuid = {};
-var hasRequiredUuid$1;
-function requireUuid$1() {
-  if (hasRequiredUuid$1) return uuid;
-  hasRequiredUuid$1 = 1;
+var hasRequiredUuid;
+function requireUuid() {
+  if (hasRequiredUuid) return uuid;
+  hasRequiredUuid = 1;
   Object.defineProperty(uuid, "__esModule", { value: true });
   uuid.nil = uuid.UUID = void 0;
   const crypto_1 = crypto;
@@ -7408,7 +7727,7 @@ function requireOut() {
     Object.defineProperty(exports$1, "parseDn", { enumerable: true, get: function() {
       return rfc2253Parser_1.parseDn;
     } });
-    var uuid_12 = requireUuid$1();
+    var uuid_12 = requireUuid();
     Object.defineProperty(exports$1, "UUID", { enumerable: true, get: function() {
       return uuid_12.UUID;
     } });
@@ -19054,10 +19373,17 @@ class AssetService {
     });
   }
 }
+var SYNC_ACTIONS = /* @__PURE__ */ ((SYNC_ACTIONS2) => {
+  SYNC_ACTIONS2["CREATE"] = "CREATE";
+  SYNC_ACTIONS2["UPDATE"] = "UPDATE";
+  SYNC_ACTIONS2["DELETE"] = "DELETE";
+  return SYNC_ACTIONS2;
+})(SYNC_ACTIONS || {});
 const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
-const SYNC_ENDPOINT = `${API_URL}/sync`;
+const SYNC_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync";
 const UPLOAD_ENDPOINT = `${API_URL}/upload`;
-const PULL_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync/pull";
+const PUSH_ENDPOINT = `${SYNC_ENDPOINT}/push`;
+const PULL_ENDPOINT = `${SYNC_ENDPOINT}/pull`;
 const MIN_PULL_INTERVAL_MS = 5 * 60 * 1e3;
 class SyncService {
   constructor(db, network, p2p) {
@@ -19126,6 +19452,10 @@ class SyncService {
       }
       const url = new URL(PULL_ENDPOINT);
       url.searchParams.set("userId", String(userId));
+      const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
+      if (lastSyncTimestamp) {
+        url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
+      }
       console.log(`[SyncService] Pulling data from ${url.toString()}...`);
       const response = await net.fetch(url.toString(), {
         method: "GET"
@@ -19149,6 +19479,7 @@ class SyncService {
         currentTimestamp: json2.currentTimestamp,
         data: json2.data
       });
+      this.db.putCache("last_sync_timestamp", json2.currentTimestamp);
     } catch (e) {
       console.error("[SyncService] Pull sync error:", e);
     } finally {
@@ -19159,14 +19490,13 @@ class SyncService {
     if (this.isUploading) return;
     this.isUploading = true;
     try {
-      const offlineImages = this.db.getOfflineImages();
-      if (offlineImages.length === 0) return;
+      const pendingImages = this.db.getPendingImageUploads();
+      if (pendingImages.length === 0) return;
       console.log(
-        `[SyncService] Found ${offlineImages.length} offline images to upload...`
+        `[SyncService] Found ${pendingImages.length} offline images to upload...`
       );
-      for (const outlet of offlineImages) {
-        if (!outlet.localLogoPath) continue;
-        let filePath = outlet.localLogoPath;
+      for (const item of pendingImages) {
+        let filePath = item.localPath;
         if (filePath.startsWith("file://")) {
           filePath = filePath.replace("file://", "");
         }
@@ -19178,6 +19508,7 @@ class SyncService {
           console.error(
             `[SyncService] Local image file not found: ${filePath}`
           );
+          this.db.failImageUpload(item.id, "File not found");
           continue;
         }
         const fileName = path.basename(filePath);
@@ -19195,23 +19526,41 @@ class SyncService {
         if (!response.ok) {
           const txt = await response.text();
           console.error(
-            `[SyncService] Upload failed for ${outlet.id}: ${response.status} ${txt}`
+            `[SyncService] Upload failed for ${item.id}: ${response.status} ${txt}`
           );
           continue;
         }
         const data = await response.json();
-        const newLogoUrl = data.url || data.data?.url;
-        if (newLogoUrl) {
-          console.log(`[SyncService] Upload successful. URL: ${newLogoUrl}`);
-          this.db.updateOfflineImage(outlet.id, newLogoUrl);
-          const fullOutlet = this.db.getOutlet(outlet.id);
-          const syncOp = {
-            table: "business_outlet",
-            action: "UPDATE",
-            data: fullOutlet,
-            id: outlet.id
-          };
-          this.db.addToQueue(syncOp);
+        const newUrl = data.url || data.data?.url;
+        if (newUrl) {
+          console.log(`[SyncService] Upload successful. URL: ${newUrl}`);
+          this.db.updateRecordColumn(
+            item.tableName,
+            item.recordId,
+            item.columnName,
+            newUrl
+          );
+          if (item.tableName === "business_outlet" && item.columnName === "logoUrl") {
+            this.db.run(
+              "UPDATE business_outlet SET isOfflineImage = 0, localLogoPath = NULL WHERE id = ?",
+              [item.recordId]
+            );
+          }
+          this.db.markImageAsUploaded(item.id);
+          const records = this.db.query(
+            `SELECT * FROM ${item.tableName} WHERE id = ?`,
+            [item.recordId]
+          );
+          if (records && records.length > 0) {
+            const record = records[0];
+            const syncOp = {
+              table: item.tableName,
+              action: SYNC_ACTIONS.UPDATE,
+              data: record,
+              id: item.recordId
+            };
+            this.db.addToQueue(syncOp);
+          }
         } else {
           console.error(`[SyncService] Upload response missing URL`, data);
         }
@@ -19232,36 +19581,41 @@ class SyncService {
         return;
       }
       console.log(
-        `[SyncService] Syncing ${itemsToSync.length} items to ${SYNC_ENDPOINT}...`
+        `[SyncService] Syncing ${itemsToSync.length} items to ${PUSH_ENDPOINT}...`
       );
-      for (const item of itemsToSync) {
-        const queueItem = item;
-        try {
-          const payload = JSON.parse(queueItem.op);
-          const response = await net.fetch(SYNC_ENDPOINT, {
-            method: "POST",
-            body: JSON.stringify(payload),
-            headers: { "Content-Type": "application/json" }
-          });
-          if (response.ok) {
-            this.db.markAsSynced([queueItem.id]);
-          } else {
-            const txt = await response.text();
-            console.error(
-              `[SyncService] Sync failed for ${queueItem.id}: ${txt}`
-            );
-            this.db.markAsFailed(
-              queueItem.id,
-              `HTTP ${response.status}: ${txt}`
-            );
-          }
-        } catch (e) {
-          console.error(
-            `[SyncService] Error processing item ${queueItem.id}:`,
-            e
-          );
-          this.db.markAsFailed(queueItem.id, e.message);
-        }
+      const deviceId = this.db.getIdentity()?.deviceId || "unknown-device";
+      console.log("Device", this.db.getIdentity());
+      const records = itemsToSync.map((item) => {
+        const op = JSON.parse(item.op);
+        return {
+          id: item.id,
+          tableName: op.tableName || op.table,
+          recordId: op.recordId || op.id,
+          recordData: JSON.stringify(op.data),
+          sourceDeviceId: deviceId,
+          action: op.action,
+          timestamp: item.created_at,
+          version: 1,
+          syncedTo: [],
+          createdAt: item.created_at,
+          updatedAt: item.created_at
+        };
+      });
+      console.log("Recordss stuff", records);
+      const payload = { records };
+      console.log(payload);
+      const response = await net.fetch(PUSH_ENDPOINT, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" }
+      });
+      if (response.ok) {
+        const ids = itemsToSync.map((i) => i.id);
+        this.db.markAsSynced(ids);
+        console.log(`[SyncService] Successfully synced ${ids.length} items.`);
+      } else {
+        const txt = await response.text();
+        console.error(`[SyncService] Sync failed: ${response.status} ${txt}`);
       }
     } catch (e) {
       console.error("[SyncService] Sync process error:", e);
@@ -19327,176 +19681,26 @@ const updateBusinessDetails = async (db, payload) => {
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
-  if (fullOutlet) {
-    db.addToQueue({
-      table: "business_outlet",
-      action: "UPDATE",
-      data: fullOutlet,
-      id: outletId
+  if (localLogoPath) {
+    db.addToImageQueue({
+      localPath: localLogoPath,
+      tableName: "business_outlet",
+      recordId: outletId,
+      columnName: "logoUrl"
     });
+  } else {
+    const fullOutlet = db.getOutlet(outletId);
+    if (fullOutlet) {
+      db.addToQueue({
+        table: "business_outlet",
+        action: SYNC_ACTIONS.UPDATE,
+        data: fullOutlet,
+        id: outletId
+      });
+    }
   }
   return { success: true };
 };
-var rng;
-var hasRequiredRng;
-function requireRng() {
-  if (hasRequiredRng) return rng;
-  hasRequiredRng = 1;
-  var crypto$1 = crypto;
-  rng = function nodeRNG() {
-    return crypto$1.randomBytes(16);
-  };
-  return rng;
-}
-var bytesToUuid_1;
-var hasRequiredBytesToUuid;
-function requireBytesToUuid() {
-  if (hasRequiredBytesToUuid) return bytesToUuid_1;
-  hasRequiredBytesToUuid = 1;
-  var byteToHex = [];
-  for (var i = 0; i < 256; ++i) {
-    byteToHex[i] = (i + 256).toString(16).substr(1);
-  }
-  function bytesToUuid(buf, offset) {
-    var i2 = offset || 0;
-    var bth = byteToHex;
-    return [
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      "-",
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      "-",
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      "-",
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      "-",
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      bth[buf[i2++]],
-      bth[buf[i2++]]
-    ].join("");
-  }
-  bytesToUuid_1 = bytesToUuid;
-  return bytesToUuid_1;
-}
-var v1_1;
-var hasRequiredV1;
-function requireV1() {
-  if (hasRequiredV1) return v1_1;
-  hasRequiredV1 = 1;
-  var rng2 = requireRng();
-  var bytesToUuid = requireBytesToUuid();
-  var _nodeId;
-  var _clockseq;
-  var _lastMSecs = 0;
-  var _lastNSecs = 0;
-  function v1(options, buf, offset) {
-    var i = buf && offset || 0;
-    var b = buf || [];
-    options = options || {};
-    var node2 = options.node || _nodeId;
-    var clockseq = options.clockseq !== void 0 ? options.clockseq : _clockseq;
-    if (node2 == null || clockseq == null) {
-      var seedBytes = rng2();
-      if (node2 == null) {
-        node2 = _nodeId = [
-          seedBytes[0] | 1,
-          seedBytes[1],
-          seedBytes[2],
-          seedBytes[3],
-          seedBytes[4],
-          seedBytes[5]
-        ];
-      }
-      if (clockseq == null) {
-        clockseq = _clockseq = (seedBytes[6] << 8 | seedBytes[7]) & 16383;
-      }
-    }
-    var msecs = options.msecs !== void 0 ? options.msecs : (/* @__PURE__ */ new Date()).getTime();
-    var nsecs = options.nsecs !== void 0 ? options.nsecs : _lastNSecs + 1;
-    var dt = msecs - _lastMSecs + (nsecs - _lastNSecs) / 1e4;
-    if (dt < 0 && options.clockseq === void 0) {
-      clockseq = clockseq + 1 & 16383;
-    }
-    if ((dt < 0 || msecs > _lastMSecs) && options.nsecs === void 0) {
-      nsecs = 0;
-    }
-    if (nsecs >= 1e4) {
-      throw new Error("uuid.v1(): Can't create more than 10M uuids/sec");
-    }
-    _lastMSecs = msecs;
-    _lastNSecs = nsecs;
-    _clockseq = clockseq;
-    msecs += 122192928e5;
-    var tl = ((msecs & 268435455) * 1e4 + nsecs) % 4294967296;
-    b[i++] = tl >>> 24 & 255;
-    b[i++] = tl >>> 16 & 255;
-    b[i++] = tl >>> 8 & 255;
-    b[i++] = tl & 255;
-    var tmh = msecs / 4294967296 * 1e4 & 268435455;
-    b[i++] = tmh >>> 8 & 255;
-    b[i++] = tmh & 255;
-    b[i++] = tmh >>> 24 & 15 | 16;
-    b[i++] = tmh >>> 16 & 255;
-    b[i++] = clockseq >>> 8 | 128;
-    b[i++] = clockseq & 255;
-    for (var n = 0; n < 6; ++n) {
-      b[i + n] = node2[n];
-    }
-    return buf ? buf : bytesToUuid(b);
-  }
-  v1_1 = v1;
-  return v1_1;
-}
-var v4_1;
-var hasRequiredV4;
-function requireV4() {
-  if (hasRequiredV4) return v4_1;
-  hasRequiredV4 = 1;
-  var rng2 = requireRng();
-  var bytesToUuid = requireBytesToUuid();
-  function v4(options, buf, offset) {
-    var i = buf && offset || 0;
-    if (typeof options == "string") {
-      buf = options === "binary" ? new Array(16) : null;
-      options = null;
-    }
-    options = options || {};
-    var rnds = options.random || (options.rng || rng2)();
-    rnds[6] = rnds[6] & 15 | 64;
-    rnds[8] = rnds[8] & 63 | 128;
-    if (buf) {
-      for (var ii = 0; ii < 16; ++ii) {
-        buf[i + ii] = rnds[ii];
-      }
-    }
-    return buf || bytesToUuid(rnds);
-  }
-  v4_1 = v4;
-  return v4_1;
-}
-var uuid_1;
-var hasRequiredUuid;
-function requireUuid() {
-  if (hasRequiredUuid) return uuid_1;
-  hasRequiredUuid = 1;
-  var v1 = requireV1();
-  var v4 = requireV4();
-  var uuid2 = v4;
-  uuid2.v1 = v1;
-  uuid2.v4 = v4;
-  uuid_1 = uuid2;
-  return uuid_1;
-}
-var uuidExports = requireUuid();
 const getTiers = (db, outletId) => {
   const outlet = db.getOutlet(outletId);
   if (!outlet || !outlet.priceTier) return [];
@@ -20041,6 +20245,14 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:deleteOutlet",
     (_event, payload) => deleteOutlet(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:createProduct",
+    (_event, payload) => dbService.createProduct(payload)
+  );
+  ipcMain.handle(
+    "db:bulkCreateProducts",
+    (_event, payload) => dbService.bulkCreateProducts(payload)
   );
   ipcMain.handle(
     "db:query",

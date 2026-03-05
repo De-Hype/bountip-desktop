@@ -19,6 +19,12 @@ import {
   productUpsertSql,
   buildProductUpsertParams,
 } from "../features/schemas/product.schema";
+import {
+  createProductRecord,
+  buildProductSyncOp,
+  ProductCreatePayload,
+} from "../features/product/productPersistence";
+import { v4 as uuidv4 } from "uuid";
 import { LocalUserProfile } from "../types/user.types";
 
 export class DatabaseService {
@@ -77,6 +83,21 @@ export class DatabaseService {
       CREATE TABLE IF NOT EXISTS sync_queue (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         op TEXT,
+        status TEXT DEFAULT 'pending',
+        retry_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_error TEXT
+      );
+    `);
+
+    // Image Upload Queue Table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS image_upload_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        localPath TEXT,
+        tableName TEXT,
+        recordId TEXT,
+        columnName TEXT,
         status TEXT DEFAULT 'pending',
         retry_count INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -299,6 +320,63 @@ export class DatabaseService {
       .run(key, JSON.stringify(value));
   }
 
+  // Image Queue Methods
+  addToImageQueue(item: {
+    localPath: string;
+    tableName: string;
+    recordId: string;
+    columnName: string;
+  }) {
+    this.db
+      .prepare(
+        "INSERT INTO image_upload_queue (localPath, tableName, recordId, columnName, status) VALUES (@localPath, @tableName, @recordId, @columnName, 'pending')",
+      )
+      .run(item);
+  }
+
+  getPendingImageUploads() {
+    return this.db
+      .prepare("SELECT * FROM image_upload_queue WHERE status = 'pending'")
+      .all() as any[];
+  }
+
+  markImageAsUploaded(id: number) {
+    this.db.prepare("DELETE FROM image_upload_queue WHERE id = ?").run(id);
+  }
+
+  failImageUpload(id: number, error: string) {
+    this.db
+      .prepare(
+        "UPDATE image_upload_queue SET status = 'failed', last_error = ? WHERE id = ?",
+      )
+      .run(error, id);
+  }
+
+  updateRecordColumn(
+    tableName: string,
+    recordId: string,
+    columnName: string,
+    value: any,
+  ) {
+    // Basic safety check for table name to prevent arbitrary SQL injection
+    // In a real app, whitelist tables.
+    if (/[^a-zA-Z0-9_]/.test(tableName) || /[^a-zA-Z0-9_]/.test(columnName)) {
+      console.error(
+        `[DatabaseService] Invalid table/column name: ${tableName}.${columnName}`,
+      );
+      return;
+    }
+
+    const now = new Date().toISOString();
+    // Also clear the offline flag if it was an image upload
+    // But we don't know if it's an image upload here generically.
+    // However, for business_outlet logo, we usually set isOfflineImage = 0.
+    // We can do that in SyncService or here if we detect it.
+    // Let's just do the update here.
+    const sql = `UPDATE ${tableName} SET ${columnName} = ?, updatedAt = ? WHERE id = ?`;
+    this.db.prepare(sql).run(value, now, recordId);
+  }
+
   // Queue Methods
   addToQueue(op: any) {
     // Avoid duplicates if op is identical?
@@ -495,5 +573,39 @@ export class DatabaseService {
     });
 
     tx();
+  }
+
+  createProduct(payload: ProductCreatePayload) {
+    const id = payload.id || uuidv4();
+    const now = new Date().toISOString();
+    const row = createProductRecord(this.db, payload, id, now);
+    const syncOp = buildProductSyncOp(row, id, now);
+    this.addToQueue(syncOp);
+    return { id };
+  }
+
+  bulkCreateProducts(payload: {
+    outletId: string;
+    data: ProductCreatePayload[];
+  }) {
+    const { outletId, data } = payload;
+    const now = new Date().toISOString();
+    const createdIds: string[] = [];
+
+    const tx = this.db.transaction(() => {
+      for (const p of data) {
+        const id = p.id || uuidv4();
+        // Ensure outletId is set
+        const productPayload = { ...p, outletId };
+        const row = createProductRecord(this.db, productPayload, id, now);
+        const syncOp = buildProductSyncOp(row, id, now);
+        this.addToQueue(syncOp);
+        createdIds.push(id);
+      }
+    });
+
+    tx();
+
+    return { ids: createdIds, status: "success", count: createdIds.length };
   }
 }

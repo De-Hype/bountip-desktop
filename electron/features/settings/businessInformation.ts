@@ -1,6 +1,7 @@
 import { app } from "electron";
 import path from "path";
 import { DatabaseService } from "../../services/DatabaseService";
+import { SYNC_ACTIONS } from "../../types/action.types";
 
 export const updateBusinessDetails = async (
   db: DatabaseService,
@@ -21,7 +22,7 @@ export const updateBusinessDetails = async (
   },
 ) => {
   const { outletId, data } = payload;
-  console.log(data)
+  console.log(data);
   let isOfflineImage = 0;
   let localLogoPath: string | undefined = undefined;
 
@@ -87,15 +88,28 @@ export const updateBusinessDetails = async (
   );
 
   // 2. Queue Sync
-  const fullOutlet = db.getOutlet(outletId);
-
-  if (fullOutlet) {
-    db.addToQueue({
-      table: "business_outlet",
-      action: "UPDATE",
-      data: fullOutlet,
-      id: outletId,
+  // If we have a local image that needs uploading, queue that first.
+  // The SyncService will handle uploading, updating the record with the remote URL,
+  // and then adding the full record update to the main sync queue.
+  if (localLogoPath) {
+    db.addToImageQueue({
+      localPath: localLogoPath,
+      tableName: "business_outlet",
+      recordId: outletId,
+      columnName: "logoUrl",
     });
+  } else {
+    // No new image to upload, sync immediately.
+    const fullOutlet = db.getOutlet(outletId);
+
+    if (fullOutlet) {
+      db.addToQueue({
+        table: "business_outlet",
+        action: SYNC_ACTIONS.UPDATE,
+        data: fullOutlet,
+        id: outletId,
+      });
+    }
   }
 
   return { success: true };

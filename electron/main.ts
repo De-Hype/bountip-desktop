@@ -233,6 +233,14 @@ app.whenReady().then(() => {
     deleteOutlet(dbService, payload),
   );
 
+  ipcMain.handle("db:createProduct", (_event, payload) =>
+    dbService.createProduct(payload),
+  );
+
+  ipcMain.handle("db:bulkCreateProducts", (_event, payload) =>
+    dbService.bulkCreateProducts(payload),
+  );
+
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>
     dbService.query(sql, params),
   );
