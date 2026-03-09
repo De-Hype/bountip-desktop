@@ -181,7 +181,7 @@ const Dashboard = () => {
     {
       icon: AssetsFiles.phusers,
       title: "Customer Management",
-      path: "/customer-management",
+      path: "/dashboard/customer-management",
       available: true,
     },
 

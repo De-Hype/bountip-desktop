@@ -17,6 +17,7 @@ import TermsPage from "./app/terms-and-conditions/page";
 import ProductManagementPage from "./app/dashboard/product-management/page";
 import RecipeManagementPage from "./app/dashboard/recipe-management/page";
 import InventoryPage from "./app/dashboard/inventory/page";
+import CustomerManagementPage from "./app/dashboard/customer-management/page";
 import DatabaseViewerPage from "./app/dashboard/debug/database/page";
 
 const DashboardLayoutWrapper = () => (
@@ -56,6 +57,10 @@ export default function App() {
               element={<RecipeManagementPage />}
             />
             <Route path="inventory" element={<InventoryPage />} />
+            <Route
+              path="customer-management"
+              element={<CustomerManagementPage />}
+            />
             <Route
               path="product-management"
               element={<ProductManagementPage />}
