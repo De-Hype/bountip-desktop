@@ -16,6 +16,7 @@ import { Input } from "../ui/Input";
 import SettingFiles from "@/assets/icons/settings";
 
 import { getPhoneCountries, PhoneCountry } from "@/utils/getPhoneCountries";
+import { CachedImg } from "@/shared/CachedImg";
 import { useUpdateOutletMutation } from "@/redux/outlets";
 import { useUploadImageMutation } from "@/redux/app";
 import useToastStore from "@/stores/toastStore";
@@ -1426,44 +1427,5 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
         </div>
       </form>
     </Modal>
-  );
-};
-const CachedImg: React.FC<{
-  src: string;
-  alt: string;
-  width?: number;
-  height?: number;
-  className?: string;
-  fill?: boolean;
-  sizes?: string;
-}> = ({ src, alt, width, height, className, fill, sizes }) => {
-  const [resolved, setResolved] = useState<string>(src);
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const w = window as unknown as {
-          electronAPI?: { cacheGet: (key: string) => Promise<any> };
-        };
-        const api = w.electronAPI;
-        if (!api) return;
-        const cached = await api.cacheGet(`image:${src}`);
-        if (active && cached && cached.data) setResolved(String(cached.data));
-      } catch {}
-    })();
-    return () => {
-      active = false;
-    };
-  }, [src]);
-  return (
-    <img
-      src={resolved}
-      alt={alt}
-      width={width}
-      height={height}
-      className={className}
-      {...(fill ? { fill: true } : {})}
-      {...(sizes ? { sizes } : {})}
-    />
   );
 };

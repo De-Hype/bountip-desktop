@@ -3,6 +3,9 @@
 import CustomerManagementAssets from "@/assets/images/customer-management";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CustomerList from "@/features/customer-management/customers/CustomerList";
+import { Plus } from "lucide-react";
+import CreateCustomer from "@/features/customer-management/customers/CreateCustomer";
+import { useState } from "react";
 
 const customerStats = [
   {
@@ -43,11 +46,13 @@ const customerStats = [
 ];
 
 const CustomerManagement = () => {
+  const [isCustomerCreationOpen, setIsCustomerCreationOpen] = useState(false);
+
   return (
     <section className="">
       <div className="w-full">
         <Tabs defaultValue="customers" className="w-auto">
-          <div className="bg-white px-6 py-4">
+          <div className="bg-white px-6 py-4 flex items-center justify-between">
             <TabsList className="w-fit h-14 p-1.5">
               <TabsTrigger
                 className="px-6 py-2 text-base font-medium text-gray-900 cursor-pointer"
@@ -62,6 +67,14 @@ const CustomerManagement = () => {
                 Payment Terms
               </TabsTrigger>
             </TabsList>
+
+            <button
+              onClick={() => setIsCustomerCreationOpen(true)}
+              className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-base font-semibold transition-all duration-200 cursor-pointer bg-[#15BA5C] text-white hover:bg-[#119E4D] active:scale-95 shadow-sm"
+            >
+              <Plus className="size-5" />
+              <span>Create Customer</span>
+            </button>
           </div>
 
           <TabsContent value="customers" className="mt-6">
@@ -138,6 +151,11 @@ const CustomerManagement = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <CreateCustomer
+        isOpen={isCustomerCreationOpen}
+        onClose={() => setIsCustomerCreationOpen(false)}
+      />
     </section>
   );
 };

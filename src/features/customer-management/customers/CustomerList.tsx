@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import useCustomerStore, { Customer } from "@/stores/useCustomerStore";
 import CustomerFilters from "./CustomerFilters";
+import CreateCustomer from "./CreateCustomer";
 import { Pagination } from "@/shared/Pagination/pagination";
 import CustomerManagementAssets from "@/assets/images/customer-management";
 import NotFound from "./NotFound";
@@ -269,6 +270,12 @@ const CustomerList = () => {
       <CustomerFilters
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
+      />
+
+      {/* Create Customer Modal */}
+      <CreateCustomer
+        isOpen={isCustomerCreationOpen}
+        onClose={() => setIsCustomerCreationOpen(false)}
       />
     </div>
   );
