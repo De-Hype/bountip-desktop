@@ -94,6 +94,7 @@
       "dist-electron/**",
       "package.json"
     ],
+    "npmRebuild": true,
     "asar": true,
     "asarUnpack": [
       "**/*.node"
