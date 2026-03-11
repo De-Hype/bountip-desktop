@@ -1,7 +1,7 @@
 import { DatabaseService } from "./DatabaseService";
 import { NetworkService } from "./NetworkService";
 import { P2PService } from "./P2PService";
-import { net } from "electron";
+import { net, app } from "electron";
 import fs from "fs";
 import path from "path";
 import { SYNC_ACTIONS } from "../types/action.types";
@@ -188,6 +188,9 @@ export class SyncService {
 
       const response = await net.fetch(url.toString(), {
         method: "GET",
+        headers: {
+          "x-app-version": app.getVersion(),
+        },
       });
 
       if (!response.ok) {
@@ -379,7 +382,10 @@ export class SyncService {
       const response = await net.fetch(PUSH_ENDPOINT, {
         method: "POST",
         body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-app-version": app.getVersion(),
+        },
       });
 
       if (response.ok) {
