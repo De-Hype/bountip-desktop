@@ -383,9 +383,9 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         api.saveUser(user);
       }
 
-      try {
-        await businessService.loadAllOutlet();
-      } catch {}
+      // try {
+      //   await businessService.loadAllOutlet();
+      // } catch {}
 
       // Check if there is a 'from' path in location state
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

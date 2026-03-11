@@ -182,22 +182,23 @@ const Dashboard = () => {
       icon: AssetsFiles.phusers,
       title: "Customer Management",
       path: "/dashboard/customer-management",
-      available: true,
+      badge: "Coming Soon",
+      available: false,
     },
 
     {
       icon: AssetsFiles.noodlebowl,
       title: "Recipe Management",
       path: "/dashboard/recipe-management",
-      // badge: "Coming Soon",
-      available: true,
+      badge: "Coming Soon",
+      available: false,
     },
     {
       icon: AssetsFiles.inventory,
       title: "Inventory",
       path: "/dashboard/inventory",
-      // badge: "Coming Soon",
-      available: true,
+      badge: "Coming Soon",
+      available: false,
     },
 
     {
@@ -211,8 +212,8 @@ const Dashboard = () => {
       icon: AssetsFiles.phusers,
       title: "Roles & Permissions",
       path: "/dashboard/roles-permissions",
-      // badge: "Coming Soon",
-      available: true,
+      badge: "Coming Soon",
+      available: false,
     },
     {
       icon: AssetsFiles.settings,

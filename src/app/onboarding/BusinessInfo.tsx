@@ -186,84 +186,30 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
       const needsOutletOnboarding =
         outlet && !outlet.isOnboarded && outletIdParam;
 
-      // Offline Handling
-      if (!isOnline) {
-        // If we have an outlet to onboard, we must do so locally
-        if (needsOutletOnboarding && outletIdParam && api) {
-          const isOfflineImage =
-            logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
-              ? 1
-              : 0;
-          const localLogoPath =
-            logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
-              ? logoUrl
-              : null;
+      // If we have an outlet to onboard, we must do so locally.
+      if (needsOutletOnboarding && outletIdParam && api) {
+        const isOfflineImage =
+          logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
+            ? 1
+            : 0;
+        const localLogoPath =
+          logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
+            ? logoUrl
+            : null;
 
-          await api.saveOutletOnboarding({
-            outletId: outletIdParam,
-            data: {
-              country: payload.country,
-              address: payload.address,
-              businessType: payload.businessType,
-              currency: payload.currency,
-              revenueRange: payload.revenueRange,
-              logoUrl: payload.logoUrl,
-              isOfflineImage,
-              localLogoPath: localLogoPath || undefined,
-            },
-          });
-          updateOutletLocal(outletIdParam, {
+        await api.saveOutletOnboarding({
+          outletId: outletIdParam,
+          data: {
             country: payload.country,
             address: payload.address,
             businessType: payload.businessType,
             currency: payload.currency,
             revenueRange: payload.revenueRange,
             logoUrl: payload.logoUrl,
-            isOnboarded: true,
             isOfflineImage,
             localLogoPath: localLogoPath || undefined,
-          });
-          showToast(
-            "success",
-            "Setup complete (Offline)",
-            "Business details saved locally.",
-          );
-          onNext();
-          return;
-        } else if (needsOutletOnboarding && !outletIdParam) {
-          showToast(
-            "error",
-            "Offline",
-            "Cannot save business details offline without an outlet.",
-          );
-          setIsSubmitting(false);
-          return;
-        } else {
-          // If there is NO outlet to onboard (just business details update?), allow it or handle differently.
-          // Assuming if we are here, we might just be updating business info locally if supported.
-          // For now, let's treat it as success if we aren't required to onboard an outlet.
-          showToast(
-            "success",
-            "Setup complete (Offline)",
-            "Business details saved locally.",
-          );
-          onNext();
-          return;
-        }
-      }
-
-      if (needsOutletOnboarding && outletIdParam && api) {
-        // await api.saveOutletOnboarding({
-        //   outletId: outletIdParam,
-        //   data: {
-        //     country: payload.country,
-        //     address: payload.address,
-        //     businessType: payload.businessType,
-        //     currency: payload.currency,
-        //     revenueRange: payload.revenueRange,
-        //     logoUrl: payload.logoUrl,
-        //   },
-        // });
+          },
+        });
         updateOutletLocal(outletIdParam, {
           country: payload.country,
           address: payload.address,
@@ -272,19 +218,26 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
           revenueRange: payload.revenueRange,
           logoUrl: payload.logoUrl,
           isOnboarded: true,
+          isOfflineImage,
+          localLogoPath: localLogoPath || undefined,
         });
-      }
-
-      if (!isOnline && needsOutletOnboarding && outletIdParam) {
-        // When you are ready to sync outlet onboarding to the server,
-        // enqueue the server operation here (e.g. via queueAdd or a dedicated IPC).
-
         showToast(
           "success",
-          "Setup complete",
+          "Setup complete (Offline)",
           "Business details saved locally.",
         );
         onNext();
+        return;
+      }
+
+      // For general business onboarding, require an internet connection.
+      if (!isOnline) {
+        showToast(
+          "error",
+          "Offline",
+          "An internet connection is required to set up your business.",
+        );
+        setIsSubmitting(false);
         return;
       }
 

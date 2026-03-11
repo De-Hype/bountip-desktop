@@ -1,11 +1,9 @@
 import AppHeader from "@/shared/Header/AppHeader";
-import React from "react";
+import React, { useEffect } from "react";
+import { useBusinessStore } from "@/stores/useBusinessStore";
+import { useNavigate, useLocation } from "react-router-dom";
 
-const DashboardLayout = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <AppHeader />

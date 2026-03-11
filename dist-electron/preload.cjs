@@ -68,11 +68,11 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   cacheGet: async (key) => electron.ipcRenderer.invoke("cache:get", key),
   cachePut: async (key, value) => electron.ipcRenderer.invoke("cache:put", key, value),
   queueAdd: async (op) => electron.ipcRenderer.invoke("queue:add", op),
+  triggerSync: async () => electron.ipcRenderer.invoke("sync:trigger"),
   queueList: async () => electron.ipcRenderer.invoke("queue:list"),
   queueClear: async () => electron.ipcRenderer.invoke("queue:clear"),
   queueSet: async (list) => electron.ipcRenderer.invoke("queue:set", list),
   getPeers: async () => electron.ipcRenderer.invoke("p2p:getPeers"),
-  syncTrigger: () => electron.ipcRenderer.send("sync:trigger"),
   onPeers: (cb) => {
     const handler = (_e, list) => cb(list);
     electron.ipcRenderer.on("p2p:peers", handler);

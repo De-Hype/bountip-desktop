@@ -658,16 +658,13 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
             name: res.outlet.name,
             address: res.outlet.address,
             phoneNumber: res.outlet.phoneNumber,
-            businessId: businessId,
-            email: "",
             isMainLocation: res.outlet.isMainLocation === 1,
+            businessId: businessId,
+            isOnboarded: 0,
             isActive: 1,
-            isOnboarded: true,
             isDeleted: 0,
             createdAt: res.outlet.createdAt,
             updatedAt: res.outlet.updatedAt,
-            country: "Nigeria",
-            currency: "NGN",
           });
         }
       }

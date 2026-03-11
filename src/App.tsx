@@ -1,5 +1,14 @@
-import { HashRouter, Routes, Route, Outlet } from "react-router-dom";
+import {
+  HashRouter,
+  Routes,
+  Route,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Providers } from "./app/providers";
+import { useBusinessStore } from "./stores/useBusinessStore";
+import { useEffect } from "react";
 
 import HomePage from "./app/page";
 import AuthPage from "./app/(auth)/auth/page";
@@ -20,6 +29,30 @@ import InventoryPage from "./app/dashboard/inventory/page";
 import CustomerManagementPage from "./app/dashboard/customer-management/page";
 import DatabaseViewerPage from "./app/dashboard/debug/database/page";
 
+/**
+ * Global guard to ensure users are redirected to onboarding
+ * as soon as an un-onboarded outlet is selected.
+ */
+const OnboardingGuard = ({ children }: { children: React.ReactNode }) => {
+  const { selectedOutlet, hasInitialized } = useBusinessStore();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!hasInitialized || !selectedOutlet) return;
+
+    const isUnonboarded = !selectedOutlet.isOnboarded;
+    const isDashboardPath = location.pathname.startsWith("/dashboard");
+    const isOnboardingPath = location.pathname.startsWith("/onboarding");
+
+    if (isUnonboarded && isDashboardPath && !isOnboardingPath) {
+      navigate(`/onboarding?outletId=${selectedOutlet.id}`, { replace: true });
+    }
+  }, [selectedOutlet, hasInitialized, location.pathname, navigate]);
+
+  return <>{children}</>;
+};
+
 const DashboardLayoutWrapper = () => (
   <DashboardLayout>
     <Outlet />
@@ -30,48 +63,46 @@ export default function App() {
   return (
     <HashRouter>
       <Providers>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/verify" element={<VerifyPage />} />
+        <OnboardingGuard>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/verify" element={<VerifyPage />} />
 
-          <Route path="/dashboard" element={<DashboardLayoutWrapper />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            {/* <Route
-              path="settings/customer"
-              element={<CustomerSettingsPage />}
-            /> */}
-            <Route
-              path="settings/customization"
-              element={<CustomizationSettingsPage />}
-            />
-            <Route path="report-analysis" element={<ReportAnalysisPage />} />
-            <Route
-              path="roles-permissions"
-              element={<RolesAndPermissionPage />}
-            />
-            <Route
-              path="recipe-management"
-              element={<RecipeManagementPage />}
-            />
-            <Route path="inventory" element={<InventoryPage />} />
-            <Route
-              path="customer-management"
-              element={<CustomerManagementPage />}
-            />
-            <Route
-              path="product-management"
-              element={<ProductManagementPage />}
-            />
-            <Route path="debug/database" element={<DatabaseViewerPage />} />
-          </Route>
+            <Route path="/dashboard" element={<DashboardLayoutWrapper />}>
+              <Route index element={<DashboardPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route
+                path="settings/customization"
+                element={<CustomizationSettingsPage />}
+              />
+              <Route path="report-analysis" element={<ReportAnalysisPage />} />
+              <Route
+                path="roles-permissions"
+                element={<RolesAndPermissionPage />}
+              />
+              <Route
+                path="recipe-management"
+                element={<RecipeManagementPage />}
+              />
+              <Route path="inventory" element={<InventoryPage />} />
+              <Route
+                path="customer-management"
+                element={<CustomerManagementPage />}
+              />
+              <Route
+                path="product-management"
+                element={<ProductManagementPage />}
+              />
+              <Route path="debug/database" element={<DatabaseViewerPage />} />
+            </Route>
 
-          <Route path="/onboarding" element={<OnboardingPage />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-          <Route path="/terms-and-conditions" element={<TermsPage />} />
-        </Routes>
+            <Route path="/onboarding" element={<OnboardingPage />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms-and-conditions" element={<TermsPage />} />
+          </Routes>
+        </OnboardingGuard>
       </Providers>
     </HashRouter>
   );

@@ -33,6 +33,7 @@ const UserProfile = ({
   const {
     outlets,
     isLoading,
+    hasInitialized,
     selectedOutlet,
     selectOutlet,
     fetchBusinessData,
@@ -136,16 +137,13 @@ const UserProfile = ({
   }, [activeOutletId]);
 
   const handleOutletSelect = (outlet: OutletView) => {
-    const needsOnboarding = !outlet.isOnboarded;
-    const isCustomizationRoute =
-      pathname?.startsWith("/dashboard/settings/customization") ?? false;
-
     setActiveOutletId(outlet.id);
     selectOutlet(outlet.id);
     setOpen(false);
+    console.log(outlet.isOnboarded);
 
-    // Only force onboarding flow when we're not already on the customization page
-    if (needsOnboarding && !isCustomizationRoute) {
+    // If the selected outlet is not onboarded, navigate to onboarding immediately
+    if (outlet.isOnboarded == 0) {
       navigate(`/onboarding?outletId=${outlet.id}`);
     }
   };
@@ -230,7 +228,7 @@ const UserProfile = ({
         <div className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg ring-1 ring-gray-200 z-50 overflow-hidden">
           {/* Outlets Section */}
           <div className="py-2 max-h-[250px] overflow-y-auto border-b border-gray-100">
-            {isLoading ? (
+            {isLoading || !hasInitialized ? (
               <div className="flex items-center justify-center py-4 text-gray-500 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                 <span className="ml-2">Loading outlets...</span>

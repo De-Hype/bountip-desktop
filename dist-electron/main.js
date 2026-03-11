@@ -20262,7 +20262,7 @@ app.whenReady().then(() => {
     "assets:import",
     (_event, filePath) => assetService.importLocalAsset(filePath)
   );
-  ipcMain.on("sync:trigger", () => syncService.triggerSync());
+  ipcMain.handle("sync:trigger", () => syncService.triggerSync());
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
   ipcMain.handle("queue:list", () => dbService.getQueue());
   ipcMain.handle("queue:clear", () => dbService.clearQueue());

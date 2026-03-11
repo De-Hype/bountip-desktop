@@ -28,15 +28,19 @@ import {
   useNetworkStore,
 } from "@/stores/useNetworkStore";
 
+import { useBusinessStore } from "@/stores/useBusinessStore";
+
 const PUBLIC_PATHS = ["/auth", "/reset-password", "/verify"];
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, setAuth, clearAuth } = useAuthStore();
+  const { fetchBusinessData } = useBusinessStore();
   const toast = useToastStore();
 
   const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [isInitialSyncing, setIsInitialSyncing] = useState(false);
   const { isOnline } = useNetworkStore();
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -95,6 +99,41 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   /**
    * ------------------------------------------------------
+   * STEP 2.5 — BUSINESS DATA FETCH + INITIAL SYNC
+   * ------------------------------------------------------
+   */
+  useEffect(() => {
+    if (isAuthenticated) {
+      (async () => {
+        // First load from local DB
+        await fetchBusinessData();
+
+        const api = (window as any).electronAPI;
+        if (!api) return;
+
+        // If no outlets found and we are online, perform initial full pull
+        const { outlets } = useBusinessStore.getState();
+        if (outlets.length === 0 && isOnline) {
+          try {
+            console.log(
+              "[Providers] No outlets found. Starting initial sync...",
+            );
+            setIsInitialSyncing(true);
+            await api.triggerSync();
+            // Fetch again after sync
+            await fetchBusinessData();
+          } catch (error) {
+            console.error("[Providers] Initial sync failed:", error);
+          } finally {
+            setIsInitialSyncing(false);
+          }
+        }
+      })();
+    }
+  }, [isAuthenticated, fetchBusinessData, isOnline]);
+
+  /**
+   * ------------------------------------------------------
    * STEP 3 — OFFLINE SYNC + P2P (UNCHANGED LOGIC)
    * ------------------------------------------------------
    */
@@ -110,9 +149,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       setIsSyncing(true);
 
       try {
-        await businessService.loadBusiness();
-        await businessService.loadAllOutlet();
-
         const queue = (await api.queueList()) || [];
         const failed: any[] = [];
 
@@ -178,14 +214,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
    * SPLASH SCREEN (NEVER RETURN NULL)
    * ------------------------------------------------------
    */
-  if (isBootstrapping) {
+  if (isBootstrapping || isInitialSyncing) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <img
           src={AssetsFiles.LogoTwo}
           alt="Bountip"
           className="w-36 animate-pulse"
         />
+        {isInitialSyncing && (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <p className="text-gray-600 font-medium animate-pulse">
+              Preparing your workspace...
+            </p>
+            <p className="text-gray-400 text-sm">
+              This will only take a moment
+            </p>
+          </div>
+        )}
       </div>
     );
   }

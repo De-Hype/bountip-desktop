@@ -98,11 +98,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cachePut: async (key: string, value: any) =>
     ipcRenderer.invoke("cache:put", key, value),
   queueAdd: async (op: any) => ipcRenderer.invoke("queue:add", op),
+  triggerSync: async () => ipcRenderer.invoke("sync:trigger"),
   queueList: async () => ipcRenderer.invoke("queue:list"),
   queueClear: async () => ipcRenderer.invoke("queue:clear"),
   queueSet: async (list: any[]) => ipcRenderer.invoke("queue:set", list),
   getPeers: async () => ipcRenderer.invoke("p2p:getPeers"),
-  syncTrigger: () => ipcRenderer.send("sync:trigger"),
   onPeers: (cb: (list: any[]) => void) => {
     const handler = (_e: any, list: any[]) => cb(list);
     ipcRenderer.on("p2p:peers", handler);

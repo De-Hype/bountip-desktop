@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { create } from "zustand";
-import businessService, { Outlet } from "@/services/businessService";
+import { Outlet } from "@/services/businessService";
 import type { Business } from "@/types/business";
-import httpService from "@/services/httpService";
 import { useNetworkStore } from "./useNetworkStore";
 
 type ElectronAPI = {
@@ -24,6 +23,7 @@ type BusinessState = {
   selectedOutletId: string | null;
   selectedOutlet: Outlet | null;
   isLoading: boolean;
+  hasInitialized: boolean;
   error: string | null;
   systemDefaults?: {
     allergens?: any;
@@ -45,6 +45,7 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   selectedOutletId: null,
   selectedOutlet: null,
   isLoading: false,
+  hasInitialized: false,
   error: null,
   addOutletLocal: (outlet) => {
     const api = getElectronAPI();
@@ -92,204 +93,68 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   fetchBusinessData: async () => {
     set({ isLoading: true, error: null });
     const api = getElectronAPI();
-    let dbOutlets: any[] = [];
 
-    if (api) {
-      try {
-        let cachedOutlets = await api.cacheGet("business:outlets");
-
-        // Try to get from SQLite
-        if (api.getOutlets) {
-          try {
-            const sqliteOutlets = await api.getOutlets();
-            if (Array.isArray(sqliteOutlets) && sqliteOutlets.length > 0) {
-              cachedOutlets = sqliteOutlets;
-              dbOutlets = sqliteOutlets;
-            }
-          } catch {}
-        }
-
-        const cachedBusiness = await api.cacheGet("business:primary");
-        const cachedSelectedId = await api.cacheGet(
-          "business:selectedOutletId",
-        );
-        if (cachedOutlets || cachedBusiness) {
-          set({
-            outlets: Array.isArray(cachedOutlets) ? cachedOutlets : [],
-            primaryBusiness: (cachedBusiness as Business) ?? null,
-            selectedOutletId:
-              (typeof cachedSelectedId === "string" && cachedSelectedId) ||
-              null,
-          });
-        }
-      } catch {}
+    if (!api) {
+      set({ isLoading: false });
+      return;
     }
-    // If offline, avoid any network calls and serve from cache only
+
     try {
-      const { isOnline } = useNetworkStore();
-      if (api && !isOnline) {
-        // If we have DB data, use it as the source of truth
-        if (dbOutlets.length > 0) {
-          const mergedMap = new Map<string, Outlet>();
-          // Start with what we have in state or empty
-          const currentOutlets = get().outlets || [];
-          currentOutlets.forEach((o) => mergedMap.set(o.id, o));
-
-          // Overlay DB data
-          dbOutlets.forEach((dbo) => {
-            const existing = mergedMap.get(dbo.id);
-            if (existing) {
-              mergedMap.set(dbo.id, { ...existing, ...dbo });
-            } else {
-              mergedMap.set(dbo.id, dbo);
-            }
-          });
-
-          set({
-            outlets: Array.from(mergedMap.values()),
-            isLoading: false,
-          });
-        }
-
-        const outletId = get().selectedOutletId || get().outlets?.[0]?.id;
-        if (outletId) {
-          const api2 = getElectronAPI();
-          if (api2) {
-            try {
-              const [
-                allergens,
-                preparationArea,
-                packagingMethod,
-                category,
-                weightScale,
-              ] = await Promise.all([
-                api2
-                  .cacheGet(`defaults:${outletId}:allergens`)
-                  .catch(() => null),
-                api2
-                  .cacheGet(`defaults:${outletId}:preparation-area`)
-                  .catch(() => null),
-                api2
-                  .cacheGet(`defaults:${outletId}:packaging-method`)
-                  .catch(() => null),
-                api2
-                  .cacheGet(`defaults:${outletId}:category`)
-                  .catch(() => null),
-                api2
-                  .cacheGet(`defaults:${outletId}:weight-scale`)
-                  .catch(() => null),
-              ]);
-              const toVal = (v: any) => (v && v.data ? v : v);
-              set({
-                systemDefaults: {
-                  allergens: toVal(allergens),
-                  preparationArea: toVal(preparationArea),
-                  packagingMethod: toVal(packagingMethod),
-                  category: toVal(category),
-                  weightScale: toVal(weightScale),
-                },
-                isLoading: false,
-              });
-            } catch {
-              set({ isLoading: false });
-            }
-          } else {
-            set({ isLoading: false });
+      // 1. Fetch outlets from SQLite or Cache
+      let outlets: Outlet[] = [];
+      if (api.getOutlets) {
+        try {
+          const sqliteOutlets = await api.getOutlets();
+          if (Array.isArray(sqliteOutlets) && sqliteOutlets.length > 0) {
+            outlets = sqliteOutlets;
           }
-        } else {
-          set({ isLoading: false });
+        } catch (err) {
+          console.error("Failed to fetch outlets from SQLite:", err);
         }
-        return;
       }
-    } catch {}
-    try {
-      const [outletsRes, businessRes] = await Promise.all([
-        businessService.loadAllOutlet(),
-        businessService.loadBusiness(),
+
+      if (outlets.length === 0) {
+        try {
+          const cachedOutlets = await api.cacheGet("business:outlets");
+          if (Array.isArray(cachedOutlets)) {
+            outlets = cachedOutlets;
+          }
+        } catch {}
+      }
+
+      // 2. Fetch primary business and selected ID from cache
+      const [cachedBusiness, cachedSelectedId] = await Promise.all([
+        api.cacheGet("business:primary").catch(() => null),
+        api.cacheGet("business:selectedOutletId").catch(() => null),
       ]);
 
-      let outlets = Array.isArray(outletsRes?.data)
-        ? (outletsRes.data as Outlet[])
-        : [];
-      const business = (businessRes?.data ?? null) as Business | null;
-
-      // Merge any locally cached outlet updates (offline mutations) by outlet id
-      if (api) {
-        try {
-          // 1. Map API outlets
-          const mergedMap = new Map<string, Outlet>();
-          outlets.forEach((o) => mergedMap.set(o.id, o));
-
-          // 2. Overlay SQLite data (dbOutlets)
-          if (dbOutlets && dbOutlets.length > 0) {
-            dbOutlets.forEach((dbo) => {
-              const existing = mergedMap.get(dbo.id);
-              if (existing) {
-                mergedMap.set(dbo.id, { ...existing, ...dbo });
-              } else {
-                mergedMap.set(dbo.id, dbo);
-              }
-            });
-          }
-
-          // 3. Apply legacy cache updates
-          const allOutlets = Array.from(mergedMap.values());
-          const finalOutlets = await Promise.all(
-            allOutlets.map(async (o) => {
-              try {
-                const cached = await api.cacheGet(`outlet:${o.id}`);
-                if (cached && cached.data) {
-                  const cd = cached.data as Partial<Outlet>;
-                  return { ...o, ...cd } as Outlet;
-                }
-              } catch {}
-              return o;
-            }),
-          );
-          outlets = finalOutlets;
-        } catch {}
-      }
-
+      const primaryBusiness = (cachedBusiness as Business) ?? null;
       const currentSelectedId = get().selectedOutletId;
-      let cachedSelectedId: string | null = null;
-      if (api) {
-        try {
-          const v = await api.cacheGet("business:selectedOutletId");
-          cachedSelectedId = typeof v === "string" ? v : null;
-        } catch {}
-      }
+
       const nextSelectedId =
-        (cachedSelectedId && outlets.some((o) => o.id === cachedSelectedId)
+        (typeof cachedSelectedId === "string" &&
+        outlets.some((o) => o.id === cachedSelectedId)
           ? cachedSelectedId
           : null) ??
         (currentSelectedId && outlets.some((o) => o.id === currentSelectedId)
           ? currentSelectedId
           : (outlets[0]?.id ?? null));
+
       const nextSelected = nextSelectedId
         ? (outlets.find((o) => o.id === nextSelectedId) ?? null)
         : null;
 
+      // 3. Update state with basic business data
       set({
         outlets,
-        primaryBusiness: business,
+        primaryBusiness,
         selectedOutletId: nextSelectedId,
         selectedOutlet: nextSelected,
-        isLoading: false,
+        hasInitialized: true,
       });
-      if (api) {
-        try {
-          await api.cachePut("business:outlets", outlets);
-          await api.cachePut("business:primary", business);
-          if (nextSelectedId)
-            await api.cachePut("business:selectedOutletId", nextSelectedId);
-          if (nextSelected)
-            await api.cachePut("business:selectedOutlet", nextSelected);
-        } catch {}
-      }
 
-      const outletId = get().selectedOutletId || outlets?.[0]?.id;
-      if (outletId) {
-        // Try network GETs first, then fall back to cache
+      // 4. Fetch system defaults for the selected outlet from cache
+      if (nextSelectedId) {
         try {
           const [
             allergens,
@@ -298,98 +163,50 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
             category,
             weightScale,
           ] = await Promise.all([
-            httpService.get<any>(`/${outletId}/defaults/allergens`, true),
-            httpService.get<any>(
-              `/${outletId}/defaults/preparation-area`,
-              true,
-            ),
-            httpService.get<any>(
-              `/${outletId}/defaults/packaging-method`,
-              true,
-            ),
-            httpService.get<any>(`/${outletId}/defaults/category`, true),
-            httpService.get<any>(`/${outletId}/defaults/weight-scale`, true),
+            api
+              .cacheGet(`defaults:${nextSelectedId}:allergens`)
+              .catch(() => null),
+            api
+              .cacheGet(`defaults:${nextSelectedId}:preparation-area`)
+              .catch(() => null),
+            api
+              .cacheGet(`defaults:${nextSelectedId}:packaging-method`)
+              .catch(() => null),
+            api
+              .cacheGet(`defaults:${nextSelectedId}:category`)
+              .catch(() => null),
+            api
+              .cacheGet(`defaults:${nextSelectedId}:weight-scale`)
+              .catch(() => null),
           ]);
 
+          const toVal = (v: any) => (v && v.data ? v : v);
           set({
             systemDefaults: {
-              allergens,
-              preparationArea,
-              packagingMethod,
-              category,
-              weightScale,
+              allergens: toVal(allergens),
+              preparationArea: toVal(preparationArea),
+              packagingMethod: toVal(packagingMethod),
+              category: toVal(category),
+              weightScale: toVal(weightScale),
             },
           });
-
-          const api2 = getElectronAPI();
-          if (api2) {
-            try {
-              await api2.cachePut(`defaults:${outletId}:allergens`, allergens);
-              await api2.cachePut(
-                `defaults:${outletId}:preparation-area`,
-                preparationArea,
-              );
-              await api2.cachePut(
-                `defaults:${outletId}:packaging-method`,
-                packagingMethod,
-              );
-              await api2.cachePut(`defaults:${outletId}:category`, category);
-              await api2.cachePut(
-                `defaults:${outletId}:weight-scale`,
-                weightScale,
-              );
-            } catch {}
-          }
-        } catch {
-          const api2 = getElectronAPI();
-          if (api2) {
-            try {
-              const [
-                allergens,
-                preparationArea,
-                packagingMethod,
-                category,
-                weightScale,
-              ] = await Promise.all([
-                api2
-                  .cacheGet(`defaults:${outletId}:allergens`)
-                  .catch(() => null),
-                api2
-                  .cacheGet(`defaults:${outletId}:preparation-area`)
-                  .catch(() => null),
-                api2
-                  .cacheGet(`defaults:${outletId}:packaging-method`)
-                  .catch(() => null),
-                api2
-                  .cacheGet(`defaults:${outletId}:category`)
-                  .catch(() => null),
-                api2
-                  .cacheGet(`defaults:${outletId}:weight-scale`)
-                  .catch(() => null),
-              ]);
-              const toVal = (v: any) => (v && v.data ? v : v);
-              set({
-                systemDefaults: {
-                  allergens: toVal(allergens),
-                  preparationArea: toVal(preparationArea),
-                  packagingMethod: toVal(packagingMethod),
-                  category: toVal(category),
-                  weightScale: toVal(weightScale),
-                },
-              });
-            } catch {}
-          }
+        } catch (err) {
+          console.error("Failed to fetch system defaults from cache:", err);
         }
       }
+
+      set({ isLoading: false });
     } catch (e: any) {
-      const message = e?.message || "Failed to load business data";
+      const message = e?.message || "Failed to load local business data";
       set({ error: message, isLoading: false });
     }
   },
   selectOutlet: (id: string) => {
     const outlets = get().outlets;
     const found = outlets.find((o) => o.id === id) ?? null;
+
     set({ selectedOutletId: id, selectedOutlet: found });
+
     const api = getElectronAPI();
     if (api) {
       (async () => {

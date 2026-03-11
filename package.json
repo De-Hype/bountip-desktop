@@ -13,7 +13,8 @@
     "dist:win": "npm run build && electron-builder --win",
     "dist:all": "npm run build && electron-builder -mwl",
     "postinstall": "electron-builder install-app-deps",
-    "rebuild": "electron-rebuild -f"
+    "rebuild": "electron-rebuild -f",
+    "clear-db": "rm -rf ~/Library/Application\\ Support/bountip-desktop/bountip.db*"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
