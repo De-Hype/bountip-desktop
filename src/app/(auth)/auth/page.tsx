@@ -2,11 +2,21 @@
 import { useState, Suspense } from "react";
 import AssetsFiles from "@/assets";
 import AuthForm from "../Form/AuthForm";
+import { performLogout } from "@/services/authSession";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/stores/authStore";
 
 const AuthPageContent = () => {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
 
   const handleModeChange = (newMode: "signin" | "signup") => {
+    if (newMode === "signup" && isAuthenticated) {
+      // If a user is already logged in and tries to sign up, log them out first
+      // to clear stale session state/cookies.
+      performLogout(navigate);
+    }
     setMode(newMode);
   };
 
