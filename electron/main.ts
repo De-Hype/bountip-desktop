@@ -179,6 +179,7 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
+  ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>
     updateBusinessDetails(dbService, payload),
   );
@@ -259,6 +260,7 @@ app.whenReady().then(() => {
     assetService.importLocalAsset(filePath),
   );
 
+  ipcMain.handle("sync:flush", () => syncService.flushQueue());
   ipcMain.handle("sync:trigger", () => syncService.triggerSync());
 
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));

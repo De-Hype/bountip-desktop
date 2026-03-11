@@ -608,4 +608,39 @@ export class DatabaseService {
 
     return { ids: createdIds, status: "success", count: createdIds.length };
   }
+
+  /**
+   * Wipes all user-specific data from the local database.
+   * This is used when a new user logs in to prevent cross-user data leakage.
+   */
+  wipeUserData() {
+    console.log("[DatabaseService] Wiping user data for fresh login...");
+    const tx = this.db.transaction(() => {
+      // 1. Clear core entity tables
+      for (const schema of schemas) {
+        this.db.prepare(`DELETE FROM ${schema.name}`).run();
+      }
+
+      // 2. Clear sync and image queues
+      this.db.prepare("DELETE FROM sync_queue").run();
+      this.db.prepare("DELETE FROM image_upload_queue").run();
+
+      // 3. Clear cache and identity (except for device-specific stuff if needed)
+      // We keep deviceId if it exists in identity, but wipe user-specific keys
+      this.db
+        .prepare(
+          "DELETE FROM identity WHERE key NOT IN ('device_id', 'pin_hash', 'login_hash')",
+        )
+        .run();
+      this.db.prepare("DELETE FROM cache").run();
+    });
+
+    try {
+      tx();
+      return true;
+    } catch (error) {
+      console.error("[DatabaseService] Failed to wipe user data:", error);
+      return false;
+    }
+  }
 }

@@ -99,6 +99,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("cache:put", key, value),
   queueAdd: async (op: any) => ipcRenderer.invoke("queue:add", op),
   triggerSync: async () => ipcRenderer.invoke("sync:trigger"),
+  flushSync: async () => ipcRenderer.invoke("sync:flush"),
+  wipeData: async () => ipcRenderer.invoke("db:wipeData"),
   queueList: async () => ipcRenderer.invoke("queue:list"),
   queueClear: async () => ipcRenderer.invoke("queue:clear"),
   queueSet: async (list: any[]) => ipcRenderer.invoke("queue:set", list),

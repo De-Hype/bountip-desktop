@@ -157,17 +157,22 @@ export class AssetService {
         const response = await net.fetch(request, {
           bypassCustomProtocolHandlers: true,
         });
+
         if (response.ok) {
-          // Clone the response to cache it?
-          // net.fetch response body can be read once.
           const buffer = await response.arrayBuffer();
-          fs.writeFileSync(filePath, Buffer.from(buffer));
-          return new Response(buffer, {
-            headers: response.headers,
-            status: response.status,
-            statusText: response.statusText,
-          });
+          // Ensure we only write if we actually have data
+          if (buffer && buffer.byteLength > 0) {
+            fs.writeFileSync(filePath, Buffer.from(buffer));
+            return new Response(buffer, {
+              headers: response.headers,
+              status: response.status,
+              statusText: response.statusText,
+            });
+          }
         }
+
+        // If the response wasn't ok or was empty, return it as is
+        return response;
       } catch (e) {
         console.log(`[AssetService] Fetch failed, trying P2P: ${url}`);
       }

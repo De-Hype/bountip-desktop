@@ -90,7 +90,7 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
         "Please verify your email to continue.",
       );
 
-      navigate("/verify/");
+      navigate("/verify");
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "Unable to sign up.";

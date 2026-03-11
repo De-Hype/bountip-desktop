@@ -16,7 +16,7 @@ const VerifyPage = () => {
   const { showToast } = useToastStore();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [otp, setOtp] = useState<string[]>(
-    Array.from({ length: OTP_LENGTH }, () => "")
+    Array.from({ length: OTP_LENGTH }, () => ""),
   );
 
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
@@ -27,11 +27,14 @@ const VerifyPage = () => {
   const [searchParams] = useSearchParams();
   const [regContext] = useState(() => {
     const cookie = getCookie<{ email?: string; name?: string }>(
-      COOKIE_NAMES.REG_USER_EMAIL
+      COOKIE_NAMES.REG_USER_EMAIL,
     );
+    const searchEmail = searchParams.get("email") ?? cookie?.email ?? "";
     return {
       name: (searchParams.get("name") ?? cookie?.name ?? "") as string,
-      email: (searchParams.get("email") ?? cookie?.email ?? "") as string,
+      email: (typeof searchEmail === "string"
+        ? searchEmail.replace(/\/$/, "")
+        : "") as string,
     };
   });
   const name = regContext.name;
@@ -46,7 +49,7 @@ const VerifyPage = () => {
         showToast(
           "error",
           "Session expired",
-          "Please sign up again to receive a verification email."
+          "Please sign up again to receive a verification email.",
         );
         hasShownToast.current = true;
       }
@@ -99,7 +102,7 @@ const VerifyPage = () => {
 
   const handleKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement>,
-    index: number
+    index: number,
   ) => {
     const key = e.key;
 
@@ -175,7 +178,21 @@ const VerifyPage = () => {
       });
 
       const { tokens, user: verifiedUser } = response.data;
-      console.log();
+      const api = (window as any).electronAPI;
+
+      // Flush previous user's queue before wiping data
+      if (api?.flushSync) {
+        try {
+          await api.flushSync();
+        } catch (err) {
+          console.error("Failed to flush sync queue before user switch", err);
+        }
+      }
+
+      // Wipe any existing data before syncing to prevent cross-user leakage
+      if (api?.wipeData) {
+        await api.wipeData();
+      }
 
       tokenManager.setTokens(tokens.accessToken, tokens.refreshToken);
       await userStorage.saveUserFromApi(verifiedUser);
@@ -190,6 +207,11 @@ const VerifyPage = () => {
         tokens,
       });
 
+      // Save user to local DB for future logins
+      if (api?.saveUser) {
+        api.saveUser(verifiedUser);
+      }
+
       try {
         await (
           await import("@/services/businessService")
@@ -199,13 +221,18 @@ const VerifyPage = () => {
           .fetchBusinessData();
       } catch {}
 
+      // Force a sync to pull business data for the newly verified user
+      if (api?.triggerSync) {
+        api.triggerSync();
+      }
+
       // Clear registration cookie now that the user is verified
       deleteCookie(COOKIE_NAMES.REG_USER_EMAIL);
 
       showToast(
         "success",
         "Email verified",
-        "Your email has been verified successfully."
+        "Your email has been verified successfully.",
       );
 
       navigate("/onboarding");
@@ -230,7 +257,7 @@ const VerifyPage = () => {
       showToast(
         "success",
         "OTP resent",
-        "A new OTP has been sent to your email."
+        "A new OTP has been sent to your email.",
       );
       setOtp(Array.from({ length: OTP_LENGTH }, () => ""));
       inputsRef.current[0]?.focus();

@@ -197,6 +197,25 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         api.saveUser(user);
       }
 
+      // Flush previous user's queue if online before wiping data
+      if (isOnline && api?.flushSync) {
+        try {
+          await api.flushSync();
+        } catch (err) {
+          console.error("Failed to flush sync queue before user switch", err);
+        }
+      }
+
+      // Wipe any existing data before syncing to prevent cross-user leakage
+      if (api?.wipeData) {
+        await api.wipeData();
+      }
+
+      // Force a sync to pull business data for the newly logged in user
+      if (api?.triggerSync) {
+        api.triggerSync();
+      }
+
       // Check if there is a 'from' path in location state
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const state = (window.history.state as any)?.usr?.state as {
@@ -259,7 +278,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         navigate(
           `/verify?name=${encodeURIComponent(
             userName,
-          )}&email=${encodeURIComponent(userEmail)}/`,
+          )}&email=${encodeURIComponent(userEmail)}`,
         );
         return;
       }

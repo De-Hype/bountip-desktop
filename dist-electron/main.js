@@ -1550,6 +1550,31 @@ class DatabaseService {
     tx();
     return { ids: createdIds, status: "success", count: createdIds.length };
   }
+  /**
+   * Wipes all user-specific data from the local database.
+   * This is used when a new user logs in to prevent cross-user data leakage.
+   */
+  wipeUserData() {
+    console.log("[DatabaseService] Wiping user data for fresh login...");
+    const tx = this.db.transaction(() => {
+      for (const schema2 of schemas) {
+        this.db.prepare(`DELETE FROM ${schema2.name}`).run();
+      }
+      this.db.prepare("DELETE FROM sync_queue").run();
+      this.db.prepare("DELETE FROM image_upload_queue").run();
+      this.db.prepare(
+        "DELETE FROM identity WHERE key NOT IN ('device_id', 'pin_hash', 'login_hash')"
+      ).run();
+      this.db.prepare("DELETE FROM cache").run();
+    });
+    try {
+      tx();
+      return true;
+    } catch (error2) {
+      console.error("[DatabaseService] Failed to wipe user data:", error2);
+      return false;
+    }
+  }
 }
 const SERVICE_NAME = "bountip-desktop";
 const ACCOUNT_NAME = "auth-tokens";
@@ -19337,13 +19362,16 @@ class AssetService {
         });
         if (response.ok) {
           const buffer = await response.arrayBuffer();
-          fs$1.writeFileSync(filePath, Buffer.from(buffer));
-          return new Response(buffer, {
-            headers: response.headers,
-            status: response.status,
-            statusText: response.statusText
-          });
+          if (buffer && buffer.byteLength > 0) {
+            fs$1.writeFileSync(filePath, Buffer.from(buffer));
+            return new Response(buffer, {
+              headers: response.headers,
+              status: response.status,
+              statusText: response.statusText
+            });
+          }
         }
+        return response;
       } catch (e) {
         console.log(`[AssetService] Fetch failed, trying P2P: ${url}`);
       }
@@ -19400,6 +19428,30 @@ class SyncService {
     console.log("[SyncService] Triggering manual sync...");
     this.lastPullAt = 0;
     await this.checkLeaderAndSync();
+  }
+  /**
+   * Flushes all pending items in the sync queue and image upload queue immediately.
+   * This is critical during user switching to ensure no data is lost.
+   */
+  async flushQueue() {
+    console.log("[SyncService] Flushing all pending queues before user switch...");
+    const online = this.network.getStatus().online;
+    if (!online) {
+      console.warn("[SyncService] Cannot flush queue: Device is offline.");
+      return false;
+    }
+    try {
+      await this.processOfflineImages();
+      const pending = this.db.getPendingQueueItems();
+      if (pending.length > 0) {
+        await this.attemptSync(pending);
+      }
+      console.log("[SyncService] Queue flush complete.");
+      return true;
+    } catch (error2) {
+      console.error("[SyncService] Failed to flush queue:", error2);
+      return false;
+    }
   }
   init() {
     this.network.onStatusChange((online) => {
@@ -20189,6 +20241,7 @@ app.whenReady().then(() => {
     (_event, payload) => dbService.saveOutletOnboarding(payload)
   );
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
+  ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle(
     "db:updateBusinessDetails",
     (_event, payload) => updateBusinessDetails(dbService, payload)
@@ -20269,6 +20322,7 @@ app.whenReady().then(() => {
     "assets:import",
     (_event, filePath) => assetService.importLocalAsset(filePath)
   );
+  ipcMain.handle("sync:flush", () => syncService.flushQueue());
   ipcMain.handle("sync:trigger", () => syncService.triggerSync());
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
   ipcMain.handle("queue:list", () => dbService.getQueue());

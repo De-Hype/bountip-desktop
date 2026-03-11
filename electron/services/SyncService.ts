@@ -36,6 +36,36 @@ export class SyncService {
     await this.checkLeaderAndSync();
   }
 
+  /**
+   * Flushes all pending items in the sync queue and image upload queue immediately.
+   * This is critical during user switching to ensure no data is lost.
+   */
+  public async flushQueue() {
+    console.log("[SyncService] Flushing all pending queues before user switch...");
+    const online = this.network.getStatus().online;
+    if (!online) {
+      console.warn("[SyncService] Cannot flush queue: Device is offline.");
+      return false;
+    }
+
+    try {
+      // 1. Process all pending image uploads
+      await this.processOfflineImages();
+
+      // 2. Process all pending sync queue items
+      const pending = this.db.getPendingQueueItems();
+      if (pending.length > 0) {
+        await this.attemptSync(pending);
+      }
+
+      console.log("[SyncService] Queue flush complete.");
+      return true;
+    } catch (error) {
+      console.error("[SyncService] Failed to flush queue:", error);
+      return false;
+    }
+  }
+
   private init() {
     this.network.onStatusChange((online) => {
       if (online) {

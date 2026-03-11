@@ -69,6 +69,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   cachePut: async (key, value) => electron.ipcRenderer.invoke("cache:put", key, value),
   queueAdd: async (op) => electron.ipcRenderer.invoke("queue:add", op),
   triggerSync: async () => electron.ipcRenderer.invoke("sync:trigger"),
+  flushSync: async () => electron.ipcRenderer.invoke("sync:flush"),
+  wipeData: async () => electron.ipcRenderer.invoke("db:wipeData"),
   queueList: async () => electron.ipcRenderer.invoke("queue:list"),
   queueClear: async () => electron.ipcRenderer.invoke("queue:clear"),
   queueSet: async (list) => electron.ipcRenderer.invoke("queue:set", list),
