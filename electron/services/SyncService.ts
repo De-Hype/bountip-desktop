@@ -30,10 +30,41 @@ export class SyncService {
     this.init();
   }
 
-  public async triggerSync() {
-    console.log("[SyncService] Triggering manual sync...");
-    this.lastPullAt = 0; // Force pull
-    await this.checkLeaderAndSync();
+  public async triggerSync(forceFullPull: boolean = false) {
+    console.log(
+      `[SyncService] Triggering manual sync (bypassing leader check, forceFullPull=${forceFullPull})...`,
+    );
+
+    if (forceFullPull) {
+      console.log("[SyncService] Forcing full pull by clearing timestamp...");
+      this.db.putCache("last_sync_timestamp", null);
+    }
+
+    const online = this.network.getStatus().online;
+    if (!online) {
+      console.warn("[SyncService] Cannot trigger sync: Device is offline.");
+      return;
+    }
+
+    const userId = this.db.getSyncUserId();
+    if (!userId) {
+      console.warn("[SyncService] Cannot trigger sync: No user ID found.");
+      return;
+    }
+
+    // 1. Process offline images
+    await this.processOfflineImages();
+
+    // 2. Perform pull (bypass interval and leader check)
+    await this.performPull();
+    this.lastPullAt = Date.now();
+
+    // 3. Process pending queue
+    const pending = this.db.getPendingQueueItems();
+    if (pending.length > 0) {
+      await this.attemptSync(pending);
+    }
+    console.log("[SyncService] Manual sync trigger complete.");
   }
 
   /**
@@ -41,7 +72,9 @@ export class SyncService {
    * This is critical during user switching to ensure no data is lost.
    */
   public async flushQueue() {
-    console.log("[SyncService] Flushing all pending queues before user switch...");
+    console.log(
+      "[SyncService] Flushing all pending queues before user switch...",
+    );
     const online = this.network.getStatus().online;
     if (!online) {
       console.warn("[SyncService] Cannot flush queue: Device is offline.");
@@ -84,6 +117,7 @@ export class SyncService {
     if (!online) return;
 
     const userId = this.db.getSyncUserId();
+    console.log(`[SyncService] checkLeaderAndSync for user: ${userId}`);
     if (!userId) {
       // Not logged in, skip everything
       return;
@@ -130,9 +164,11 @@ export class SyncService {
 
     try {
       const userId = this.db.getSyncUserId();
+      console.log(`[SyncService] Starting pull for userId: ${userId}`);
 
       if (!userId) {
         // Should be handled by caller
+        console.warn("[SyncService] Pull skipped: No userId found.");
         return;
       }
 
@@ -140,12 +176,15 @@ export class SyncService {
 
       url.searchParams.set("userId", String(userId));
 
+      /* 
       const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
+      console.log(`[SyncService] lastSyncTimestamp: ${lastSyncTimestamp}`);
       if (lastSyncTimestamp) {
         url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
       }
+      */
 
-      console.log(`[SyncService] Pulling data from ${url.toString()}...`);
+      console.log(`[SyncService] Fetching from: ${url.toString()}`);
 
       const response = await net.fetch(url.toString(), {
         method: "GET",
@@ -160,6 +199,7 @@ export class SyncService {
       }
 
       const json = (await response.json()) as any;
+      console.log(`[SyncService] Pulled data:`, json);
 
       if (!json || !json.data || !json.currentTimestamp) {
         console.error(
@@ -167,7 +207,6 @@ export class SyncService {
         );
         return;
       }
-      console.log("Pulled stuff", json);
 
       this.db.applyPullData({
         currentTimestamp: json.currentTimestamp,
@@ -176,6 +215,9 @@ export class SyncService {
 
       // Update last sync timestamp
       this.db.putCache("last_sync_timestamp", json.currentTimestamp);
+      console.log(
+        `[SyncService] Pull complete. New timestamp: ${json.currentTimestamp}`,
+      );
     } catch (e) {
       console.error("[SyncService] Pull sync error:", e);
     } finally {
@@ -332,7 +374,7 @@ export class SyncService {
       console.log("Recordss stuff", records);
 
       const payload = { records: records };
-      console.log(payload)
+      console.log(payload);
 
       const response = await net.fetch(PUSH_ENDPOINT, {
         method: "POST",

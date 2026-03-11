@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveOutletOnboarding: async (payload: any) =>
     ipcRenderer.invoke("db:saveOutletOnboarding", payload),
   getOutlets: async () => ipcRenderer.invoke("db:getOutlets"),
+  getBusinesses: async () => ipcRenderer.invoke("db:getBusinesses"),
   updateBusinessDetails: async (payload: any) =>
     ipcRenderer.invoke("db:updateBusinessDetails", payload),
   updatePaymentTier: async (payload: any) =>
@@ -98,7 +99,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cachePut: async (key: string, value: any) =>
     ipcRenderer.invoke("cache:put", key, value),
   queueAdd: async (op: any) => ipcRenderer.invoke("queue:add", op),
-  triggerSync: async () => ipcRenderer.invoke("sync:trigger"),
+  triggerSync: async (forceFullPull?: boolean) =>
+    ipcRenderer.invoke("sync:trigger", forceFullPull),
   flushSync: async () => ipcRenderer.invoke("sync:flush"),
   wipeData: async () => ipcRenderer.invoke("db:wipeData"),
   queueList: async () => ipcRenderer.invoke("queue:list"),

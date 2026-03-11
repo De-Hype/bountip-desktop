@@ -19,6 +19,7 @@ import PinInput from "./PinInput";
 import { COOKIE_NAMES, getCookie } from "@/utils/cookiesUtils";
 import { useLoginPinMutation } from "@/redux/auth";
 import { useNetworkStore } from "@/stores/useNetworkStore";
+import useBusinessStore from "@/stores/useBusinessStore";
 
 export const signinSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -50,6 +51,9 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   const { showToast } = useToastStore();
   const { isOnline } = useNetworkStore();
   const [loginPin] = useLoginPinMutation();
+  const fetchBusinessData = useBusinessStore(
+    (state) => state.fetchBusinessData,
+  );
 
   const {
     register,
@@ -170,7 +174,6 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       const { tokens, user } = response.data;
 
       tokenManager.setTokens(tokens.accessToken, tokens.refreshToken);
-      await userStorage.saveUserFromApi(user);
       setFailedAttempts(0);
       setLockUntil(null);
       setLockRemainingMs(0);
@@ -193,9 +196,6 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       if (api?.saveLoginHash) {
         api.saveLoginHash(data.email, data.password);
       }
-      if (api?.saveUser) {
-        api.saveUser(user);
-      }
 
       // Flush previous user's queue if online before wiping data
       if (isOnline && api?.flushSync) {
@@ -211,9 +211,55 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         await api.wipeData();
       }
 
+      // Save user to local storage and DB after wipe
+      await userStorage.saveUserFromApi(user);
+
       // Force a sync to pull business data for the newly logged in user
       if (api?.triggerSync) {
-        api.triggerSync();
+        await api.triggerSync();
+      }
+
+      // Retry check for business and outlets to handle sync time lapse
+      const checkOnboardingStatus = async (retries = 3, delay = 1000) => {
+        for (let i = 0; i < retries; i++) {
+          const [outlets, businesses] = await Promise.all([
+            api?.getOutlets?.() || [],
+            api?.getBusinesses?.() || [],
+          ]);
+
+          console.log(
+            `[Login] Attempt ${i + 1} - Outlets: ${outlets.length}, Businesses: ${businesses.length}`,
+          );
+
+          if (outlets.length > 0 && businesses.length > 0) {
+            return { hasOutlets: true, hasBusiness: true };
+          }
+
+          // If it's not the last retry, wait
+          if (i < retries - 1) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        }
+
+        const [finalOutlets, finalBusinesses] = await Promise.all([
+          api?.getOutlets?.() || [],
+          api?.getBusinesses?.() || [],
+        ]);
+
+        return {
+          hasOutlets: finalOutlets.length > 0,
+          hasBusiness: finalBusinesses.length > 0,
+        };
+      };
+
+      const status = await checkOnboardingStatus();
+
+      // Refresh the business store state to update UI (like the UserProfile outlet list)
+      await fetchBusinessData();
+
+      if (!status.hasBusiness || !status.hasOutlets) {
+        navigate("/onboarding");
+        return;
       }
 
       // Check if there is a 'from' path in location state

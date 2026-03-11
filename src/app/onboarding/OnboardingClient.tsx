@@ -22,15 +22,23 @@ const OnboardingClient = () => {
     | undefined;
   const skipPin = outlet && outlet.isOnboarded === false;
 
-  const handleNextStep = useCallback(() => {
+  const handleNextStep = useCallback(async () => {
+    const api = (window as any).electronAPI;
+
     // If we are onboarding a specific outlet (outletId present), skip the PIN step
     if (outletId) {
+      if (api?.triggerSync) {
+        await api.triggerSync(true);
+      }
       navigate("/dashboard");
       return;
     }
 
     // Original logic: skip if outlet is already onboarded (legacy/general check)
     if (skipPin) {
+      if (api?.triggerSync) {
+        await api.triggerSync(true);
+      }
       navigate("/dashboard");
       return;
     }

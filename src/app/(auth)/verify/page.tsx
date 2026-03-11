@@ -209,7 +209,7 @@ const VerifyPage = () => {
 
       // Save user to local DB for future logins
       if (api?.saveUser) {
-        api.saveUser(verifiedUser);
+        await api.saveUser(verifiedUser);
       }
 
       try {
@@ -223,7 +223,7 @@ const VerifyPage = () => {
 
       // Force a sync to pull business data for the newly verified user
       if (api?.triggerSync) {
-        api.triggerSync();
+        await api.triggerSync();
       }
 
       // Clear registration cookie now that the user is verified

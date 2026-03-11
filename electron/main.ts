@@ -179,6 +179,7 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
+  ipcMain.handle("db:getBusinesses", () => dbService.getBusinesses());
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>
     updateBusinessDetails(dbService, payload),
@@ -261,7 +262,9 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("sync:flush", () => syncService.flushQueue());
-  ipcMain.handle("sync:trigger", () => syncService.triggerSync());
+  ipcMain.handle("sync:trigger", (_event, forceFullPull?: boolean) =>
+    syncService.triggerSync(forceFullPull),
+  );
 
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
   ipcMain.handle("queue:list", () => dbService.getQueue());

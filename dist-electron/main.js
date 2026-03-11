@@ -1479,6 +1479,9 @@ class DatabaseService {
   getOutlets() {
     return this.db.prepare("SELECT * FROM business_outlet").all();
   }
+  getBusinesses() {
+    return this.db.prepare("SELECT * FROM business").all();
+  }
   applyPullData(payload) {
     const { data } = payload;
     const toSqliteValue = (value) => {
@@ -19424,17 +19427,41 @@ class SyncService {
     this.p2p = p2p;
     this.init();
   }
-  async triggerSync() {
-    console.log("[SyncService] Triggering manual sync...");
-    this.lastPullAt = 0;
-    await this.checkLeaderAndSync();
+  async triggerSync(forceFullPull = false) {
+    console.log(
+      `[SyncService] Triggering manual sync (bypassing leader check, forceFullPull=${forceFullPull})...`
+    );
+    if (forceFullPull) {
+      console.log("[SyncService] Forcing full pull by clearing timestamp...");
+      this.db.putCache("last_sync_timestamp", null);
+    }
+    const online = this.network.getStatus().online;
+    if (!online) {
+      console.warn("[SyncService] Cannot trigger sync: Device is offline.");
+      return;
+    }
+    const userId = this.db.getSyncUserId();
+    if (!userId) {
+      console.warn("[SyncService] Cannot trigger sync: No user ID found.");
+      return;
+    }
+    await this.processOfflineImages();
+    await this.performPull();
+    this.lastPullAt = Date.now();
+    const pending = this.db.getPendingQueueItems();
+    if (pending.length > 0) {
+      await this.attemptSync(pending);
+    }
+    console.log("[SyncService] Manual sync trigger complete.");
   }
   /**
    * Flushes all pending items in the sync queue and image upload queue immediately.
    * This is critical during user switching to ensure no data is lost.
    */
   async flushQueue() {
-    console.log("[SyncService] Flushing all pending queues before user switch...");
+    console.log(
+      "[SyncService] Flushing all pending queues before user switch..."
+    );
     const online = this.network.getStatus().online;
     if (!online) {
       console.warn("[SyncService] Cannot flush queue: Device is offline.");
@@ -19466,6 +19493,7 @@ class SyncService {
     const online = this.network.getStatus().online;
     if (!online) return;
     const userId = this.db.getSyncUserId();
+    console.log(`[SyncService] checkLeaderAndSync for user: ${userId}`);
     if (!userId) {
       return;
     }
@@ -19499,16 +19527,14 @@ class SyncService {
     this.isPulling = true;
     try {
       const userId = this.db.getSyncUserId();
+      console.log(`[SyncService] Starting pull for userId: ${userId}`);
       if (!userId) {
+        console.warn("[SyncService] Pull skipped: No userId found.");
         return;
       }
       const url = new URL(PULL_ENDPOINT);
       url.searchParams.set("userId", String(userId));
-      const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
-      if (lastSyncTimestamp) {
-        url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
-      }
-      console.log(`[SyncService] Pulling data from ${url.toString()}...`);
+      console.log(`[SyncService] Fetching from: ${url.toString()}`);
       const response = await net.fetch(url.toString(), {
         method: "GET"
       });
@@ -19520,18 +19546,21 @@ class SyncService {
         return;
       }
       const json2 = await response.json();
+      console.log(`[SyncService] Pulled data:`, json2);
       if (!json2 || !json2.data || !json2.currentTimestamp) {
         console.error(
           "[SyncService] Pull sync response missing data or currentTimestamp"
         );
         return;
       }
-      console.log("Pulled stuff", json2);
       this.db.applyPullData({
         currentTimestamp: json2.currentTimestamp,
         data: json2.data
       });
       this.db.putCache("last_sync_timestamp", json2.currentTimestamp);
+      console.log(
+        `[SyncService] Pull complete. New timestamp: ${json2.currentTimestamp}`
+      );
     } catch (e) {
       console.error("[SyncService] Pull sync error:", e);
     } finally {
@@ -20241,6 +20270,7 @@ app.whenReady().then(() => {
     (_event, payload) => dbService.saveOutletOnboarding(payload)
   );
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
+  ipcMain.handle("db:getBusinesses", () => dbService.getBusinesses());
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle(
     "db:updateBusinessDetails",
@@ -20323,7 +20353,10 @@ app.whenReady().then(() => {
     (_event, filePath) => assetService.importLocalAsset(filePath)
   );
   ipcMain.handle("sync:flush", () => syncService.flushQueue());
-  ipcMain.handle("sync:trigger", () => syncService.triggerSync());
+  ipcMain.handle(
+    "sync:trigger",
+    (_event, forceFullPull) => syncService.triggerSync(forceFullPull)
+  );
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
   ipcMain.handle("queue:list", () => dbService.getQueue());
   ipcMain.handle("queue:clear", () => dbService.clearQueue());

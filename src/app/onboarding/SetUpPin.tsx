@@ -9,6 +9,7 @@ import useToastStore from "@/stores/toastStore";
 
 type ElectronAPI = {
   savePinHash: (pin: string) => Promise<void>;
+  triggerSync: (forceFullPull?: boolean) => Promise<void>;
 };
 
 const getElectronAPI = (): ElectronAPI | null => {
@@ -37,12 +38,15 @@ const SetUpPin = () => {
         const api = getElectronAPI();
         if (api) {
           await api.savePinHash(pin);
+          if (api.triggerSync) {
+            await api.triggerSync(true);
+          }
         }
 
         showToast(
           "success",
           "PIN setup successful",
-          "PIN setup successful, please sign in"
+          "PIN setup successful, please sign in",
         );
         navigate("/dashboard");
       } catch (error) {
@@ -50,7 +54,7 @@ const SetUpPin = () => {
         showToast(
           "error",
           "PIN setup failed",
-          (error as Error).message || "An unexpected error occurred"
+          (error as Error).message || "An unexpected error occurred",
         );
       }
     }

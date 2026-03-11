@@ -518,6 +518,10 @@ export class DatabaseService {
     return this.db.prepare("SELECT * FROM business_outlet").all() as any[];
   }
 
+  getBusinesses() {
+    return this.db.prepare("SELECT * FROM business").all() as any[];
+  }
+
   applyPullData(payload: { currentTimestamp: string; data: any }) {
     const { data } = payload;
 

@@ -138,7 +138,7 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
           : null) ??
         (currentSelectedId && outlets.some((o) => o.id === currentSelectedId)
           ? currentSelectedId
-          : (outlets[0]?.id ?? null));
+          : (outlets.find((o) => o.isOnboarded)?.id ?? outlets[0]?.id ?? null));
 
       const nextSelected = nextSelectedId
         ? (outlets.find((o) => o.id === nextSelectedId) ?? null)
