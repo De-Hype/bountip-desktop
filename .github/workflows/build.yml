@@ -1,0 +1,40 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build and Publish Electron app
+        run: |
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            npm run build && npx electron-builder --mac --publish always
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            npm run build && npx electron-builder --win --publish always
+          else
+            npm run build && npx electron-builder --linux --publish always
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}

@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bountip Desktop
 
-## Getting Started
+Bountip is an offline-first desktop application built with Electron, React, and SQLite.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Development Setup
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2. **Run Dev Server**:
+   ```bash
+   npm run dev
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 🛠 How to Build the App (Step-by-Step)
 
-To learn more about Next.js, take a look at the following resources:
+There are two ways to build the app: **Locally** (on your computer) or **Automated** (via GitHub Actions).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Option A: Build Locally (On your Mac)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Use this if you want to test the installers immediately without pushing to GitHub.
 
-## Deploy on Vercel
+1. **Get a GitHub Personal Access Token (PAT)**:
+   - Go to [GitHub Settings > Developer settings > Tokens (classic)](https://github.com/settings/tokens).
+   - Generate a new token with the `repo` scope.
+   - Copy the token.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+2. **Set the Token in your Terminal**:
+   ```bash
+   export GITHUB_TOKEN=your_token_here
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+3. **Run the Build Command**:
+   - **For all platforms (Mac, Windows, Linux)**:
+     ```bash
+     npm run dist:all
+     ```
+   - **For Mac only**:
+     ```bash
+     npm run dist:mac
+     ```
+   - **For Windows only**:
+     ```bash
+     npm run dist:win
+     ```
+
+4. **Find your installers**:
+   The builds will be in the `dist_electron` or `release` folder in your project.
+
+---
+
+### Option B: Automated Build (Recommended for Distribution)
+
+Use this to officially release a new version. This is the only way to ensure Windows/Linux builds are generated correctly and auto-updates are triggered for users.
+
+### 1. One-Time Setup (GitHub Settings)
+To allow the automated build to publish releases to GitHub, you must add a Personal Access Token (PAT) as a secret:
+1. **Generate a PAT**:
+   - Go to [GitHub Settings > Developer settings > Tokens (classic)](https://github.com/settings/tokens).
+   - Generate a new token with the `repo` scope.
+   - Copy the token.
+2. **Add as a Secret**:
+   - Go to your repo on GitHub: **Settings** > **Secrets and variables** > **Actions**.
+   - Click **New repository secret**.
+   - Name: `RELEASE_TOKEN`.
+   - Value: Paste the PAT you just copied.
+   - Click **Add secret**.
+
+### 2. Releasing a New Version
+The build is automatically triggered whenever you push to the **`dev`** branch.
+
+1. **Bump the Version**: Update the `"version"` field in your `package.json"` (e.g., from `0.1.0` to `0.1.1`).
+2. **Commit and Push**:
+   ```bash
+   git add package.json
+   git commit -m "Release v0.1.1"
+   git push origin dev
+   ```
+3. **Automated Build**: GitHub Actions will automatically detect the push to `dev` and start building the application for macOS and Windows.
+
+---
+
+## 📜 Distribution
+
+To give the app to new people, send them to:
+[https://github.com/De-Hype/bountip-desktop/releases/latest](https://github.com/De-Hype/bountip-desktop/releases/latest)
+
+---
+
+## 🛠 Tech Stack
+- **Framework**: React (Vite)
+- **Desktop**: Electron
+- **Database**: SQLite (better-sqlite3)
+- **CI/CD**: GitHub Actions & Electron Builder
+- **Updates**: electron-updater

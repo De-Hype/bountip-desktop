@@ -88,6 +88,7 @@
     "files": [
       "electron/**",
       "dist/**",
+      "dist-electron/**",
       "package.json"
     ],
     "asar": true,
@@ -124,8 +125,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "YOUR_GITHUB_USERNAME",
-        "repo": "YOUR_REPO_NAME"
+        "owner": "De-Hype",
+        "repo": "bountip-desktop"
       }
     ]
   }
