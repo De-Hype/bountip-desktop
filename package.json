@@ -85,6 +85,9 @@
   "build": {
     "appId": "com.bountip.desktop",
     "productName": "Bountip Desktop",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "electron/**",
       "dist/**",
@@ -97,6 +100,7 @@
     ],
     "artifactName": "Bountip-Desktop-${version}-${os}-${arch}.${ext}",
     "mac": {
+      "icon": "electron/assets/icon.png",
       "target": [
         "dmg"
       ],
@@ -104,6 +108,7 @@
       "identity": null
     },
     "win": {
+      "icon": "electron/assets/icon.png",
       "target": [
         {
           "target": "nsis",

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, nativeImage, protocol } from "electron";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { DatabaseService } from "./services/DatabaseService";
@@ -62,14 +63,23 @@ function generateDeviceId() {
 }
 
 function createWindow() {
-  // Try to resolve icon path
+  // Use a more reliable way to find the icon path
   let iconPath = path.join(__dirname, "../electron/assets/icon.png");
-  if (app.isPackaged) {
-    iconPath = path.join(process.resourcesPath, "assets/icon.png");
-  } else {
-    // In dev, __dirname is likely dist-electron, so we go up and into electron/assets
-    // Or we can use process.cwd()
+
+  // Fallback check if it's not found (can happen depending on the environment)
+  if (!fs.existsSync(iconPath)) {
     iconPath = path.join(process.cwd(), "electron/assets/icon.png");
+  }
+
+  // If still not found and we are in production, check common packaged locations
+  if (!fs.existsSync(iconPath) && app.isPackaged) {
+    iconPath = path.join(process.resourcesPath, "assets/icon.png");
+    if (!fs.existsSync(iconPath)) {
+      iconPath = path.join(
+        process.resourcesPath,
+        "app.asar/electron/assets/icon.png",
+      );
+    }
   }
 
   const appIcon = nativeImage.createFromPath(iconPath);
