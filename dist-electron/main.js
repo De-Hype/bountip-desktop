@@ -19536,7 +19536,10 @@ class SyncService {
       url.searchParams.set("userId", String(userId));
       console.log(`[SyncService] Fetching from: ${url.toString()}`);
       const response = await net.fetch(url.toString(), {
-        method: "GET"
+        method: "GET",
+        headers: {
+          "x-app-version": app.getVersion()
+        }
       });
       if (!response.ok) {
         const txt = await response.text();
@@ -19688,7 +19691,10 @@ class SyncService {
       const response = await net.fetch(PUSH_ENDPOINT, {
         method: "POST",
         body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" }
+        headers: {
+          "Content-Type": "application/json",
+          "x-app-version": app.getVersion()
+        }
       });
       if (response.ok) {
         const ids = itemsToSync.map((i) => i.id);
