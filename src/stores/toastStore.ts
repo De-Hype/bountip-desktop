@@ -8,13 +8,14 @@ interface ToastState {
   heading: string;
   description: string;
   duration: number;
+  id: number;
   showToast: (
     type: ToastType,
     heading: string,
     description: string,
-    duration?: number
+    duration?: number,
   ) => void;
-  closeToast: () => void;
+  onClose: () => void;
 }
 
 const useToastStore = create<ToastState>((set) => ({
@@ -23,15 +24,17 @@ const useToastStore = create<ToastState>((set) => ({
   heading: "",
   description: "",
   duration: 5000,
+  id: 0,
   showToast: (type, heading, description, duration = 5000) =>
-    set({
+    set((state) => ({
       isOpen: true,
       type,
       heading,
       description,
       duration,
-    }),
-  closeToast: () =>
+      id: state.id + 1,
+    })),
+  onClose: () =>
     set({
       isOpen: false,
       heading: "",

@@ -80,6 +80,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>
     ipcRenderer.invoke("assets:import", filePath),
+  uploadImage: async (payload: {
+    buffer: Uint8Array;
+    name: string;
+    type: string;
+    token: string;
+  }) => ipcRenderer.invoke("net:uploadImage", payload),
   getNetworkStatus: async () => {
     try {
       return await ipcRenderer.invoke("network:getStatus");

@@ -99,9 +99,11 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
       );
 
       navigate("/verify");
-    } catch (error: unknown) {
+    } catch (error: any) {
       const message =
-        error instanceof Error ? error.message : "Unable to sign up.";
+        error?.response?.data?.message ||
+        error?.message ||
+        "Unable to sign up.";
       showToast("error", "Sign up failed", message);
     } finally {
       setIsLoading(false);

@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, nativeImage, protocol } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  nativeImage,
+  protocol,
+  net,
+} from "electron";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -259,6 +266,57 @@ app.whenReady().then(() => {
 
   ipcMain.handle("assets:import", (_event, filePath) =>
     assetService.importLocalAsset(filePath),
+  );
+
+  ipcMain.handle(
+    "net:uploadImage",
+    async (_event, { buffer, name, type, token }) => {
+      const baseUrl = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
+      const url = `${baseUrl}/static/upload`;
+
+      const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+
+      // Construct multipart body manually for net.fetch
+      const chunks = [];
+      chunks.push(Buffer.from(`--${boundary}\r\n`));
+      chunks.push(
+        Buffer.from(
+          `Content-Disposition: form-data; name="image"; filename="${name}"\r\n`,
+        ),
+      );
+      chunks.push(Buffer.from(`Content-Type: ${type}\r\n\r\n`));
+      chunks.push(Buffer.from(buffer));
+      chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+      const body = Buffer.concat(chunks);
+
+      try {
+        const response = await net.fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "*/*",
+            "Content-Type": `multipart/form-data; boundary=${boundary}`,
+            Origin: "https://sea-turtle-app-73wxj.ondigitalocean.app",
+            Referer: "https://sea-turtle-app-73wxj.ondigitalocean.app/",
+          },
+          body,
+        });
+
+        const data = await response.json();
+        return {
+          ok: response.ok,
+          status: response.status,
+          data,
+        };
+      } catch (error: any) {
+        console.error("[Main] Upload error:", error);
+        return {
+          ok: false,
+          status: 500,
+          error: error.message,
+        };
+      }
+    },
   );
 
   ipcMain.handle("sync:flush", () => syncService.flushQueue());

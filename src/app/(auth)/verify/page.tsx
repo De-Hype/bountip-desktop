@@ -258,12 +258,12 @@ const VerifyPage = () => {
       );
 
       navigate("/onboarding");
-    } catch (error: unknown) {
-      console.error(error);
+    } catch (error: any) {
+      console.error("OTP EXPIRED", error);
       const message =
-        error instanceof Error
-          ? error.message
-          : "Please check the code and try again.";
+        error?.response?.data?.message ||
+        error?.message ||
+        "Please check the code and try again.";
       showToast("error", "Invalid OTP", message);
     } finally {
       setIsLoading(false);
@@ -283,12 +283,12 @@ const VerifyPage = () => {
       );
       setOtp(Array.from({ length: OTP_LENGTH }, () => ""));
       inputsRef.current[0]?.focus();
-    } catch (error) {
+    } catch (error: any) {
       console.error("[VerifyPage] ❌ Resend OTP error:", error);
       const message =
-        error instanceof Error
-          ? error.message
-          : "An unexpected error occurred. Please try again.";
+        error?.response?.data?.message ||
+        error?.message ||
+        "An unexpected error occurred. Please try again.";
       showToast("error", "Resend failed", message);
     } finally {
       setIsResending(false);
@@ -366,7 +366,7 @@ const VerifyPage = () => {
           </div>
           <button
             disabled={!isOtpComplete || isLoading}
-            className={`flex items-center justify-center gap-4 bg-[#15BA5C] text-white font-bold text-xl py-3.5 rounded-[10px] hover:bg-[#13a551] w-full ${
+            className={`flex items-center cursor-pointer justify-center gap-4 bg-[#15BA5C] text-white font-bold text-xl py-3.5 rounded-[10px] hover:bg-[#13a551] w-full ${
               !isOtpComplete || isLoading ? "opacity-50 cursor-not-allowed" : ""
             }`}
             type="submit"

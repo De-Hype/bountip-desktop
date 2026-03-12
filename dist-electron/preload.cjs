@@ -52,6 +52,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   bulkCreateProducts: async (payload) => electron.ipcRenderer.invoke("db:bulkCreateProducts", payload),
   dbQuery: async (sql, params = []) => electron.ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath) => electron.ipcRenderer.invoke("assets:import", filePath),
+  uploadImage: async (payload) => electron.ipcRenderer.invoke("net:uploadImage", payload),
   getNetworkStatus: async () => {
     try {
       return await electron.ipcRenderer.invoke("network:getStatus");

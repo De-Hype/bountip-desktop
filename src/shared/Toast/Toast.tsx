@@ -10,6 +10,7 @@ type ToastProps = {
   onClose: () => void;
   duration?: number;
   type?: ToastType;
+  id?: number;
 };
 
 const Toast = ({
@@ -19,6 +20,7 @@ const Toast = ({
   onClose,
   duration = 5000,
   type = "success",
+  id,
 }: ToastProps) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -35,7 +37,7 @@ const Toast = ({
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, duration]);
+  }, [isOpen, duration, id]);
 
   const handleClose = () => {
     setIsAnimating(false);
@@ -84,8 +86,8 @@ const Toast = ({
       <div
         className={`
           ${currentConfig.bgColor} border-l-[5px] ${
-          currentConfig.borderColor
-        } rounded-md shadow-md px-4 py-3 min-w-[340px] max-w-md
+            currentConfig.borderColor
+          } rounded-md shadow-md px-4 py-3 min-w-[340px] max-w-md
           pointer-events-auto flex items-start justify-between transition-all transform duration-300 ease-out
           ${
             isAnimating

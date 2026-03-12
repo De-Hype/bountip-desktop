@@ -20357,6 +20357,57 @@ app.whenReady().then(() => {
     "assets:import",
     (_event, filePath) => assetService.importLocalAsset(filePath)
   );
+  ipcMain.handle(
+    "net:uploadImage",
+    async (_event, { buffer, name, type: type2, token }) => {
+      const baseUrl = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
+      const url = `${baseUrl}/static/upload`;
+      const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+      const chunks = [];
+      chunks.push(Buffer.from(`--${boundary}\r
+`));
+      chunks.push(
+        Buffer.from(
+          `Content-Disposition: form-data; name="image"; filename="${name}"\r
+`
+        )
+      );
+      chunks.push(Buffer.from(`Content-Type: ${type2}\r
+\r
+`));
+      chunks.push(Buffer.from(buffer));
+      chunks.push(Buffer.from(`\r
+--${boundary}--\r
+`));
+      const body = Buffer.concat(chunks);
+      try {
+        const response = await net.fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "*/*",
+            "Content-Type": `multipart/form-data; boundary=${boundary}`,
+            Origin: "https://sea-turtle-app-73wxj.ondigitalocean.app",
+            Referer: "https://sea-turtle-app-73wxj.ondigitalocean.app/"
+          },
+          body
+        });
+        const data = await response.json();
+        return {
+          ok: response.ok,
+          status: response.status,
+          data
+        };
+      } catch (error2) {
+        console.error("[Main] Upload error:", error2);
+        return {
+          ok: false,
+          status: 500,
+          error: error2.message
+        };
+      }
+    }
+  );
   ipcMain.handle("sync:flush", () => syncService.flushQueue());
   ipcMain.handle(
     "sync:trigger",
