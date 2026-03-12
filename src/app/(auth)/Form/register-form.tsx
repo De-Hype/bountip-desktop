@@ -75,11 +75,19 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
         password: data.password,
       };
 
-      // Persist minimal registration info for verification step
-      setCookie(COOKIE_NAMES.REG_USER_EMAIL, {
-        email: user.email,
-        name: user.fullName,
-      });
+      const api = (window as any).electronAPI;
+      if (api?.cachePut) {
+        await api.cachePut(COOKIE_NAMES.REG_USER_EMAIL, {
+          email: user.email,
+          name: user.fullName,
+        });
+      } else {
+        // Fallback for web or older builds
+        setCookie(COOKIE_NAMES.REG_USER_EMAIL, {
+          email: user.email,
+          name: user.fullName,
+        });
+      }
 
       // Optionally persist user in local DB, but don't mark as authenticated yet
       await userStorage.saveUserFromApi(user);

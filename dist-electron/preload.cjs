@@ -106,5 +106,10 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
     electron.ipcRenderer.on("updater:status", handler);
     return () => electron.ipcRenderer.removeListener("updater:status", handler);
   },
+  onDownloadProgress: (cb) => {
+    const handler = (_e, progressObj) => cb(progressObj);
+    electron.ipcRenderer.on("updater:download-progress", handler);
+    return () => electron.ipcRenderer.removeListener("updater:download-progress", handler);
+  },
   factoryReset: () => electron.ipcRenderer.send("system:factoryReset")
 });

@@ -12,7 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import React, { useState, useRef, Suspense } from "react";
+import React, { useState, useRef, Suspense, useEffect } from "react";
 import {
   getStrength,
   getStrengthLabel,
@@ -29,12 +29,33 @@ import {
 
 const ResetPasswordPageContent = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState<string>(() => {
-    const v = getCookie<string | { email?: string }>(
-      COOKIE_NAMES.RESET_USER_EMAIL
-    );
-    return typeof v === "string" ? v : v?.email || "";
-  });
+  const [email, setEmail] = useState<string>("");
+  const [isFetchingEmail, setIsFetchingEmail] = useState(true);
+
+  useEffect(() => {
+    const fetchEmail = async () => {
+      try {
+        const api = (window as any).electronAPI;
+        if (api?.cacheGet) {
+          const v = await api.cacheGet(COOKIE_NAMES.RESET_USER_EMAIL);
+          if (v) {
+            setEmail(typeof v === "string" ? v : v?.email || "");
+            return;
+          }
+        }
+
+        const v = getCookie<string | { email?: string }>(
+          COOKIE_NAMES.RESET_USER_EMAIL,
+        );
+        setEmail(typeof v === "string" ? v : v?.email || "");
+      } finally {
+        setIsFetchingEmail(false);
+      }
+    };
+
+    fetchEmail();
+  }, []);
+
   const [resetOtp, setResetOtp] = useState<string>("");
 
   // Use local state for step instead of URL query param
@@ -80,6 +101,10 @@ const ResetPasswordPageContent = () => {
             email={email}
             otp={resetOtp}
             onNext={() => {
+              const api = (window as any).electronAPI;
+              if (api?.cachePut) {
+                api.cachePut(COOKIE_NAMES.RESET_USER_EMAIL, null);
+              }
               deleteCookie(COOKIE_NAMES.RESET_USER_EMAIL);
               setTimeout(() => goToStep("success"), 500);
             }}
@@ -115,7 +140,7 @@ function ForgotPassword({
   const { showToast } = useToastStore();
 
   const handleForgotPassword = async (
-    e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+    e: React.MouseEvent<HTMLButtonElement, MouseEvent>,
   ) => {
     e.preventDefault();
     setIsLoading(true);
@@ -132,7 +157,12 @@ function ForgotPassword({
         return;
       }
       await authService.forgotPassword({ email });
-      setCookie(COOKIE_NAMES.RESET_USER_EMAIL, email, 1);
+      const api = (window as any).electronAPI;
+      if (api?.cachePut) {
+        await api.cachePut(COOKIE_NAMES.RESET_USER_EMAIL, email);
+      } else {
+        setCookie(COOKIE_NAMES.RESET_USER_EMAIL, email, 1);
+      }
       onEmailSaved(email);
       showToast("success", "Code sent", "Reset code sent to your email.");
       setIsLoading(false);
@@ -219,7 +249,7 @@ function OtpInput({
 
   const handleKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement>,
-    index: number
+    index: number,
   ) => {
     if (e.key === "Backspace" && !otp[index] && index > 0) {
       inputsRef.current[index - 1]?.focus();

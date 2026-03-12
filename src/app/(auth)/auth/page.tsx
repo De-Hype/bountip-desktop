@@ -41,7 +41,7 @@ const AuthPageContent = () => {
             Welcome Backs
           </h3>
           <p className="text-[#1E1E1E] text-[25px] font-light text-center">
-            Welcome back, Please Enter your detailss
+            Welcome back, Please Enter your details
           </p>
 
           <div className="inline-flex font-bold bg-[#FAFAFC] w-full rounded-md p-1 my-2.5">

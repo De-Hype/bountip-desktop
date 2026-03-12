@@ -24,26 +24,48 @@ const VerifyPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  const [searchParams] = useSearchParams();
-  const [regContext] = useState(() => {
-    const cookie = getCookie<{ email?: string; name?: string }>(
-      COOKIE_NAMES.REG_USER_EMAIL,
-    );
-    const searchEmail = searchParams.get("email") ?? cookie?.email ?? "";
-    return {
-      name: (searchParams.get("name") ?? cookie?.name ?? "") as string,
-      email: (typeof searchEmail === "string"
-        ? searchEmail.replace(/\/$/, "")
-        : "") as string,
+  const [regContext, setRegContext] = useState<{
+    email?: string;
+    name?: string;
+  } | null>(null);
+  const [isFetchingContext, setIsFetchingContext] = useState(true);
+
+  useEffect(() => {
+    const fetchRegContext = async () => {
+      try {
+        const api = (window as any).electronAPI;
+        if (api?.cacheGet) {
+          const context = await api.cacheGet(COOKIE_NAMES.REG_USER_EMAIL);
+          if (context) {
+            setRegContext(context);
+            return;
+          }
+        }
+
+        // Fallback to cookie
+        const cookie = getCookie<{ email?: string; name?: string }>(
+          COOKIE_NAMES.REG_USER_EMAIL,
+        );
+        if (cookie) {
+          setRegContext(cookie);
+        }
+      } finally {
+        setIsFetchingContext(false);
+      }
     };
-  });
-  const name = regContext.name;
-  const email = regContext.email;
-  const firstName = name.split(" ")[0];
+
+    fetchRegContext();
+  }, []);
+
+  const name = regContext?.name || "";
+  const email = regContext?.email || "";
+  const firstName = name ? name.split(" ")[0] : "User";
 
   const hasShownToast = useRef(false);
 
   useEffect(() => {
+    if (isFetchingContext) return;
+
     if (!name || !email) {
       if (!hasShownToast.current) {
         showToast(

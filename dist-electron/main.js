@@ -19224,10 +19224,9 @@ class UpdateService {
       if (win) win.webContents.send("updater:error", err.toString());
     });
     mainExports.autoUpdater.on("download-progress", (progressObj) => {
-      let log_message = "Download speed: " + progressObj.bytesPerSecond;
-      log_message = log_message + " - Downloaded " + progressObj.percent + "%";
-      log_message = log_message + " (" + progressObj.transferred + "/" + progressObj.total + ")";
-      this.sendStatusToWindow(log_message);
+      this.sendStatusToWindow("Downloading update...");
+      const win = BrowserWindow.getAllWindows()[0];
+      if (win) win.webContents.send("updater:download-progress", progressObj);
     });
     mainExports.autoUpdater.on("update-downloaded", (info) => {
       this.sendStatusToWindow("Update downloaded");

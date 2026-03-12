@@ -16,6 +16,11 @@ export const performLogout = (navigate: NavigateFunction) => {
   clearAuth();
 
   // Clear any related cookies
+  const api = (window as any).electronAPI;
+  if (api?.cachePut) {
+    api.cachePut(COOKIE_NAMES.REG_USER_EMAIL, null);
+    api.cachePut(COOKIE_NAMES.RESET_USER_EMAIL, null);
+  }
   deleteCookie(COOKIE_NAMES.BOUNTIP_LOGIN_USER_TOKENS);
   deleteCookie(COOKIE_NAMES.BOUNTIP_LOGIN_USER);
   deleteCookie(COOKIE_NAMES.REG_USER_EMAIL);
