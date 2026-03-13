@@ -1561,9 +1561,33 @@ class DatabaseService {
   // Queue Methods
   addToQueue(op) {
     this.db.prepare("INSERT INTO sync_queue (op, status) VALUES (?, ?)").run(JSON.stringify(op), "pending");
-    return true;
   }
-  getQueue() {
+  // System Default Methods
+  getSystemDefaults(key, outletId) {
+    if (outletId) {
+      return this.db.prepare("SELECT * FROM system_default WHERE key = ? AND outletId = ?").all(key, outletId);
+    }
+    return this.db.prepare("SELECT * FROM system_default WHERE key = ?").all(key);
+  }
+  addSystemDefault(key, data, outletId) {
+    const id = uuidExports.v4();
+    const record = {
+      id,
+      key,
+      data: JSON.stringify(data),
+      outletId,
+      recordId: null,
+      version: 0
+    };
+    this.db.prepare(
+      "INSERT INTO system_default (id, key, data, outletId, recordId, version) VALUES (@id, @key, @data, @outletId, @recordId, @version)"
+    ).run(record);
+    return record;
+  }
+  deleteSystemDefault(id) {
+    this.db.prepare("DELETE FROM system_default WHERE id = ?").run(id);
+  }
+  getPendingQueue() {
     const rows = this.db.prepare(
       "SELECT op FROM sync_queue WHERE status = 'pending' ORDER BY id ASC"
     ).all();
@@ -1829,6 +1853,8 @@ class NetworkService {
     this.online = false;
     this.checkInterval = null;
     this.isChecking = false;
+    this.consecutiveFailures = 0;
+    this.consecutiveSuccesses = 0;
     this.listeners = [];
     this.startConnectivityCheck();
   }
@@ -1844,23 +1870,37 @@ class NetworkService {
   // Called by Frontend (navigator.onLine updates)
   setOnline(flag) {
     if (!flag) {
+      this.consecutiveSuccesses = 0;
       this.updateStatus(false);
     } else {
       this.checkConnectivity();
     }
   }
   updateStatus(isOnline) {
-    if (this.online !== isOnline) {
-      this.online = isOnline;
-      console.log(
-        `[NetworkService] Status changed to: ${isOnline ? "ONLINE" : "OFFLINE"}`
-      );
-      const win = BrowserWindow.getAllWindows()[0];
-      if (win && !win.isDestroyed()) {
-        win.webContents.send("network:status", { online: this.online });
+    if (isOnline) {
+      this.consecutiveFailures = 0;
+      this.consecutiveSuccesses++;
+      if (this.online !== true && this.consecutiveSuccesses >= 1) {
+        this.applyStatus(true);
       }
-      this.listeners.forEach((cb) => cb(this.online));
+    } else {
+      this.consecutiveSuccesses = 0;
+      this.consecutiveFailures++;
+      if (this.online !== false && this.consecutiveFailures >= 3) {
+        this.applyStatus(false);
+      }
     }
+  }
+  applyStatus(isOnline) {
+    this.online = isOnline;
+    console.log(
+      `[NetworkService] Status changed to: ${isOnline ? "ONLINE" : "OFFLINE"}`
+    );
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("network:status", { online: this.online });
+    }
+    this.listeners.forEach((cb) => cb(this.online));
   }
   startConnectivityCheck() {
     this.checkConnectivity();
@@ -19854,11 +19894,11 @@ class SyncService {
         const op = JSON.parse(item.op);
         return {
           id: item.id,
-          tableName: op.tableName || op.table,
+          tableName: op.tableName || op.table || op.type,
           recordId: op.recordId || op.id,
-          recordData: JSON.stringify(op.data),
+          payload: JSON.stringify(op.data || op.payload || {}),
           sourceDeviceId: deviceId,
-          action: op.action,
+          action: op.action || op.op,
           timestamp: item.created_at,
           version: 1,
           syncedTo: [],
@@ -20596,9 +20636,21 @@ app.whenReady().then(() => {
     (_event, forceFullPull) => syncService.triggerSync(forceFullPull)
   );
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
-  ipcMain.handle("queue:list", () => dbService.getQueue());
+  ipcMain.handle("queue:list", () => dbService.getPendingQueue());
   ipcMain.handle("queue:clear", () => dbService.clearQueue());
   ipcMain.handle("queue:set", (_event, list) => dbService.setQueue(list));
+  ipcMain.handle(
+    "db:getSystemDefaults",
+    (_event, key, outletId) => dbService.getSystemDefaults(key, outletId)
+  );
+  ipcMain.handle(
+    "db:addSystemDefault",
+    (_event, key, data, outletId) => dbService.addSystemDefault(key, data, outletId)
+  );
+  ipcMain.handle(
+    "db:deleteSystemDefault",
+    (_event, id) => dbService.deleteSystemDefault(id)
+  );
   ipcMain.handle("network:getStatus", () => networkService.getStatus());
   ipcMain.on(
     "network:setOnline",

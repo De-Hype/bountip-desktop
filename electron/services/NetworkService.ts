@@ -3,9 +3,11 @@ import { BrowserWindow, net } from "electron";
 const CHECK_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1"; // Check the actual API
 
 export class NetworkService {
-  private online: boolean = false; // Default to false until proven otherwise
+  private online: boolean = false;
   private checkInterval: NodeJS.Timeout | null = null;
   private isChecking: boolean = false;
+  private consecutiveFailures: number = 0;
+  private consecutiveSuccesses: number = 0;
 
   private listeners: ((online: boolean) => void)[] = [];
 
@@ -27,29 +29,45 @@ export class NetworkService {
   // Called by Frontend (navigator.onLine updates)
   setOnline(flag: boolean) {
     if (!flag) {
-      // If frontend says "Cable Unplugged", we are definitely offline.
+      // If OS says offline, go offline immediately to prevent failed sync attempts
+      this.consecutiveSuccesses = 0;
       this.updateStatus(false);
     } else {
-      // If frontend says "Cable Plugged In", we don't believe it yet.
-      // We trigger a check to verify internet access.
+      // Trigger a check to verify internet access
       this.checkConnectivity();
     }
   }
 
   private updateStatus(isOnline: boolean) {
-    if (this.online !== isOnline) {
-      this.online = isOnline;
-      console.log(
-        `[NetworkService] Status changed to: ${isOnline ? "ONLINE" : "OFFLINE"}`,
-      );
-      const win = BrowserWindow.getAllWindows()[0];
-      if (win && !win.isDestroyed()) {
-        win.webContents.send("network:status", { online: this.online });
+    if (isOnline) {
+      this.consecutiveFailures = 0;
+      this.consecutiveSuccesses++;
+      // Switch to online after 1 successful check
+      if (this.online !== true && this.consecutiveSuccesses >= 1) {
+        this.applyStatus(true);
       }
-
-      // Notify internal listeners
-      this.listeners.forEach((cb) => cb(this.online));
+    } else {
+      this.consecutiveSuccesses = 0;
+      this.consecutiveFailures++;
+      // Be more patient: Only switch to offline after 3 consecutive failed checks (avoid noise from slow internet/glitches)
+      if (this.online !== false && this.consecutiveFailures >= 3) {
+        this.applyStatus(false);
+      }
     }
+  }
+
+  private applyStatus(isOnline: boolean) {
+    this.online = isOnline;
+    console.log(
+      `[NetworkService] Status changed to: ${isOnline ? "ONLINE" : "OFFLINE"}`,
+    );
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("network:status", { online: this.online });
+    }
+
+    // Notify internal listeners
+    this.listeners.forEach((cb) => cb(this.online));
   }
 
   private startConnectivityCheck() {

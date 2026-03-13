@@ -325,9 +325,21 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("queue:add", (_event, op) => dbService.addToQueue(op));
-  ipcMain.handle("queue:list", () => dbService.getQueue());
+  ipcMain.handle("queue:list", () => dbService.getPendingQueue());
   ipcMain.handle("queue:clear", () => dbService.clearQueue());
   ipcMain.handle("queue:set", (_event, list) => dbService.setQueue(list));
+
+  ipcMain.handle("db:getSystemDefaults", (_event, key, outletId) =>
+    dbService.getSystemDefaults(key, outletId),
+  );
+
+  ipcMain.handle("db:addSystemDefault", (_event, key, data, outletId) =>
+    dbService.addSystemDefault(key, data, outletId),
+  );
+
+  ipcMain.handle("db:deleteSystemDefault", (_event, id) =>
+    dbService.deleteSystemDefault(id),
+  );
 
   ipcMain.handle("network:getStatus", () => networkService.getStatus());
   ipcMain.on("network:setOnline", (_event, flag) =>

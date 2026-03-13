@@ -31,6 +31,10 @@ type ProductCreatePayload = {
 
 type ElectronAPI = {
   createProduct: (payload: ProductCreatePayload) => Promise<{ id: string }>;
+  getSystemDefaults: (key: string, outletId?: string) => Promise<any[]>;
+  addSystemDefault: (key: string, data: any, outletId: string) => Promise<any>;
+  deleteSystemDefault: (id: string) => Promise<void>;
+  queueAdd: (op: any) => Promise<void>;
 };
 
 const getElectronAPI = (): ElectronAPI | null => {
@@ -40,7 +44,7 @@ const getElectronAPI = (): ElectronAPI | null => {
 };
 
 type ProductCategory = {
-  id: number;
+  id: number | string;
   name: string;
 };
 
@@ -236,7 +240,7 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
   const [categories, setCategories] =
     useState<ProductCategory[]>(initialCategories);
   const [selectedCategoryId, setSelectedCategoryId] = useState<
-    number | undefined
+    number | string | undefined
   >(undefined);
   const [defaultPrice, setDefaultPrice] = useState("");
   const [priceTierEnabled, setPriceTierEnabled] = useState(false);
@@ -274,6 +278,62 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
   const currencySymbol = selectedOutlet?.currency
     ? getCurrencySymbol(selectedOutlet.currency)
     : "";
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const api = getElectronAPI();
+      if (api && selectedOutletId) {
+        try {
+          const result = await api.getSystemDefaults(
+            "category",
+            selectedOutletId,
+          );
+
+          // Flatten categories from all rows with key="category"
+          const dbCategories: ProductCategory[] = [];
+
+          for (const row of result) {
+            try {
+              const data = JSON.parse(row.data);
+              if (Array.isArray(data)) {
+                // Each row can have an array of categories (like in the mock data)
+                data.forEach((item: any, index: number) => {
+                  if (item.name) {
+                    dbCategories.push({
+                      // Use row.id + index if item has no id, or item.id if it does
+                      id: item.id || `${row.id}-${index}`,
+                      name: item.name,
+                    });
+                  }
+                });
+              } else if (data?.name) {
+                // Fallback for single object data
+                dbCategories.push({
+                  id: row.id,
+                  name: data.name,
+                });
+              }
+            } catch (e) {
+              console.error("Failed to parse category row data", row, e);
+            }
+          }
+
+          // ALWAYS call setCategories to clear old data if none found
+          setCategories(dbCategories);
+          // Reset selection when changing outlets
+          setSelectedCategoryId(undefined);
+        } catch (error) {
+          console.error("Failed to fetch categories from DB", error);
+        }
+      } else {
+        // Clear if no outlet selected
+        setCategories([]);
+        setSelectedCategoryId(undefined);
+      }
+    };
+
+    fetchCategories();
+  }, [selectedOutletId]);
 
   useEffect(() => {
     if (selectedOutlet?.priceTier) {
@@ -448,21 +508,77 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
     (area) => area.id === selectedPreparationAreaId,
   );
 
-  const handleCategoryDelete = (option: DropdownOption) => {
-    const id = Number(option.value);
+  const handleCategoryDelete = async (option: DropdownOption) => {
+    const id = option.value;
+    const api = getElectronAPI();
+
+    if (api && typeof id === "string" && id.includes("-")) {
+      // It's a UUID from the database
+      try {
+        await api.deleteSystemDefault(id);
+        // Also queue a sync operation for deletion
+        await api.queueAdd({
+          tableName: "system_default",
+          action: "delete",
+          id,
+          data: { id },
+        });
+      } catch (error) {
+        console.error("Failed to delete category from DB", error);
+      }
+    }
+
     setCategories((previous) =>
-      previous.filter((category) => category.id !== id),
+      previous.filter((category) => String(category.id) !== id),
     );
-    if (selectedCategoryId === id) {
+    if (String(selectedCategoryId) === id) {
       setSelectedCategoryId(undefined);
     }
   };
 
-  const handleCategoryAdded = (name: string) => {
+  const handleCategoryAdded = async (name: string) => {
+    const api = getElectronAPI();
+    if (api && selectedOutletId) {
+      try {
+        const result = await api.addSystemDefault(
+          "category",
+          [{ name }],
+          selectedOutletId,
+        );
+        const newCategory: ProductCategory = {
+          id: result.id,
+          name,
+        };
+
+        // Queue a sync operation for creation
+        await api.queueAdd({
+          tableName: "system_default",
+          action: "create",
+          id: result.id,
+          data: {
+            id: result.id,
+            key: "category",
+            data: [{ name }],
+            outletId: selectedOutletId,
+          },
+        });
+
+        setCategories((previous) => [...previous, newCategory]);
+        setSelectedCategoryId(newCategory.id);
+        setIsAddCategoryModalOpen(false);
+        return;
+      } catch (error) {
+        console.error("Failed to add category to DB", error);
+      }
+    }
+
+    // Fallback for non-electron or error
     setCategories((previous) => {
       const nextId =
         previous.length > 0
-          ? Math.max(...previous.map((category) => category.id)) + 1
+          ? Math.max(
+              ...previous.map((c) => (typeof c.id === "number" ? c.id : 0)),
+            ) + 1
           : 1;
       const newCategory = { id: nextId, name };
       setSelectedCategoryId(newCategory.id);
@@ -646,9 +762,7 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
                     selectedValue={
                       selectedCategory ? String(selectedCategory.id) : undefined
                     }
-                    onChange={(value) =>
-                      setSelectedCategoryId(Number(value) || undefined)
-                    }
+                    onChange={(value) => setSelectedCategoryId(value)}
                     placeholder="Click to select category"
                     className="w-full"
                     allowAddNew

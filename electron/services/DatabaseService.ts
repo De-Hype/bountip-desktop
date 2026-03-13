@@ -447,10 +447,45 @@ export class DatabaseService {
     this.db
       .prepare("INSERT INTO sync_queue (op, status) VALUES (?, ?)")
       .run(JSON.stringify(op), "pending");
-    return true;
   }
 
-  getQueue(): any[] {
+  // System Default Methods
+  getSystemDefaults(key: string, outletId?: string) {
+    if (outletId) {
+      return this.db
+        .prepare("SELECT * FROM system_default WHERE key = ? AND outletId = ?")
+        .all(key, outletId) as any[];
+    }
+    return this.db
+      .prepare("SELECT * FROM system_default WHERE key = ?")
+      .all(key) as any[];
+  }
+
+  addSystemDefault(key: string, data: any, outletId: string) {
+    const id = uuidv4();
+    const record = {
+      id,
+      key,
+      data: JSON.stringify(data),
+      outletId,
+      recordId: null,
+      version: 0,
+    };
+
+    this.db
+      .prepare(
+        "INSERT INTO system_default (id, key, data, outletId, recordId, version) VALUES (@id, @key, @data, @outletId, @recordId, @version)",
+      )
+      .run(record);
+
+    return record;
+  }
+
+  deleteSystemDefault(id: string) {
+    this.db.prepare("DELETE FROM system_default WHERE id = ?").run(id);
+  }
+
+  getPendingQueue() {
     const rows = this.db
       .prepare(
         "SELECT op FROM sync_queue WHERE status = 'pending' ORDER BY id ASC",

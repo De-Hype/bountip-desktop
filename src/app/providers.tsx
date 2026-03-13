@@ -36,7 +36,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, setAuth, clearAuth } = useAuthStore();
-  const { fetchBusinessData } = useBusinessStore();
+  const {
+    fetchBusinessData,
+    isLoading: businessLoading,
+    hasInitialized,
+  } = useBusinessStore();
   const toast = useToastStore();
 
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -105,22 +109,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isAuthenticated) {
       (async () => {
-        // First load from local DB
+        // 1. Initial load from local DB
         await fetchBusinessData();
 
         const api = (window as any).electronAPI;
         if (!api) return;
 
-        // If no outlets found and we are online, perform initial full pull
+        // 2. Check if we need a sync pull
         const { outlets } = useBusinessStore.getState();
-        if (outlets.length === 0 && isOnline) {
+        const hasUnonboarded = outlets.some((o) => !o.isOnboarded);
+
+        // If no outlets found OR some are unonboarded and we are online, perform sync pull
+        if ((outlets.length === 0 || hasUnonboarded) && isOnline) {
           try {
-            console.log(
-              "[Providers] No outlets found. Starting initial sync...",
-            );
+            console.log("[Providers] Triggering initial sync pull...");
             setIsInitialSyncing(true);
             await api.triggerSync();
-            // Fetch again after sync
+            // 3. Re-fetch after sync to get latest data
             await fetchBusinessData();
           } catch (error) {
             console.error("[Providers] Initial sync failed:", error);
@@ -130,7 +135,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }
       })();
     }
-  }, [isAuthenticated, fetchBusinessData, isOnline]);
+  }, [isAuthenticated, isOnline]);
 
   /**
    * ------------------------------------------------------
@@ -214,7 +219,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
    * SPLASH SCREEN (NEVER RETURN NULL)
    * ------------------------------------------------------
    */
-  if (isBootstrapping || isInitialSyncing) {
+  if (
+    isBootstrapping ||
+    isInitialSyncing ||
+    (isAuthenticated && !hasInitialized)
+  ) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <img
@@ -239,12 +248,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider>
       <ReactQueryProvider>
-        {!isOnline && (
-          <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-sm py-2 text-center z-50">
-            <WifiOff size={16} className="inline mr-2" />
-            Offline mode — syncing paused
-          </div>
-        )}
+        <div
+          className={`fixed top-0 left-0 right-0 bg-red-600 text-white text-sm py-2 text-center z-50 transition-all duration-300 transform ${
+            !isOnline
+              ? "translate-y-0 opacity-100"
+              : "-translate-y-full opacity-0 pointer-events-none"
+          }`}
+        >
+          <WifiOff size={16} className="inline mr-2" />
+          Offline mode — syncing paused
+        </div>
 
         <Toast {...toast} />
         {children}

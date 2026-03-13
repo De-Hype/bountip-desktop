@@ -3,7 +3,7 @@ import { create } from "zustand";
 type ElectronAPI = {
   getNetworkStatus: () => Promise<{ online: boolean }>;
   onNetworkStatus: (
-    callback: (status: { online: boolean }) => void
+    callback: (status: { online: boolean }) => void,
   ) => () => void;
   setNetworkStatus: (online: boolean) => void;
 };
@@ -46,28 +46,34 @@ export const initializeNetworkListeners = () => {
   api
     .getNetworkStatus()
     .then(({ online }) => {
-      console.log("[NetworkStore] Initial network status:", online);
       setIsOnline(online);
     })
-    .catch((err) => {
-      console.error("[NetworkStore] Failed to get network status:", err);
+    .catch(() => {
       setIsOnline(false);
     });
 
-  // 2. Listen for Updates from Main Process
+  // 2. Listen for Updates from Main Process (Single Source of Truth)
   const removeListener = api.onNetworkStatus(({ online }) => {
-    console.log("[NetworkStore] Network status updated:", online);
     setIsOnline(online);
   });
 
-  // 3. Notify Main Process of Browser Events
-  const handleBrowserOnline = () => api.setNetworkStatus(true);
-  const handleBrowserOffline = () => api.setNetworkStatus(false);
+  // 3. Notify Main Process of Browser Events (with stability delay)
+  let debounceTimer: NodeJS.Timeout | null = null;
+  const notifyMain = (online: boolean) => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      api.setNetworkStatus(online);
+    }, 5000); // Increased to 5s to ignore short fluctuations
+  };
+
+  const handleBrowserOnline = () => notifyMain(true);
+  const handleBrowserOffline = () => notifyMain(false);
 
   window.addEventListener("online", handleBrowserOnline);
   window.addEventListener("offline", handleBrowserOffline);
 
   return () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
     window.removeEventListener("online", handleBrowserOnline);
     window.removeEventListener("offline", handleBrowserOffline);
     if (removeListener) removeListener();

@@ -362,11 +362,11 @@ export class SyncService {
         // Map local queue format to API expected format
         return {
           id: item.id,
-          tableName: op.tableName || op.table,
+          tableName: op.tableName || op.table || op.type,
           recordId: op.recordId || op.id,
-          recordData: JSON.stringify(op.data),
+          payload: JSON.stringify(op.data || op.payload || {}),
           sourceDeviceId: deviceId,
-          action: op.action,
+          action: op.action || op.op,
           timestamp: item.created_at,
           version: 1,
           syncedTo: [],

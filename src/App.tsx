@@ -39,6 +39,7 @@ const OnboardingGuard = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // 🛡️ Wait for basic initialization to be complete
     if (!hasInitialized || !selectedOutlet) return;
 
     const isUnonboarded = !selectedOutlet.isOnboarded;
@@ -46,6 +47,10 @@ const OnboardingGuard = ({ children }: { children: React.ReactNode }) => {
     const isOnboardingPath = location.pathname.startsWith("/onboarding");
 
     if (isUnonboarded && isDashboardPath && !isOnboardingPath) {
+      console.log(
+        "[OnboardingGuard] Redirecting to onboarding because outlet is not onboarded:",
+        selectedOutlet.id,
+      );
       navigate(`/onboarding?outletId=${selectedOutlet.id}`, { replace: true });
     }
   }, [selectedOutlet, hasInitialized, location.pathname, navigate]);

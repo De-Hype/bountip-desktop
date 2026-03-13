@@ -104,6 +104,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cacheGet: async (key: string) => ipcRenderer.invoke("cache:get", key),
   cachePut: async (key: string, value: any) =>
     ipcRenderer.invoke("cache:put", key, value),
+  getSystemDefaults: async (key: string, outletId?: string) =>
+    ipcRenderer.invoke("db:getSystemDefaults", key, outletId),
+  addSystemDefault: async (key: string, data: any, outletId: string) =>
+    ipcRenderer.invoke("db:addSystemDefault", key, data, outletId),
+  deleteSystemDefault: async (id: string) =>
+    ipcRenderer.invoke("db:deleteSystemDefault", id),
   queueAdd: async (op: any) => ipcRenderer.invoke("queue:add", op),
   triggerSync: async (forceFullPull?: boolean) =>
     ipcRenderer.invoke("sync:trigger", forceFullPull),

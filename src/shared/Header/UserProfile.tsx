@@ -141,10 +141,10 @@ const UserProfile = ({
     setActiveOutletId(outlet.id);
     selectOutlet(outlet.id);
     setOpen(false);
-    console.log(outlet.isOnboarded);
+    console.log("Onboarding stuff", outlet.isOnboarded);
 
-    // If the selected outlet is not onboarded, navigate to onboarding immediately
-    if (outlet.isOnboarded == 0) {
+    // 🛡️ Only redirect if we ARE NOT loading and explicitly unonboarded
+    if (!isLoading && hasInitialized && outlet.isOnboarded == 0) {
       navigate(`/onboarding?outletId=${outlet.id}`);
     }
   };

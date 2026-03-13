@@ -220,7 +220,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       }
 
       // Retry check for business and outlets to handle sync time lapse
-      const checkOnboardingStatus = async (retries = 3, delay = 1000) => {
+      const checkOnboardingStatus = async (retries = 5, delay = 2000) => {
         for (let i = 0; i < retries; i++) {
           const [outlets, businesses] = await Promise.all([
             api?.getOutlets?.() || [],
