@@ -182,8 +182,8 @@ const Dashboard = () => {
       icon: AssetsFiles.phusers,
       title: "Customer Management",
       path: "/dashboard/customer-management",
-      badge: "Coming Soon",
-      available: false,
+     // badge: "Coming Soon",
+      available: true,
     },
 
     {

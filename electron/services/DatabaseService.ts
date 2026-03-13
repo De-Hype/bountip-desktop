@@ -20,6 +20,14 @@ import {
   buildProductUpsertParams,
 } from "../features/schemas/product.schema";
 import {
+  systemDefaultUpsertSql,
+  buildSystemDefaultUpsertParams,
+} from "../features/schemas/system_default.schema";
+import {
+  customerUpsertSql,
+  buildCustomerUpsertParams,
+} from "../features/schemas/customers.schema";
+import {
   createProductRecord,
   buildProductSyncOp,
   ProductCreatePayload,
@@ -40,6 +48,23 @@ export class DatabaseService {
 
     this.db = new Database(dbPath);
     this.initSchema();
+    this.ensureDeviceId();
+  }
+
+  private ensureDeviceId() {
+    const row = this.db
+      .prepare("SELECT value FROM identity WHERE key = ?")
+      .get("device_id") as { value: string } | undefined;
+
+    if (!row) {
+      const deviceId = uuidv4();
+      this.db
+        .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
+        .run("device_id", JSON.stringify({ deviceId }));
+      console.log("[DatabaseService] Generated new deviceId:", deviceId);
+    } else {
+      console.log("[DatabaseService] Existing deviceId loaded.");
+    }
   }
 
   clearAllData() {
@@ -137,9 +162,34 @@ export class DatabaseService {
     try {
       this.db.exec("ALTER TABLE business_outlet ADD COLUMN localLogoPath TEXT");
     } catch (e: any) {
-      // Ignore if column already exists
       if (!e.message.includes("duplicate column name")) {
         console.error("Migration error (localLogoPath):", e);
+      }
+    }
+
+    // Migration: Add missing columns to system_default
+    const systemDefaultColumns = ["recordId", "version"];
+    for (const col of systemDefaultColumns) {
+      try {
+        const type = col === "version" ? "INTEGER DEFAULT 0" : "TEXT";
+        this.db.exec(`ALTER TABLE system_default ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (system_default.${col}):`, e);
+        }
+      }
+    }
+
+    // Migration: Add missing columns to customers
+    const customerColumns = ["reason", "recordId", "version"];
+    for (const col of customerColumns) {
+      try {
+        const type = col === "version" ? "INTEGER DEFAULT 0" : "TEXT";
+        this.db.exec(`ALTER TABLE customers ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (customers.${col}):`, e);
+        }
       }
     }
   }
@@ -301,6 +351,19 @@ export class DatabaseService {
     try {
       const parsed = JSON.parse(row.value) as { hash?: string };
       return parsed.hash ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  getDeviceId(): string | null {
+    const row = this.db
+      .prepare("SELECT value FROM identity WHERE key = ?")
+      .get("device_id") as { value: string } | undefined;
+    if (!row) return null;
+    try {
+      const parsed = JSON.parse(row.value) as { deviceId?: string };
+      return parsed.deviceId ?? null;
     } catch {
       return null;
     }
@@ -572,6 +635,25 @@ export class DatabaseService {
 
         for (const p of data.products) {
           stmt.run(sanitize(buildProductUpsertParams(p)));
+        }
+      }
+
+      if (
+        Array.isArray(data.systemDefaults) &&
+        data.systemDefaults.length > 0
+      ) {
+        const stmt = this.db.prepare(systemDefaultUpsertSql);
+
+        for (const s of data.systemDefaults) {
+          stmt.run(sanitize(buildSystemDefaultUpsertParams(s)));
+        }
+      }
+
+      if (Array.isArray(data.customers) && data.customers.length > 0) {
+        const stmt = this.db.prepare(customerUpsertSql);
+
+        for (const c of data.customers) {
+          stmt.run(sanitize(buildCustomerUpsertParams(c)));
         }
       }
     });

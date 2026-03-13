@@ -354,8 +354,8 @@ export class SyncService {
         `[SyncService] Syncing ${itemsToSync.length} items to ${PUSH_ENDPOINT}...`,
       );
 
-      const deviceId = this.db.getIdentity()?.deviceId || "unknown-device";
-      console.log("Device", this.db.getIdentity());
+      const deviceId = this.db.getDeviceId() || "unknown-device";
+      console.log("Device ID used for sync:", deviceId);
 
       const records = itemsToSync.map((item: any) => {
         const op = JSON.parse(item.op);

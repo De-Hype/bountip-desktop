@@ -606,6 +606,94 @@ const businessUserRolesBusinessRoleSchema = {
     );
   `
 };
+const customerUpsertSql = `
+  INSERT OR REPLACE INTO customers (
+    id,
+    email,
+    name,
+    phoneNumber,
+    customerCode,
+    status,
+    verificationCode,
+    verificationCodeExpiry,
+    emailVerified,
+    phoneVerfied,
+    reference,
+    createdAt,
+    outletId,
+    otherEmails,
+    otherNames,
+    otherPhoneNumbers,
+    customerType,
+    pricingTier,
+    paymentTermId,
+    organizationName,
+    addedBy,
+    updatedBy,
+    updatedAt,
+    deletedAt,
+    reason,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @email,
+    @name,
+    @phoneNumber,
+    @customerCode,
+    @status,
+    @verificationCode,
+    @verificationCodeExpiry,
+    @emailVerified,
+    @phoneVerfied,
+    @reference,
+    @createdAt,
+    @outletId,
+    @otherEmails,
+    @otherNames,
+    @otherPhoneNumbers,
+    @customerType,
+    @pricingTier,
+    @paymentTermId,
+    @organizationName,
+    @addedBy,
+    @updatedBy,
+    @updatedAt,
+    @deletedAt,
+    @reason,
+    @recordId,
+    @version
+  )
+`;
+const buildCustomerUpsertParams = (c) => ({
+  id: c.id,
+  email: c.email ?? null,
+  name: c.name ?? null,
+  phoneNumber: c.phoneNumber ?? null,
+  customerCode: c.customerCode ?? null,
+  status: c.status ?? "active",
+  verificationCode: c.verificationCode ?? null,
+  verificationCodeExpiry: c.verificationCodeExpiry ?? null,
+  emailVerified: c.emailVerified ? 1 : 0,
+  phoneVerfied: c.phoneVerfied ? 1 : 0,
+  reference: c.reference ?? null,
+  createdAt: c.createdAt ?? null,
+  outletId: c.outletId ?? null,
+  otherEmails: Array.isArray(c.otherEmails) ? JSON.stringify(c.otherEmails) : c.otherEmails ?? null,
+  otherNames: Array.isArray(c.otherNames) ? JSON.stringify(c.otherNames) : c.otherNames ?? null,
+  otherPhoneNumbers: Array.isArray(c.otherPhoneNumbers) ? JSON.stringify(c.otherPhoneNumbers) : c.otherPhoneNumbers ?? null,
+  customerType: c.customerType ?? "individual",
+  pricingTier: c.pricingTier ?? null,
+  paymentTermId: c.paymentTermId ?? null,
+  organizationName: c.organizationName ?? null,
+  addedBy: c.addedBy ?? null,
+  updatedBy: c.updatedBy ?? null,
+  updatedAt: c.updatedAt ?? null,
+  deletedAt: c.deletedAt ?? null,
+  reason: c.reason ?? null,
+  recordId: c.recordId ?? null,
+  version: c.version ?? 0
+});
 const customersSchema = {
   name: "customers",
   create: `
@@ -633,9 +721,17 @@ const customersSchema = {
       addedBy TEXT,
       updatedBy TEXT,
       updatedAt TEXT,
-      deletedAt TEXT
+      deletedAt TEXT,
+      reason TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0
     );
-  `
+  `,
+  indexes: [
+    `CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);`,
+    `CREATE INDEX IF NOT EXISTS idx_customers_phoneNumber ON customers(phoneNumber);`,
+    `CREATE INDEX IF NOT EXISTS idx_customers_outletId ON customers(outletId);`
+  ]
 };
 const customerAddressSchema = {
   name: "customer_address",
@@ -820,16 +916,47 @@ const recipeIngredientsSchema = {
     );
   `
 };
+const systemDefaultUpsertSql = `
+  INSERT OR REPLACE INTO system_default (
+    id,
+    key,
+    data,
+    outletId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @key,
+    @data,
+    @outletId,
+    @recordId,
+    @version
+  )
+`;
+const buildSystemDefaultUpsertParams = (s) => ({
+  id: s.id,
+  key: s.key || "category",
+  data: Array.isArray(s.data) ? JSON.stringify(s.data) : s.data || "[]",
+  outletId: s.outletId || null,
+  recordId: s.recordId || null,
+  version: s.version || 0
+});
 const systemDefaultSchema = {
   name: "system_default",
   create: `
     CREATE TABLE IF NOT EXISTS system_default (
       id TEXT PRIMARY KEY,
-      key TEXT DEFAULT 'category' NOT NULL,
-      data TEXT DEFAULT '[]' NOT NULL,
-      outletId TEXT
+      key TEXT NOT NULL,
+      data TEXT NOT NULL,
+      outletId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0
     );
-  `
+  `,
+  indexes: [
+    `CREATE INDEX IF NOT EXISTS idx_system_default_key ON system_default(key);`,
+    `CREATE INDEX IF NOT EXISTS idx_system_default_outletId ON system_default(outletId);`
+  ]
 };
 const syncSessionSchema = {
   name: "sync_session",
@@ -1181,6 +1308,17 @@ class DatabaseService {
     if (!fs$1.existsSync(dir)) fs$1.mkdirSync(dir, { recursive: true });
     this.db = new Database(dbPath);
     this.initSchema();
+    this.ensureDeviceId();
+  }
+  ensureDeviceId() {
+    const row = this.db.prepare("SELECT value FROM identity WHERE key = ?").get("device_id");
+    if (!row) {
+      const deviceId = uuidExports.v4();
+      this.db.prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)").run("device_id", JSON.stringify({ deviceId }));
+      console.log("[DatabaseService] Generated new deviceId:", deviceId);
+    } else {
+      console.log("[DatabaseService] Existing deviceId loaded.");
+    }
   }
   clearAllData() {
     try {
@@ -1258,6 +1396,28 @@ class DatabaseService {
     } catch (e) {
       if (!e.message.includes("duplicate column name")) {
         console.error("Migration error (localLogoPath):", e);
+      }
+    }
+    const systemDefaultColumns = ["recordId", "version"];
+    for (const col of systemDefaultColumns) {
+      try {
+        const type2 = col === "version" ? "INTEGER DEFAULT 0" : "TEXT";
+        this.db.exec(`ALTER TABLE system_default ADD COLUMN ${col} ${type2}`);
+      } catch (e) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (system_default.${col}):`, e);
+        }
+      }
+    }
+    const customerColumns = ["reason", "recordId", "version"];
+    for (const col of customerColumns) {
+      try {
+        const type2 = col === "version" ? "INTEGER DEFAULT 0" : "TEXT";
+        this.db.exec(`ALTER TABLE customers ADD COLUMN ${col} ${type2}`);
+      } catch (e) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (customers.${col}):`, e);
+        }
       }
     }
   }
@@ -1348,6 +1508,16 @@ class DatabaseService {
     try {
       const parsed = JSON.parse(row.value);
       return parsed.hash ?? null;
+    } catch {
+      return null;
+    }
+  }
+  getDeviceId() {
+    const row = this.db.prepare("SELECT value FROM identity WHERE key = ?").get("device_id");
+    if (!row) return null;
+    try {
+      const parsed = JSON.parse(row.value);
+      return parsed.deviceId ?? null;
     } catch {
       return null;
     }
@@ -1523,6 +1693,18 @@ class DatabaseService {
         const stmt = this.db.prepare(productUpsertSql);
         for (const p of data.products) {
           stmt.run(sanitize(buildProductUpsertParams(p)));
+        }
+      }
+      if (Array.isArray(data.systemDefaults) && data.systemDefaults.length > 0) {
+        const stmt = this.db.prepare(systemDefaultUpsertSql);
+        for (const s of data.systemDefaults) {
+          stmt.run(sanitize(buildSystemDefaultUpsertParams(s)));
+        }
+      }
+      if (Array.isArray(data.customers) && data.customers.length > 0) {
+        const stmt = this.db.prepare(customerUpsertSql);
+        for (const c of data.customers) {
+          stmt.run(sanitize(buildCustomerUpsertParams(c)));
         }
       }
     });
@@ -19666,8 +19848,8 @@ class SyncService {
       console.log(
         `[SyncService] Syncing ${itemsToSync.length} items to ${PUSH_ENDPOINT}...`
       );
-      const deviceId = this.db.getIdentity()?.deviceId || "unknown-device";
-      console.log("Device", this.db.getIdentity());
+      const deviceId = this.db.getDeviceId() || "unknown-device";
+      console.log("Device ID used for sync:", deviceId);
       const records = itemsToSync.map((item) => {
         const op = JSON.parse(item.op);
         return {

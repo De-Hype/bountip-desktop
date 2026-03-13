@@ -603,7 +603,7 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
         // 3. Trigger Sync if Online
         if (isOnline) {
           console.log("[UPDATE] Online: Triggering sync...");
-          api.syncTrigger();
+          api.triggerSync();
         } else {
           console.log("[UPDATE] Offline: Changes saved to queue.");
         }
@@ -630,7 +630,12 @@ export const BusinessDetailsModal: React.FC<BusinessDetailsModalProps> = ({
       }
 
       await fetchBusinessData();
-      onClose();
+
+      // We close the modal after a short delay to ensure the toast is triggered correctly
+      // and the user sees the final state before the modal disappears.
+      setTimeout(() => {
+        onClose();
+      }, 500);
     } catch (error: any) {
       console.error("[SUBMIT] Update failed:", error);
       showToast(
