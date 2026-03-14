@@ -40,6 +40,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:saveOutletOnboarding", payload),
   getOutlets: async () => ipcRenderer.invoke("db:getOutlets"),
   getCustomers: async () => ipcRenderer.invoke("db:getCustomers"),
+  getPaymentTerms: async (outletId: string) =>
+    ipcRenderer.invoke("db:getPaymentTerms", outletId),
+  savePaymentTerm: async (payload: any) =>
+    ipcRenderer.invoke("db:savePaymentTerm", payload),
+  deletePaymentTerm: async (id: string) =>
+    ipcRenderer.invoke("db:deletePaymentTerm", id),
   getBusinesses: async () => ipcRenderer.invoke("db:getBusinesses"),
   updateBusinessDetails: async (payload: any) =>
     ipcRenderer.invoke("db:updateBusinessDetails", payload),
@@ -77,7 +83,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:createProduct", payload),
   bulkCreateProducts: async (payload: any) =>
     ipcRenderer.invoke("db:bulkCreateProducts", payload),
-  dbQuery: async (sql: string, params: any[] = []) =>
+  bulkCreateCustomers: async (payload: any) =>
+    ipcRenderer.invoke("db:bulkCreateCustomers", payload),
+  dbQuery: async (sql: string, params: any[]) =>
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>
     ipcRenderer.invoke("assets:import", filePath),

@@ -6,8 +6,8 @@ interface ModalProps {
   image?: any;
   isOpen: boolean;
   onClose: () => void;
-  title: string;
-  subtitle: string;
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl" | "full" | number; // Added size prop
 }
@@ -42,7 +42,6 @@ export const Modal: React.FC<ModalProps> = ({
  
 
   if (!isOpen && !isVisible) return null;
-  if (!image) return null;
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex justify-end z-50 transition-opacity duration-300 ease-in-out">
@@ -54,16 +53,28 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Modal Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex gap-4 items-center">
-            <div className="p-2.5 rounded-full border border-[#15BA5C] bg-white">
-              <img
-                src={image.src || image}
-                alt="Modal Icon"
-                className="object-contain h-[20px] w-[20px]"
-              />
-            </div>
+            {image && (
+              <div className="p-2.5 rounded-full border border-[#15BA5C] bg-white">
+                <img
+                  src={image.src || image}
+                  alt="Modal Icon"
+                  className="object-contain h-[20px] w-[20px]"
+                />
+              </div>
+            )}
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-              <p className="text-sm text-gray-500">{subtitle}</p>
+              {typeof title === "string" ? (
+                <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+              ) : (
+                title
+              )}
+              {subtitle && (
+                typeof subtitle === "string" ? (
+                  <p className="text-sm text-gray-500">{subtitle}</p>
+                ) : (
+                  subtitle
+                )
+              )}
             </div>
           </div>
           <button

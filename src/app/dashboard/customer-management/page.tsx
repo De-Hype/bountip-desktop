@@ -5,32 +5,86 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CustomerList from "@/features/customer-management/customers/CustomerList";
 import { Plus } from "lucide-react";
 import CreateCustomer from "@/features/customer-management/customers/CreateCustomer";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import useCustomerStore from "@/stores/useCustomerStore";
+import PaymentTermsList, {
+  PaymentTerm,
+} from "@/features/customer-management/payment-tiers/PaymentTermsList";
+import PaymentTermDetails from "@/features/customer-management/payment-tiers/PaymentTermDetails";
+import CreatePaymentTerm from "@/features/customer-management/payment-tiers/CreatePaymentTerm";
+import EditPaymentTerm from "@/features/customer-management/payment-tiers/EditPaymentTerm";
+import useBusinessStore from "@/stores/useBusinessStore";
 
 const CustomerManagement = () => {
   const [isCustomerCreationOpen, setIsCustomerCreationOpen] = useState(false);
-  const { customers, isLoading } = useCustomerStore();
+  const [isCreateTermOpen, setIsCreateTermOpen] = useState(false);
+  const [isEditTermOpen, setIsEditTermOpen] = useState(false);
+  const [editTermMode, setEditTermMode] = useState<"view" | "edit">("view");
+  const { allCustomers, isLoading } = useCustomerStore();
+  const selectedOutlet = useBusinessStore((state) => state.selectedOutlet);
+
+  // Payment Terms State
+  const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([]);
+  const [selectedTerm, setSelectedTerm] = useState<PaymentTerm | null>(null);
+  const [isTermsLoading, setIsTermsLoading] = useState(false);
+  const [termsSearchQuery, setTermsSearchQuery] = useState("");
+
+  const fetchPaymentTerms = async () => {
+    if (!selectedOutlet) return;
+    setIsTermsLoading(true);
+    try {
+      const api = (window as any).electronAPI;
+      if (api) {
+        const result = await api.getPaymentTerms(selectedOutlet.id);
+        const mapped = result.map((pt: any) => ({
+          ...pt,
+          paymentInInstallment: pt.paymentInInstallment
+            ? JSON.parse(pt.paymentInInstallment)
+            : null,
+        }));
+        setPaymentTerms(mapped);
+        if (mapped.length > 0 && !selectedTerm) {
+          setSelectedTerm(mapped[0]);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch payment terms:", error);
+    } finally {
+      setIsTermsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPaymentTerms();
+  }, [selectedOutlet]);
+
+  const filteredTerms = useMemo(() => {
+    return paymentTerms.filter((term) =>
+      term.name.toLowerCase().includes(termsSearchQuery.toLowerCase()),
+    );
+  }, [paymentTerms, termsSearchQuery]);
 
   const customerStats = useMemo(
     () => [
       {
         label: "Total Customers",
-        value: customers.length.toString(),
+        value: allCustomers.length.toString(),
         bgColor: "#0485FC0D",
         iconColor: "#0485FC1A",
         image: CustomerManagementAssets.UserStar,
       },
       {
         label: "Total Active Customers",
-        value: customers.filter((c) => c.status === "Active").length.toString(),
+        value: allCustomers
+          .filter((c) => c.status === "Active")
+          .length.toString(),
         bgColor: "#15BA5C0D",
         iconColor: "#15BA5C1A",
         image: CustomerManagementAssets.UserStatsGreen,
       },
       {
         label: "Total Inactive Customers",
-        value: customers
+        value: allCustomers
           .filter((c) => c.status === "Inactive")
           .length.toString(),
         bgColor: "#F8BD000D",
@@ -39,7 +93,7 @@ const CustomerManagement = () => {
       },
       {
         label: "Total Individual Customers",
-        value: customers
+        value: allCustomers
           .filter((c) => c.type === "Individual")
           .length.toString(),
         bgColor: "#9747FF0D",
@@ -48,7 +102,7 @@ const CustomerManagement = () => {
       },
       {
         label: "Total Organizations",
-        value: customers
+        value: allCustomers
           .filter((c) => c.type === "Organization")
           .length.toString(),
         bgColor: "#307B320D",
@@ -56,7 +110,7 @@ const CustomerManagement = () => {
         image: CustomerManagementAssets.UserStatsTeal,
       },
     ],
-    [customers],
+    [allCustomers],
   );
 
   return (
@@ -79,13 +133,18 @@ const CustomerManagement = () => {
               </TabsTrigger>
             </TabsList>
 
-            <button
-              onClick={() => setIsCustomerCreationOpen(true)}
-              className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-base font-semibold transition-all duration-200 cursor-pointer bg-[#15BA5C] text-white hover:bg-[#119E4D] active:scale-95 shadow-sm"
+            <TabsContent
+              value="customers"
+              className=" flex items-end justify-end"
             >
-              <Plus className="size-5" />
-              <span>Create Customer</span>
-            </button>
+              <button
+                onClick={() => setIsCustomerCreationOpen(true)}
+                className="flex items-center gap-2.5 px-6 py-3 rounded-xl text-base font-semibold transition-all duration-200 cursor-pointer bg-[#15BA5C] text-white hover:bg-[#119E4D] active:scale-95 shadow-sm"
+              >
+                <Plus className="size-5" />
+                <span>Create Customer</span>
+              </button>
+            </TabsContent>
           </div>
 
           <TabsContent value="customers" className="mt-6">
@@ -155,13 +214,26 @@ const CustomerManagement = () => {
           </TabsContent>
 
           <TabsContent value="payment-terms" className="mt-6">
-            <div className="p-4 bg-white rounded-lg border border-gray-100">
-              <h3 className="text-lg font-medium text-gray-900">
-                Payment Terms
-              </h3>
-              <p className="text-gray-500 mt-2">
-                Configure payment terms and conditions.
-              </p>
+            <div className=" px-3  flex gap-[12px] overflow-hidden  h-[700px]">
+              <PaymentTermsList
+                terms={filteredTerms}
+                selectedTermId={selectedTerm?.id || null}
+                onSelect={setSelectedTerm}
+                searchQuery={termsSearchQuery}
+                onSearchChange={setTermsSearchQuery}
+                isLoading={isTermsLoading}
+              />
+              <PaymentTermDetails
+                term={selectedTerm}
+                onAdd={() => {
+                  setIsCreateTermOpen(true);
+                }}
+                onEdit={(term) => {
+                  setSelectedTerm(term);
+                  setEditTermMode("edit");
+                  setIsEditTermOpen(true);
+                }}
+              />
             </div>
           </TabsContent>
         </Tabs>
@@ -170,6 +242,20 @@ const CustomerManagement = () => {
       <CreateCustomer
         isOpen={isCustomerCreationOpen}
         onClose={() => setIsCustomerCreationOpen(false)}
+      />
+
+      <CreatePaymentTerm
+        isOpen={isCreateTermOpen}
+        onClose={() => setIsCreateTermOpen(false)}
+        onSuccess={fetchPaymentTerms}
+      />
+
+      <EditPaymentTerm
+        isOpen={isEditTermOpen}
+        onClose={() => setIsEditTermOpen(false)}
+        onSuccess={fetchPaymentTerms}
+        paymentTerm={selectedTerm}
+        mode={editTermMode}
       />
     </section>
   );

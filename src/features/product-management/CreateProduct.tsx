@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { X, Check } from "lucide-react";
-import AssetsFiles from "@/assets";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
 import useBusinessStore from "@/stores/useBusinessStore";
+import useToastStore from "@/stores/toastStore";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import { SYNC_ACTIONS } from "../../../electron/types/action.types";
+import ImageHandler from "@/shared/Image/ImageHandler";
 
 type ProductCreatePayload = {
   name: string;
@@ -63,23 +64,23 @@ type PriceTier = {
 };
 
 type PreparationAreaOption = {
-  id: number;
+  id: number | string;
   name: string;
 };
 
 type Allergen = {
-  id: number;
+  id: number | string;
   name: string;
   selected: boolean;
 };
 
 type WeightUnit = {
-  id: number;
+  id: number | string;
   name: string;
 };
 
 type PackagingMethod = {
-  id: number;
+  id: number | string;
   name: string;
 };
 
@@ -97,56 +98,6 @@ type AddEntityModalProps = {
   submitLabel?: string;
   onClose: () => void;
   onSubmit: (value: string) => void;
-};
-
-const initialCategories: ProductCategory[] = [
-  { id: 1, name: "Bread" },
-  { id: 2, name: "Dough" },
-];
-
-const initialPreparationAreas: PreparationAreaOption[] = [
-  { id: 1, name: "Bakery" },
-  { id: 2, name: "Kitchen" },
-];
-
-const initialPriceTiers: PriceTier[] = [];
-
-const initialAllergens: Allergen[] = [
-  { id: 1, name: "Cereals", selected: true },
-  { id: 2, name: "Crustaceans", selected: false },
-  { id: 3, name: "Eggs", selected: true },
-  { id: 4, name: "Fish", selected: false },
-  { id: 5, name: "Peanuts", selected: false },
-  { id: 6, name: "Soybeans", selected: false },
-  { id: 7, name: "Milk", selected: false },
-  { id: 8, name: "Mollusks", selected: false },
-  { id: 9, name: "Nuts", selected: false },
-  { id: 10, name: "Celery", selected: false },
-  { id: 11, name: "Mustard", selected: false },
-  { id: 12, name: "Sesame seed", selected: false },
-  {
-    id: 13,
-    name: "Sulphur dioxide and sulphites",
-    selected: false,
-  },
-  { id: 14, name: "Lupin", selected: false },
-];
-
-const initialWeightUnits: WeightUnit[] = [
-  { id: 1, name: "Milligrams (mg)" },
-  { id: 2, name: "Grams (g)" },
-  { id: 3, name: "Kilogram (kg)" },
-  { id: 4, name: "Ounce (oz)" },
-];
-
-const initialPackagingMethods: PackagingMethod[] = [
-  { id: 1, name: "Box" },
-  { id: 2, name: "Trey" },
-];
-
-const initialSelectedPackagingMethods: Record<string, boolean> = {
-  "1": true,
-  "2": false,
 };
 
 type ToggleSwitchProps = {
@@ -195,19 +146,19 @@ const AddEntityModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
-      <div className="relative w-full max-w-md rounded-[24px] bg-white shadow-2xl">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4 sm:p-6 backdrop-blur-sm">
+      <div className="relative w-full max-w-md rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-[#F3F4F6] text-[#111827] cursor-pointer"
+          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-[#F3F4F6] text-[#111827] cursor-pointer hover:bg-[#E5E7EB] transition-colors"
           aria-label="Close add item modal"
           title="Close"
         >
           <X className="h-4 w-4" />
         </button>
 
-        <div className="px-8 pt-8 pb-6">
+        <div className="px-6 sm:px-8 pt-8 pb-6">
           <h2 className="text-lg font-semibold text-[#1C1B20]">{title}</h2>
 
           <div className="mt-6 space-y-2">
@@ -217,14 +168,14 @@ const AddEntityModal = ({
               value={value}
               onChange={(event) => setValue(event.target.value)}
               placeholder={fieldPlaceholder}
-              className="w-full rounded-[12px] border border-[#E5E7EB] bg-[#FAFAFC] px-4 py-3 text-sm text-[#111827] placeholder-[#A6A6A6] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C]"
+              className="w-full rounded-[12px] border border-[#E5E7EB] bg-[#FAFAFC] px-4 py-3 text-sm text-[#111827] placeholder-[#A6A6A6] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C] transition-all"
             />
           </div>
 
           <button
             type="button"
             onClick={handleSubmit}
-            className="mt-8 inline-flex h-11 w-full items-center justify-center rounded-[12px] bg-[#15BA5C] px-4 text-sm font-medium text-white cursor-pointer hover:bg-[#13A652]"
+            className="mt-8 inline-flex h-11 w-full items-center justify-center rounded-[12px] bg-[#15BA5C] px-4 text-sm font-medium text-white cursor-pointer hover:bg-[#13A652] active:scale-[0.98] transition-all"
           >
             {submitLabel}
           </button>
@@ -235,106 +186,158 @@ const AddEntityModal = ({
 };
 
 const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
+  const { showToast } = useToastStore();
   const [activeTab, setActiveTab] = useState<"basic" | "modifiers">("basic");
   const { selectedOutletId, selectedOutlet } = useBusinessStore();
   const [productName, setProductName] = useState("");
-  const [categories, setCategories] =
-    useState<ProductCategory[]>(initialCategories);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<
     number | string | undefined
   >(undefined);
   const [defaultPrice, setDefaultPrice] = useState("");
   const [priceTierEnabled, setPriceTierEnabled] = useState(false);
-  const [priceTiers, setPriceTiers] = useState<PriceTier[]>(initialPriceTiers);
+  const [priceTiers, setPriceTiers] = useState<PriceTier[]>([]);
   const [description, setDescription] = useState("");
-  const [preparationAreas] = useState<PreparationAreaOption[]>(
-    initialPreparationAreas,
-  );
+  const [preparationAreas, setPreparationAreas] = useState<
+    PreparationAreaOption[]
+  >([]);
   const [selectedPreparationAreaId, setSelectedPreparationAreaId] = useState<
-    number | undefined
+    number | string | undefined
   >(undefined);
   const [leadTimeDays, setLeadTimeDays] = useState("");
   const [leadTimeHours, setLeadTimeHours] = useState("");
   const [leadTimeMinutes, setLeadTimeMinutes] = useState("");
   const [allergensEnabled, setAllergensEnabled] = useState(false);
-  const [allergens, setAllergens] = useState<Allergen[]>(initialAllergens);
+  const [allergens, setAllergens] = useState<Allergen[]>([]);
   const [weight, setWeight] = useState("");
-  const [weightUnits, setWeightUnits] =
-    useState<WeightUnit[]>(initialWeightUnits);
+  const [weightUnits, setWeightUnits] = useState<WeightUnit[]>([]);
   const [selectedWeightUnitId, setSelectedWeightUnitId] = useState<
-    number | undefined
+    number | string | undefined
   >(undefined);
   const [packagingMethods, setPackagingMethods] = useState<PackagingMethod[]>(
-    initialPackagingMethods,
+    [],
   );
   const [selectedPackagingMethods, setSelectedPackagingMethods] = useState<
     Record<string, boolean>
-  >(initialSelectedPackagingMethods);
+  >({});
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoHash, setLogoHash] = useState<string | null>(null);
 
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isAddAllergenModalOpen, setIsAddAllergenModalOpen] = useState(false);
   const [isAddWeightUnitModalOpen, setIsAddWeightUnitModalOpen] =
+    useState(false);
+  const [isAddPreparationAreaModalOpen, setIsAddPreparationAreaModalOpen] =
     useState(false);
 
   const currencySymbol = selectedOutlet?.currency
     ? getCurrencySymbol(selectedOutlet.currency)
     : "";
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      const api = getElectronAPI();
-      if (api && selectedOutletId) {
-        try {
-          const result = await api.getSystemDefaults(
-            "category",
-            selectedOutletId,
-          );
+  const fetchSystemDefaults = async (
+    key: string,
+    setter: (data: any[]) => void,
+  ) => {
+    const api = getElectronAPI();
+    if (api && selectedOutletId) {
+      try {
+        const result = await api.getSystemDefaults(key, selectedOutletId);
+        const dbItems: any[] = [];
 
-          // Flatten categories from all rows with key="category"
-          const dbCategories: ProductCategory[] = [];
-
-          for (const row of result) {
-            try {
-              const data = JSON.parse(row.data);
-              if (Array.isArray(data)) {
-                // Each row can have an array of categories (like in the mock data)
-                data.forEach((item: any, index: number) => {
-                  if (item.name) {
-                    dbCategories.push({
-                      // Use row.id + index if item has no id, or item.id if it does
-                      id: item.id || `${row.id}-${index}`,
-                      name: item.name,
-                    });
-                  }
+        for (const row of result) {
+          try {
+            const data = JSON.parse(row.data);
+            if (Array.isArray(data)) {
+              data.forEach((item: any, index: number) => {
+                dbItems.push({
+                  id: item.id || `${row.id}-${index}`,
+                  name: item.name || item,
+                  selected: item.selected ?? false,
                 });
-              } else if (data?.name) {
-                // Fallback for single object data
-                dbCategories.push({
-                  id: row.id,
-                  name: data.name,
-                });
-              }
-            } catch (e) {
-              console.error("Failed to parse category row data", row, e);
+              });
+            } else if (data?.name || typeof data === "string") {
+              dbItems.push({
+                id: row.id,
+                name: data.name || data,
+                selected: data.selected ?? false,
+              });
             }
+          } catch (e) {
+            console.error(`Failed to parse ${key} row data`, row, e);
           }
-
-          // ALWAYS call setCategories to clear old data if none found
-          setCategories(dbCategories);
-          // Reset selection when changing outlets
-          setSelectedCategoryId(undefined);
-        } catch (error) {
-          console.error("Failed to fetch categories from DB", error);
         }
-      } else {
-        // Clear if no outlet selected
-        setCategories([]);
-        setSelectedCategoryId(undefined);
+        setter(dbItems);
+      } catch (error) {
+        console.error(`Failed to fetch ${key} from DB`, error);
       }
-    };
+    } else {
+      setter([]);
+    }
+  };
 
-    fetchCategories();
+  useEffect(() => {
+    fetchSystemDefaults("category", setCategories);
+    fetchSystemDefaults("preparation-area", setPreparationAreas);
+    fetchSystemDefaults("allergens", (items) =>
+      setAllergens(items.map((i) => ({ ...i, selected: i.selected ?? false }))),
+    );
+    fetchSystemDefaults("weight-scale", setWeightUnits);
+    fetchSystemDefaults("packaging-method", setPackagingMethods);
   }, [selectedOutletId]);
+
+  const handleEntityAdded = async (
+    key: string,
+    name: string,
+    setter: React.Dispatch<React.SetStateAction<any[]>>,
+    modalSetter?: (open: boolean) => void,
+    extraFields: Record<string, any> = {},
+  ) => {
+    const api = getElectronAPI();
+    if (api && selectedOutletId) {
+      try {
+        const result = await api.addSystemDefault(
+          key,
+          [{ name, ...extraFields }],
+          selectedOutletId,
+        );
+
+        const newItem = { id: result.id, name, ...extraFields };
+
+        await api.queueAdd({
+          tableName: "system_default",
+          action: SYNC_ACTIONS.CREATE,
+          id: result.id,
+          data: {
+            id: result.id,
+            key,
+            data: [{ name, ...extraFields }],
+            outletId: selectedOutletId,
+          },
+        });
+
+        setter((prev) => [...prev, newItem]);
+        modalSetter?.(false);
+        return newItem;
+      } catch (error) {
+        console.error(`Failed to add ${key} to DB`, error);
+      }
+    }
+  };
+
+  const handleEntityDeleted = async (
+    id: string | number,
+    setter: React.Dispatch<React.SetStateAction<any[]>>,
+  ) => {
+    const api = getElectronAPI();
+    if (api) {
+      try {
+        await api.deleteSystemDefault(String(id));
+        setter((prev) => prev.filter((item) => item.id !== id));
+      } catch (error) {
+        console.error("Failed to delete item", error);
+      }
+    }
+  };
 
   useEffect(() => {
     if (selectedOutlet?.priceTier) {
@@ -487,16 +490,28 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
       isActive: 1 as 1,
       productAvailableStock: null,
       productCode: null,
-      logoUrl: null,
+      logoUrl: logoUrl,
       logoHash: null,
       outletId: selectedOutletId,
     };
 
     try {
       await api.createProduct(payload);
+      showToast(
+        "success",
+        "Product Created",
+        `${productName} has been created successfully.`,
+      );
       onSuccess?.();
       onClose();
-    } catch {}
+    } catch (error) {
+      console.error("Failed to create product:", error);
+      showToast(
+        "error",
+        "Creation Failed",
+        "Failed to create product. Please try again.",
+      );
+    }
   };
 
   if (!isOpen) return null;
@@ -509,86 +524,30 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
     (area) => area.id === selectedPreparationAreaId,
   );
 
-  const handleCategoryDelete = async (option: DropdownOption) => {
-    const id = option.value;
-    const api = getElectronAPI();
+  const selectedWeightUnit = weightUnits.find(
+    (unit) => unit.id === selectedWeightUnitId,
+  );
 
-    if (api && typeof id === "string" && id.includes("-")) {
-      // It's a UUID from the database
-      try {
-        await api.deleteSystemDefault(id);
-        // Also queue a sync operation for deletion
-        await api.queueAdd({
-          tableName: "system_default",
-          action: "delete",
-          id,
-          data: { id },
-        });
-      } catch (error) {
-        console.error("Failed to delete category from DB", error);
-      }
-    }
-
-    setCategories((previous) =>
-      previous.filter((category) => String(category.id) !== id),
-    );
-    if (String(selectedCategoryId) === id) {
+  const handleCategoryDelete = (option: DropdownOption) => {
+    handleEntityDeleted(option.value, setCategories);
+    if (selectedCategoryId === option.value) {
       setSelectedCategoryId(undefined);
     }
   };
 
   const handleCategoryAdded = async (name: string) => {
-    const api = getElectronAPI();
-    if (api && selectedOutletId) {
-      try {
-        const result = await api.addSystemDefault(
-          "category",
-          [{ name }],
-          selectedOutletId,
-        );
-        const newCategory: ProductCategory = {
-          id: result.id,
-          name,
-        };
-
-        // Queue a sync operation for creation
-        await api.queueAdd({
-          tableName: "system_default",
-          action: SYNC_ACTIONS.CREATE,
-          id: result.id,
-          data: {
-            id: result.id,
-            key: "category",
-            data: [{ name }],
-            outletId: selectedOutletId,
-          },
-        });
-
-        setCategories((previous) => [...previous, newCategory]);
-        setSelectedCategoryId(newCategory.id);
-        setIsAddCategoryModalOpen(false);
-        return;
-      } catch (error) {
-        console.error("Failed to add category to DB", error);
-      }
+    const newItem = await handleEntityAdded(
+      "category",
+      name,
+      setCategories,
+      setIsAddCategoryModalOpen,
+    );
+    if (newItem) {
+      setSelectedCategoryId(newItem.id);
     }
-
-    // Fallback for non-electron or error
-    setCategories((previous) => {
-      const nextId =
-        previous.length > 0
-          ? Math.max(
-              ...previous.map((c) => (typeof c.id === "number" ? c.id : 0)),
-            ) + 1
-          : 1;
-      const newCategory = { id: nextId, name };
-      setSelectedCategoryId(newCategory.id);
-      return [...previous, newCategory];
-    });
-    setIsAddCategoryModalOpen(false);
   };
 
-  const handleAllergenToggle = (id: number) => {
+  const handleAllergenToggle = (id: number | string) => {
     setAllergens((previous) =>
       previous.map((allergen) =>
         allergen.id === id
@@ -598,92 +557,76 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
     );
   };
 
-  const handleAllergenDelete = (id: number) => {
-    setAllergens((previous) =>
-      previous.filter((allergen) => allergen.id !== id),
-    );
+  const handleAllergenDelete = (id: number | string) => {
+    handleEntityDeleted(id, setAllergens);
   };
 
   const handleAllergenAdded = (name: string) => {
-    setAllergens((previous) => {
-      const nextId =
-        previous.length > 0
-          ? Math.max(...previous.map((allergen) => allergen.id)) + 1
-          : 1;
-      const newAllergen: Allergen = {
-        id: nextId,
-        name,
-        selected: true,
-      };
-      return [...previous, newAllergen];
-    });
-    setIsAddAllergenModalOpen(false);
+    handleEntityAdded(
+      "allergen",
+      name,
+      setAllergens,
+      setIsAddAllergenModalOpen,
+      { selected: true },
+    );
   };
 
   const handleWeightUnitDelete = (option: DropdownOption) => {
-    const id = Number(option.value);
-    setWeightUnits((previous) => previous.filter((unit) => unit.id !== id));
-    if (selectedWeightUnitId === id) {
+    handleEntityDeleted(option.value, setWeightUnits);
+    if (selectedWeightUnitId === option.value) {
       setSelectedWeightUnitId(undefined);
     }
   };
 
-  const handleWeightUnitAdded = (name: string) => {
-    setWeightUnits((previous) => {
-      const nextId =
-        previous.length > 0
-          ? Math.max(...previous.map((unit) => unit.id)) + 1
-          : 1;
-      const newUnit: WeightUnit = {
-        id: nextId,
-        name,
-      };
-      setSelectedWeightUnitId(newUnit.id);
-      return [...previous, newUnit];
-    });
-    setIsAddWeightUnitModalOpen(false);
+  const handleWeightUnitAdded = async (name: string) => {
+    const newItem = await handleEntityAdded(
+      "weightUnit",
+      name,
+      setWeightUnits,
+      setIsAddWeightUnitModalOpen,
+    );
+    if (newItem) {
+      setSelectedWeightUnitId(newItem.id);
+    }
+  };
+
+  const handlePreparationAreaDelete = (option: DropdownOption) => {
+    handleEntityDeleted(option.value, setPreparationAreas);
+    if (selectedPreparationAreaId === option.value) {
+      setSelectedPreparationAreaId(undefined);
+    }
+  };
+
+  const handlePreparationAreaAdded = async (name: string) => {
+    const newItem = await handleEntityAdded(
+      "preparationArea",
+      name,
+      setPreparationAreas,
+      setIsAddPreparationAreaModalOpen,
+    );
+    if (newItem) {
+      setSelectedPreparationAreaId(newItem.id);
+    }
   };
 
   const handlePackagingMethodsChange = (
-    values: Record<string, boolean>,
-    name?: string,
+    methods: Record<string, boolean>,
+    _name?: string,
   ) => {
-    if (name !== undefined) {
-      setSelectedPackagingMethods(values);
-      return;
-    }
-    setSelectedPackagingMethods(values);
+    setSelectedPackagingMethods(methods);
   };
 
   const handlePackagingMethodDelete = (option: DropdownOption) => {
-    const optionId = option.value;
-    setPackagingMethods((previous) =>
-      previous.filter((method) => String(method.id) !== optionId),
-    );
-    setSelectedPackagingMethods((previous) => {
-      const updated = { ...previous };
-      delete updated[optionId];
-      return updated;
+    handleEntityDeleted(option.value, setPackagingMethods);
+    setSelectedPackagingMethods((prev) => {
+      const next = { ...prev };
+      delete next[option.value];
+      return next;
     });
   };
 
-  const handlePackagingMethodAdded = (value: string) => {
-    setPackagingMethods((previous) => {
-      const nextId =
-        previous.length > 0
-          ? Math.max(...previous.map((method) => method.id)) + 1
-          : 1;
-      const newMethod: PackagingMethod = {
-        id: nextId,
-        name: value,
-      };
-      const newIdKey = String(newMethod.id);
-      setSelectedPackagingMethods((previousSelected) => ({
-        ...previousSelected,
-        [newIdKey]: true,
-      }));
-      return [...previous, newMethod];
-    });
+  const handlePackagingMethodAdded = (name: string) => {
+    handleEntityAdded("packagingMethod", name, setPackagingMethods);
   };
 
   return (
@@ -893,32 +836,25 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
                   <p className="text-[15px] font-medium text-[#1C1B20]">
                     Preparation Area <span className="text-[#EF4444]">*</span>
                   </p>
-                  <div className="flex overflow-hidden rounded-[12px] border border-[#E5E7EB] bg-[#FAFAFC]">
-                    <Dropdown
-                      options={preparationAreas.map((area) => ({
-                        value: String(area.id),
-                        label: area.name,
-                      }))}
-                      selectedValue={
-                        selectedPreparationArea
-                          ? String(selectedPreparationArea.id)
-                          : ""
-                      }
-                      onChange={(value) =>
-                        setSelectedPreparationAreaId(Number(value) || undefined)
-                      }
-                      placeholder="Select Area"
-                      className="flex-1"
-                    />
-                    <button
-                      type="button"
-                      className="flex w-16 items-center justify-center bg-[#E5E7EB] text-[#6B7280]"
-                      aria-label="Add preparation area"
-                      title="Add preparation area"
-                    >
-                      <span className="text-xl leading-none">+</span>
-                    </button>
-                  </div>
+                  <Dropdown
+                    name="preparationArea"
+                    options={preparationAreas.map((area) => ({
+                      value: String(area.id),
+                      label: area.name,
+                    }))}
+                    selectedValue={
+                      selectedPreparationArea
+                        ? String(selectedPreparationArea.id)
+                        : undefined
+                    }
+                    onChange={(value) => setSelectedPreparationAreaId(value)}
+                    placeholder="Select Area"
+                    className="w-full"
+                    allowAddNew
+                    onAddNewClick={() => setIsAddPreparationAreaModalOpen(true)}
+                    addNewLabel="+"
+                    onDeleteOption={handlePreparationAreaDelete}
+                  />
                 </div>
 
                 <div className="space-y-3">
@@ -1124,13 +1060,11 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
                         label: unit.name,
                       }))}
                       selectedValue={
-                        selectedWeightUnitId
-                          ? String(selectedWeightUnitId)
+                        selectedWeightUnit
+                          ? String(selectedWeightUnit.id)
                           : undefined
                       }
-                      onChange={(value) =>
-                        setSelectedWeightUnitId(Number(value) || undefined)
-                      }
+                      onChange={(value) => setSelectedWeightUnitId(value)}
                       placeholder="Select unit of measure"
                       className="w-full"
                       allowAddNew
@@ -1161,6 +1095,16 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
                     onAddNew={handlePackagingMethodAdded}
                     onDeleteOption={handlePackagingMethodDelete}
                     searchPlaceholder="Search Packaging Method"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <ImageHandler
+                    value={logoUrl}
+                    onChange={({ url }) => setLogoUrl(url)}
+                    label=""
+                    className="w-full"
+                    previewSize="lg"
                   />
                 </div>
 
@@ -1226,6 +1170,15 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
           fieldPlaceholder="Enter the name of the unit"
           submitLabel="Add Unit"
           onSubmit={handleWeightUnitAdded}
+        />
+        <AddEntityModal
+          isOpen={isAddPreparationAreaModalOpen}
+          onClose={() => setIsAddPreparationAreaModalOpen(false)}
+          title="Add Preparation Area"
+          fieldLabel="Area Name"
+          fieldPlaceholder="Enter the name of the preparation area"
+          submitLabel="Add Area"
+          onSubmit={handlePreparationAreaAdded}
         />
       </div>
     </div>

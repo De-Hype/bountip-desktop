@@ -193,6 +193,15 @@ app.whenReady().then(() => {
 
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
   ipcMain.handle("db:getCustomers", () => dbService.getCustomers());
+  ipcMain.handle("db:getPaymentTerms", (_event, outletId: string) =>
+    dbService.getPaymentTerms(outletId),
+  );
+  ipcMain.handle("db:savePaymentTerm", (_event, payload) =>
+    dbService.savePaymentTerm(payload),
+  );
+  ipcMain.handle("db:deletePaymentTerm", (_event, id: string) =>
+    dbService.deletePaymentTerm(id),
+  );
   ipcMain.handle("db:getBusinesses", () => dbService.getBusinesses());
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>
@@ -265,6 +274,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("db:bulkCreateProducts", (_event, payload) =>
     dbService.bulkCreateProducts(payload),
+  );
+
+  ipcMain.handle("db:bulkCreateCustomers", (_event, payload) =>
+    dbService.bulkCreateCustomers(payload),
   );
 
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>

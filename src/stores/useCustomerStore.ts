@@ -16,6 +16,7 @@ export interface Customer {
 
 interface CustomerState {
   customers: Customer[];
+  allCustomers: Customer[]; // 👈 NEW: for static stats
   isLoading: boolean;
   error: string | null;
   searchQuery: string;
@@ -40,6 +41,7 @@ interface CustomerState {
   fetchCustomers: () => Promise<void>;
   setSearchQuery: (query: string) => void;
   setFilter: (key: string, value: any) => void;
+  applyFilters: (newFilters: any) => void;
   resetFilters: () => void;
   setPage: (page: number) => void;
   setItemsPerPage: (items: number) => void;
@@ -51,6 +53,7 @@ interface CustomerState {
 
 const useCustomerStore = create<CustomerState>((set) => ({
   customers: [],
+  allCustomers: [],
   isLoading: false,
   error: null,
   searchQuery: "",
@@ -98,10 +101,14 @@ const useCustomerStore = create<CustomerState>((set) => ({
           params.push(state.filters.type.toLowerCase());
         }
         if (state.filters.date) {
-          // Assuming date is stored as ISO string, filter by day
-          const dateStr = state.filters.date.toISOString().split("T")[0];
-          sql += " AND createdAt LIKE ?";
-          params.push(`${dateStr}%`);
+          // Fix: Ensure we filter by date using the start of the day in local time
+          const startOfDay = new Date(state.filters.date);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(state.filters.date);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          sql += " AND createdAt >= ? AND createdAt <= ?";
+          params.push(startOfDay.toISOString(), endOfDay.toISOString());
         }
         // paymentTermId not easily filtered without joining or mapping names
         // if (state.filters.paymentTerm !== "All") { ... }
@@ -122,7 +129,15 @@ const useCustomerStore = create<CustomerState>((set) => ({
           sql += " ORDER BY createdAt DESC";
         }
 
-        const result = await api.dbQuery(sql, params);
+        const result = await api.dbQuery(
+          `
+          SELECT c.*, pt.name as paymentTermName 
+          FROM customers c
+          LEFT JOIN payment_terms pt ON c.paymentTermId = pt.id
+          WHERE 1=1 ${sql.split("WHERE 1=1")[1]}
+        `,
+          params,
+        );
         const mapped: Customer[] = result.map((c: any) => ({
           id: c.id,
           name: c.name || "Unknown",
@@ -132,11 +147,37 @@ const useCustomerStore = create<CustomerState>((set) => ({
             c.customerType === "organization" ? "Organization" : "Individual",
           status: c.status === "active" ? "Active" : "Inactive",
           balance: 0,
-          paymentTermId: c.paymentTermId || "---",
+          paymentTermId: c.paymentTermName || c.paymentTermId || "---",
           createdAt: c.createdAt,
           customerCode: c.customerCode,
         }));
-        set({ customers: mapped, isLoading: false });
+
+        // Fetch all customers for stats if it's the first load or if filters changed
+        // but stats should be based on the entire list
+        const allResult = await api.dbQuery(`
+          SELECT c.*, pt.name as paymentTermName 
+          FROM customers c
+          LEFT JOIN payment_terms pt ON c.paymentTermId = pt.id
+        `);
+        const allMapped: Customer[] = allResult.map((c: any) => ({
+          id: c.id,
+          name: c.name || "Unknown",
+          email: c.email || "---",
+          phoneNumber: c.phoneNumber || "---",
+          type:
+            c.customerType === "organization" ? "Organization" : "Individual",
+          status: c.status === "active" ? "Active" : "Inactive",
+          balance: 0,
+          paymentTermId: c.paymentTermName || c.paymentTermId || "---",
+          createdAt: c.createdAt,
+          customerCode: c.customerCode,
+        }));
+
+        set({
+          customers: mapped,
+          allCustomers: allMapped,
+          isLoading: false,
+        });
       }
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
@@ -149,6 +190,12 @@ const useCustomerStore = create<CustomerState>((set) => ({
   setFilter: (key, value) => {
     set((state) => ({
       filters: { ...state.filters, [key]: value },
+      pagination: { ...state.pagination, currentPage: 1 },
+    }));
+  },
+  applyFilters: (newFilters) => {
+    set((state) => ({
+      filters: { ...state.filters, ...newFilters },
       pagination: { ...state.pagination, currentPage: 1 },
     }));
     useCustomerStore.getState().fetchCustomers();

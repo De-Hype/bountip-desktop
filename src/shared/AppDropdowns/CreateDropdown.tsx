@@ -220,6 +220,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
   const handleAddNewItem = (newValue: string) => {
     if (onAddNew) {
       onAddNew(newValue, name);
+      setShowAddModal(false); // Close the modal
       if (mode === "select" && onChange) {
         onChange(newValue, name);
         setIsOpen(false);

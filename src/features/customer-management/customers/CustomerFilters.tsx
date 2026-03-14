@@ -1,7 +1,8 @@
-import React from "react";
-import { X, ChevronDown } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import useCustomerStore from "@/stores/useCustomerStore";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Dropdown } from "@/shared/AppDropdowns/CreateDropdown";
 
 interface CustomerFiltersProps {
   isOpen: boolean;
@@ -9,11 +10,22 @@ interface CustomerFiltersProps {
 }
 
 const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
-  const { filters, setFilter, resetFilters } = useCustomerStore();
+  const { filters, applyFilters, resetFilters } = useCustomerStore();
+
+  // Local state to store pending filters
+  const [localFilters, setLocalFilters] = useState(filters);
+
+  // Sync local filters with store filters when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setLocalFilters(filters);
+    }
+  }, [isOpen, filters]);
 
   if (!isOpen) return null;
 
   const handleApply = () => {
+    applyFilters(localFilters);
     onClose();
   };
 
@@ -23,7 +35,11 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
   };
 
   const handleResetField = (field: string, defaultValue: any) => {
-    setFilter(field, defaultValue);
+    setLocalFilters((prev) => ({ ...prev, [field]: defaultValue }));
+  };
+
+  const handleFilterChange = (field: string, value: any) => {
+    setLocalFilters((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -56,8 +72,8 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
               </button>
             </div>
             <DatePicker
-              date={filters.date}
-              onDateChange={(date) => setFilter("date", date)}
+              date={localFilters.date}
+              onDateChange={(date) => handleFilterChange("date", date)}
               className="w-full justify-between border-[#E5E7EB] h-12"
             />
           </div>
@@ -75,18 +91,17 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
                 Reset
               </button>
             </div>
-            <div className="relative">
-              <select
-                value={filters.type}
-                onChange={(e) => setFilter("type", e.target.value)}
-                className="w-full appearance-none rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#737373] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C]"
-              >
-                <option value="All">Select Type</option>
-                <option value="Individual">Individual</option>
-                <option value="Organization">Organization</option>
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#737373] pointer-events-none" />
-            </div>
+            <Dropdown
+              mode="select"
+              options={[
+                { value: "All", label: "Select Type" },
+                { value: "Individual", label: "Individual" },
+                { value: "Organization", label: "Organization" },
+              ]}
+              selectedValue={localFilters.type}
+              onChange={(value) => handleFilterChange("type", value)}
+              className="w-full"
+            />
           </div>
 
           {/* Payment Term Filter */}
@@ -102,19 +117,18 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
                 Reset
               </button>
             </div>
-            <div className="relative">
-              <select
-                value={filters.paymentTerm}
-                onChange={(e) => setFilter("paymentTerm", e.target.value)}
-                className="w-full appearance-none rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#737373] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C]"
-              >
-                <option value="All">Select Payment Terms</option>
-                <option value="Net 30">Net 30</option>
-                <option value="Net 60">Net 60</option>
-                <option value="Due on Receipt">Due on Receipt</option>
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#737373] pointer-events-none" />
-            </div>
+            <Dropdown
+              mode="select"
+              options={[
+                { value: "All", label: "Select Payment Terms" },
+                { value: "Net 30", label: "Net 30" },
+                { value: "Net 60", label: "Net 60" },
+                { value: "Due on Receipt", label: "Due on Receipt" },
+              ]}
+              selectedValue={localFilters.paymentTerm}
+              onChange={(value) => handleFilterChange("paymentTerm", value)}
+              className="w-full"
+            />
           </div>
 
           {/* Status Filter */}
@@ -130,18 +144,17 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
                 Reset
               </button>
             </div>
-            <div className="relative">
-              <select
-                value={filters.status}
-                onChange={(e) => setFilter("status", e.target.value)}
-                className="w-full appearance-none rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#737373] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C]"
-              >
-                <option value="All">Select Status</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#737373] pointer-events-none" />
-            </div>
+            <Dropdown
+              mode="select"
+              options={[
+                { value: "All", label: "Select Status" },
+                { value: "Active", label: "Active" },
+                { value: "Inactive", label: "Inactive" },
+              ]}
+              selectedValue={localFilters.status}
+              onChange={(value) => handleFilterChange("status", value)}
+              className="w-full"
+            />
           </div>
         </div>
 

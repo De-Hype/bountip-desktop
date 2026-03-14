@@ -663,6 +663,97 @@ export class DatabaseService {
     return this.db.prepare("SELECT * FROM customers").all() as any[];
   }
 
+  getPaymentTerms(outletId: string) {
+    return this.db
+      .prepare(
+        "SELECT * FROM payment_terms WHERE outletId = ? AND deletedAt IS NULL",
+      )
+      .all(outletId) as any[];
+  }
+
+  savePaymentTerm(payload: {
+    id?: string;
+    name: string;
+    paymentType: string;
+    instantPayment: boolean;
+    paymentOnDelivery: boolean;
+    paymentInInstallment: any;
+    outletId: string;
+  }) {
+    const id = payload.id || uuidv4();
+    const now = new Date().toISOString();
+
+    const data = {
+      id,
+      name: payload.name,
+      paymentType: payload.paymentType,
+      instantPayment: payload.instantPayment ? 1 : 0,
+      paymentOnDelivery: payload.paymentOnDelivery ? 1 : 0,
+      paymentInInstallment: payload.paymentInInstallment
+        ? JSON.stringify(payload.paymentInInstallment)
+        : null,
+      outletId: payload.outletId,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    };
+
+    this.db
+      .prepare(
+        `
+      INSERT INTO payment_terms (
+        id, name, paymentType, instantPayment, paymentOnDelivery, 
+        paymentInInstallment, outletId, version, createdAt, updatedAt, deletedAt
+      ) VALUES (
+        @id, @name, @paymentType, @instantPayment, @paymentOnDelivery, 
+        @paymentInInstallment, @outletId, @version, @createdAt, @updatedAt, @deletedAt
+      ) ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        paymentType = excluded.paymentType,
+        instantPayment = excluded.instantPayment,
+        paymentOnDelivery = excluded.paymentOnDelivery,
+        paymentInInstallment = excluded.paymentInInstallment,
+        version = version + 1,
+        updatedAt = excluded.updatedAt
+    `,
+      )
+      .run(data);
+
+    // Queue Sync
+    this.addToQueue({
+      table: "payment_terms",
+      action: payload.id ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
+      data: {
+        ...data,
+        paymentInInstallment: payload.paymentInInstallment, // Send original object to sync
+      },
+      id,
+    });
+
+    return data;
+  }
+
+  deletePaymentTerm(id: string) {
+    const now = new Date().toISOString();
+    this.db
+      .prepare("UPDATE payment_terms SET deletedAt = ? WHERE id = ?")
+      .run(now, id);
+
+    const record = this.db
+      .prepare("SELECT * FROM payment_terms WHERE id = ?")
+      .get(id) as any;
+
+    if (record) {
+      this.addToQueue({
+        table: "payment_terms",
+        action: SYNC_ACTIONS.DELETE,
+        data: record,
+        id,
+      });
+    }
+  }
+
   getBusinesses() {
     return this.db.prepare("SELECT * FROM business").all() as any[];
   }
@@ -738,6 +829,49 @@ export class DatabaseService {
           stmt.run(sanitize(buildCustomerUpsertParams(c)));
         }
       }
+
+      if (Array.isArray(data.paymentTerms) && data.paymentTerms.length > 0) {
+        const stmt = this.db.prepare(`
+          INSERT INTO payment_terms (
+            id, name, paymentType, instantPayment, paymentOnDelivery, 
+            paymentInInstallment, outletId, recordId, version, 
+            createdAt, updatedAt, deletedAt
+          ) VALUES (
+            @id, @name, @paymentType, @instantPayment, @paymentOnDelivery, 
+            @paymentInInstallment, @outletId, @recordId, @version, 
+            @createdAt, @updatedAt, @deletedAt
+          ) ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            paymentType = excluded.paymentType,
+            instantPayment = excluded.instantPayment,
+            paymentOnDelivery = excluded.paymentOnDelivery,
+            paymentInInstallment = excluded.paymentInInstallment,
+            outletId = excluded.outletId,
+            recordId = excluded.recordId,
+            version = excluded.version,
+            updatedAt = excluded.updatedAt,
+            deletedAt = excluded.deletedAt
+        `);
+
+        for (const pt of data.paymentTerms) {
+          stmt.run({
+            id: pt.id,
+            name: pt.name,
+            paymentType: pt.paymentType,
+            instantPayment: pt.instantPayment ? 1 : 0,
+            paymentOnDelivery: pt.paymentOnDelivery ? 1 : 0,
+            paymentInInstallment: pt.paymentInInstallment
+              ? JSON.stringify(pt.paymentInInstallment)
+              : null,
+            outletId: pt.outletId,
+            recordId: pt.recordId,
+            version: pt.version,
+            createdAt: pt.createdAt,
+            updatedAt: pt.updatedAt,
+            deletedAt: pt.deletedAt,
+          });
+        }
+      }
     });
 
     tx();
@@ -768,6 +902,47 @@ export class DatabaseService {
         const row = createProductRecord(this.db, productPayload, id, now);
         const syncOp = buildProductSyncOp(row, id, now);
         this.addToQueue(syncOp);
+        createdIds.push(id);
+      }
+    });
+
+    tx();
+
+    return { ids: createdIds, status: "success", count: createdIds.length };
+  }
+
+  bulkCreateCustomers(payload: { outletId: string; data: any[] }) {
+    const { outletId, data } = payload;
+    const now = new Date().toISOString();
+    const createdIds: string[] = [];
+
+    const tx = this.db.transaction(() => {
+      const stmt = this.db.prepare(customerUpsertSql);
+      for (const c of data) {
+        const id = c.id || uuidv4();
+        const customerData = {
+          ...c,
+          id,
+          outletId,
+          createdAt: c.createdAt || now,
+          updatedAt: now,
+          status: c.status || "active",
+          customerType: c.customerType || "individual",
+          emailVerified: c.emailVerified ? 1 : 0,
+          phoneVerfied: c.phoneVerfied ? 1 : 0,
+          version: c.version || 1,
+        };
+
+        const params = buildCustomerUpsertParams(customerData);
+        stmt.run(params);
+
+        this.addToQueue({
+          table: "customers",
+          action: SYNC_ACTIONS.CREATE,
+          data: customerData,
+          id: id,
+        });
+
         createdIds.push(id);
       }
     });

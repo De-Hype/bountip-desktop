@@ -1356,6 +1356,26 @@ const notificationsSchema = {
     );
   `
 };
+const paymentTermSchema = {
+  name: "payment_terms",
+  create: `
+    CREATE TABLE IF NOT EXISTS payment_terms (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      paymentType TEXT,
+      instantPayment BOOLEAN DEFAULT 0,
+      paymentOnDelivery BOOLEAN DEFAULT 0,
+      paymentInInstallment TEXT, -- JSON string
+      outletId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      deletedAt DATETIME
+    );
+  `,
+  indexes: ["CREATE INDEX IF NOT EXISTS idx_payment_terms_outletId ON payment_terms(outletId)"]
+};
 const schemas = [
   userSchema,
   productSchema,
@@ -1378,7 +1398,8 @@ const schemas = [
   systemDefaultSchema,
   syncSessionSchema,
   syncTableLogSchema,
-  notificationsSchema
+  notificationsSchema,
+  paymentTermSchema
 ];
 function createProductRecord(db, payload, id, now) {
   const stmt = db.prepare(`
@@ -2050,6 +2071,70 @@ class DatabaseService {
   getCustomers() {
     return this.db.prepare("SELECT * FROM customers").all();
   }
+  getPaymentTerms(outletId) {
+    return this.db.prepare(
+      "SELECT * FROM payment_terms WHERE outletId = ? AND deletedAt IS NULL"
+    ).all(outletId);
+  }
+  savePaymentTerm(payload) {
+    const id = payload.id || uuidExports.v4();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const data = {
+      id,
+      name: payload.name,
+      paymentType: payload.paymentType,
+      instantPayment: payload.instantPayment ? 1 : 0,
+      paymentOnDelivery: payload.paymentOnDelivery ? 1 : 0,
+      paymentInInstallment: payload.paymentInInstallment ? JSON.stringify(payload.paymentInInstallment) : null,
+      outletId: payload.outletId,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null
+    };
+    this.db.prepare(
+      `
+      INSERT INTO payment_terms (
+        id, name, paymentType, instantPayment, paymentOnDelivery, 
+        paymentInInstallment, outletId, version, createdAt, updatedAt, deletedAt
+      ) VALUES (
+        @id, @name, @paymentType, @instantPayment, @paymentOnDelivery, 
+        @paymentInInstallment, @outletId, @version, @createdAt, @updatedAt, @deletedAt
+      ) ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        paymentType = excluded.paymentType,
+        instantPayment = excluded.instantPayment,
+        paymentOnDelivery = excluded.paymentOnDelivery,
+        paymentInInstallment = excluded.paymentInInstallment,
+        version = version + 1,
+        updatedAt = excluded.updatedAt
+    `
+    ).run(data);
+    this.addToQueue({
+      table: "payment_terms",
+      action: payload.id ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
+      data: {
+        ...data,
+        paymentInInstallment: payload.paymentInInstallment
+        // Send original object to sync
+      },
+      id
+    });
+    return data;
+  }
+  deletePaymentTerm(id) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    this.db.prepare("UPDATE payment_terms SET deletedAt = ? WHERE id = ?").run(now, id);
+    const record = this.db.prepare("SELECT * FROM payment_terms WHERE id = ?").get(id);
+    if (record) {
+      this.addToQueue({
+        table: "payment_terms",
+        action: SYNC_ACTIONS.DELETE,
+        data: record,
+        id
+      });
+    }
+  }
   getBusinesses() {
     return this.db.prepare("SELECT * FROM business").all();
   }
@@ -2108,6 +2193,45 @@ class DatabaseService {
           stmt.run(sanitize(buildCustomerUpsertParams(c)));
         }
       }
+      if (Array.isArray(data.paymentTerms) && data.paymentTerms.length > 0) {
+        const stmt = this.db.prepare(`
+          INSERT INTO payment_terms (
+            id, name, paymentType, instantPayment, paymentOnDelivery, 
+            paymentInInstallment, outletId, recordId, version, 
+            createdAt, updatedAt, deletedAt
+          ) VALUES (
+            @id, @name, @paymentType, @instantPayment, @paymentOnDelivery, 
+            @paymentInInstallment, @outletId, @recordId, @version, 
+            @createdAt, @updatedAt, @deletedAt
+          ) ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            paymentType = excluded.paymentType,
+            instantPayment = excluded.instantPayment,
+            paymentOnDelivery = excluded.paymentOnDelivery,
+            paymentInInstallment = excluded.paymentInInstallment,
+            outletId = excluded.outletId,
+            recordId = excluded.recordId,
+            version = excluded.version,
+            updatedAt = excluded.updatedAt,
+            deletedAt = excluded.deletedAt
+        `);
+        for (const pt of data.paymentTerms) {
+          stmt.run({
+            id: pt.id,
+            name: pt.name,
+            paymentType: pt.paymentType,
+            instantPayment: pt.instantPayment ? 1 : 0,
+            paymentOnDelivery: pt.paymentOnDelivery ? 1 : 0,
+            paymentInInstallment: pt.paymentInInstallment ? JSON.stringify(pt.paymentInInstallment) : null,
+            outletId: pt.outletId,
+            recordId: pt.recordId,
+            version: pt.version,
+            createdAt: pt.createdAt,
+            updatedAt: pt.updatedAt,
+            deletedAt: pt.deletedAt
+          });
+        }
+      }
     });
     tx();
   }
@@ -2130,6 +2254,40 @@ class DatabaseService {
         const row = createProductRecord(this.db, productPayload, id, now);
         const syncOp = buildProductSyncOp(row, id, now);
         this.addToQueue(syncOp);
+        createdIds.push(id);
+      }
+    });
+    tx();
+    return { ids: createdIds, status: "success", count: createdIds.length };
+  }
+  bulkCreateCustomers(payload) {
+    const { outletId, data } = payload;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const createdIds = [];
+    const tx = this.db.transaction(() => {
+      const stmt = this.db.prepare(customerUpsertSql);
+      for (const c of data) {
+        const id = c.id || uuidExports.v4();
+        const customerData = {
+          ...c,
+          id,
+          outletId,
+          createdAt: c.createdAt || now,
+          updatedAt: now,
+          status: c.status || "active",
+          customerType: c.customerType || "individual",
+          emailVerified: c.emailVerified ? 1 : 0,
+          phoneVerfied: c.phoneVerfied ? 1 : 0,
+          version: c.version || 1
+        };
+        const params = buildCustomerUpsertParams(customerData);
+        stmt.run(params);
+        this.addToQueue({
+          table: "customers",
+          action: SYNC_ACTIONS.CREATE,
+          data: customerData,
+          id
+        });
         createdIds.push(id);
       }
     });
@@ -20890,6 +21048,18 @@ app.whenReady().then(() => {
   );
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
   ipcMain.handle("db:getCustomers", () => dbService.getCustomers());
+  ipcMain.handle(
+    "db:getPaymentTerms",
+    (_event, outletId) => dbService.getPaymentTerms(outletId)
+  );
+  ipcMain.handle(
+    "db:savePaymentTerm",
+    (_event, payload) => dbService.savePaymentTerm(payload)
+  );
+  ipcMain.handle(
+    "db:deletePaymentTerm",
+    (_event, id) => dbService.deletePaymentTerm(id)
+  );
   ipcMain.handle("db:getBusinesses", () => dbService.getBusinesses());
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle(
@@ -20963,6 +21133,10 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:bulkCreateProducts",
     (_event, payload) => dbService.bulkCreateProducts(payload)
+  );
+  ipcMain.handle(
+    "db:bulkCreateCustomers",
+    (_event, payload) => dbService.bulkCreateCustomers(payload)
   );
   ipcMain.handle(
     "db:query",
