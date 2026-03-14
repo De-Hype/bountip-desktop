@@ -1673,6 +1673,9 @@ class DatabaseService {
   getOutlets() {
     return this.db.prepare("SELECT * FROM business_outlet").all();
   }
+  getCustomers() {
+    return this.db.prepare("SELECT * FROM customers").all();
+  }
   getBusinesses() {
     return this.db.prepare("SELECT * FROM business").all();
   }
@@ -19896,7 +19899,7 @@ class SyncService {
           id: item.id,
           tableName: op.tableName || op.table || op.type,
           recordId: op.recordId || op.id,
-          payload: JSON.stringify(op.data || op.payload || {}),
+          payload: op.data || op.payload || {},
           sourceDeviceId: deviceId,
           action: op.action || op.op,
           timestamp: item.created_at,
@@ -19917,6 +19920,7 @@ class SyncService {
           "x-app-version": app.getVersion()
         }
       });
+      console.log("This is the response", await response.json());
       if (response.ok) {
         const ids = itemsToSync.map((i) => i.id);
         this.db.markAsSynced(ids);
@@ -20170,7 +20174,7 @@ const updateInvoiceSettings = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20312,7 +20316,7 @@ const createOutlet = async (db, payload) => {
   db.run(businessOutletUpsertSql, params);
   db.addToQueue({
     table: "business_outlet",
-    action: "CREATE",
+    action: SYNC_ACTIONS.UPDATE,
     // or UPDATE since we use Upsert logic, but CREATE is semantically correct for sync
     data: newOutlet,
     id: newOutletId
@@ -20320,25 +20324,25 @@ const createOutlet = async (db, payload) => {
   return { success: true, outlet: newOutlet };
 };
 const updateOutlet = async (db, payload) => {
-  const { outletId, data } = payload;
+  const { outletId, location } = payload;
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const fields = [];
   const params = { outletId, updatedAt: now };
-  if (data.name !== void 0) {
+  if (location.name !== void 0) {
     fields.push("name = @name");
-    params.name = data.name;
+    params.name = location.name;
   }
-  if (data.address !== void 0) {
+  if (location.address !== void 0) {
     fields.push("address = @address");
-    params.address = data.address;
+    params.address = location.address;
   }
-  if (data.phoneNumber !== void 0) {
+  if (location.phoneNumber !== void 0) {
     fields.push("phoneNumber = @phoneNumber");
-    params.phoneNumber = data.phoneNumber;
+    params.phoneNumber = location.phoneNumber;
   }
-  if (data.isMainLocation !== void 0) {
+  if (location.isMainLocation !== void 0) {
     fields.push("isMainLocation = @isMainLocation");
-    params.isMainLocation = data.isMainLocation ? 1 : 0;
+    params.isMainLocation = location.isMainLocation ? 1 : 0;
   }
   if (fields.length === 0) return { success: true };
   const sql = `
@@ -20497,6 +20501,7 @@ app.whenReady().then(() => {
     (_event, payload) => dbService.saveOutletOnboarding(payload)
   );
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
+  ipcMain.handle("db:getCustomers", () => dbService.getCustomers());
   ipcMain.handle("db:getBusinesses", () => dbService.getBusinesses());
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle(

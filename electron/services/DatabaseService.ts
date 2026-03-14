@@ -616,6 +616,10 @@ export class DatabaseService {
     return this.db.prepare("SELECT * FROM business_outlet").all() as any[];
   }
 
+  getCustomers() {
+    return this.db.prepare("SELECT * FROM customers").all() as any[];
+  }
+
   getBusinesses() {
     return this.db.prepare("SELECT * FROM business").all() as any[];
   }

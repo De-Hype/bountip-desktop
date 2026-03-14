@@ -1,4 +1,5 @@
 import { DatabaseService } from "../../services/DatabaseService";
+import { SYNC_ACTIONS } from "../../types/action.types";
 import {
   buildBusinessOutletUpsertParams,
   businessOutletUpsertSql,
@@ -44,7 +45,7 @@ export const createOutlet = async (
   // 2. Queue Sync
   db.addToQueue({
     table: "business_outlet",
-    action: "CREATE", // or UPDATE since we use Upsert logic, but CREATE is semantically correct for sync
+    action: SYNC_ACTIONS.UPDATE, // or UPDATE since we use Upsert logic, but CREATE is semantically correct for sync
     data: newOutlet,
     id: newOutletId,
   });
@@ -56,7 +57,7 @@ export const updateOutlet = async (
   db: DatabaseService,
   payload: {
     outletId: string;
-    data: {
+    location: {
       name?: string;
       address?: string;
       phoneNumber?: string;
@@ -64,29 +65,28 @@ export const updateOutlet = async (
     };
   },
 ) => {
-  const { outletId, data } = payload;
+  const { outletId, location } = payload;
   const now = new Date().toISOString();
 
   // 1. Update local DB
-  // We construct a dynamic UPDATE query or use specific fields
   const fields = [];
   const params: any = { outletId, updatedAt: now };
 
-  if (data.name !== undefined) {
+  if (location.name !== undefined) {
     fields.push("name = @name");
-    params.name = data.name;
+    params.name = location.name;
   }
-  if (data.address !== undefined) {
+  if (location.address !== undefined) {
     fields.push("address = @address");
-    params.address = data.address;
+    params.address = location.address;
   }
-  if (data.phoneNumber !== undefined) {
+  if (location.phoneNumber !== undefined) {
     fields.push("phoneNumber = @phoneNumber");
-    params.phoneNumber = data.phoneNumber;
+    params.phoneNumber = location.phoneNumber;
   }
-  if (data.isMainLocation !== undefined) {
+  if (location.isMainLocation !== undefined) {
     fields.push("isMainLocation = @isMainLocation");
-    params.isMainLocation = data.isMainLocation ? 1 : 0;
+    params.isMainLocation = location.isMainLocation ? 1 : 0;
   }
 
   if (fields.length === 0) return { success: true };

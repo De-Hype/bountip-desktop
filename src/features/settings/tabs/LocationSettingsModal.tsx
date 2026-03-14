@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Trash2 } from "lucide-react";
+import { Check, Loader2, Trash2, ChevronDown } from "lucide-react";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
@@ -51,8 +51,12 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
     deleteLocation,
     setLocations,
   } = useLocationStore();
-  const { addOutletLocal, removeOutletLocal, updateOutletLocal } =
-    useBusinessStore();
+  const {
+    addOutletLocal,
+    removeOutletLocal,
+    updateOutletLocal,
+    fetchBusinessData,
+  } = useBusinessStore();
 
   const [phoneCountries, setPhoneCountries] = useState<PhoneCountry[]>([]);
   const [selectedPhoneCountries, setSelectedPhoneCountries] = useState<
@@ -176,43 +180,28 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
       selectedPhoneCountries[key] || getFallbackPhoneCountry();
 
     return (
-      <div className="relative">
+      <div className="relative shrink-0">
         <button
           type="button"
           onClick={(e) => {
             e.preventDefault();
             togglePhoneCountryDropdown(key);
           }}
-          className="flex items-center px-3 py-2 bg-white border border-gray-300 rounded-l-lg shadow-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors"
+          className="flex items-center justify-between min-w-[100px] h-full px-2.5 py-2 bg-white border border-gray-300 rounded-l-lg shadow-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors"
         >
           {selectedCountry && (
-            <>
+            <div className="flex items-center">
               <img
                 src={selectedCountry.flag}
                 alt={`${selectedCountry.name} flag`}
-                className="w-6 h-4 mr-2 rounded-sm border border-gray-200 object-cover"
-                width={24}
-                height={18}
+                className="w-5 h-3.5 mr-1.5 rounded-sm border border-gray-200 object-cover shrink-0"
               />
-              <span className="text-gray-900 mr-2 font-medium">
+              <span className="text-gray-900 text-sm font-semibold whitespace-nowrap">
                 {selectedCountry.dialCode}
               </span>
-            </>
+            </div>
           )}
-          <svg
-            className="h-4 w-4 text-gray-400"
-            viewBox="0 0 20 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M5 8l5 5 5-5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <ChevronDown className="h-4 w-4 text-gray-400 shrink-0 ml-1" />
         </button>
 
         {openPhonePickerFor === key && (
@@ -381,8 +370,6 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
     setNewLocations((prev) => {
       const locationToRemove = prev[index];
       const remaining = prev.filter((_, i) => i !== index);
-      const next =
-        remaining.length > 0 ? remaining : [createEmptyNewLocation()];
 
       setSelectedPhoneCountries((prevSelected) => {
         if (!locationToRemove) return prevSelected;
@@ -391,7 +378,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
         return updated;
       });
 
-      return next;
+      return remaining;
     });
   };
 
@@ -503,6 +490,9 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
         "Location Updated",
         "Business location updated successfully.",
       );
+
+      // Trigger a business data refresh to ensure UI is in sync
+      await fetchBusinessData();
     } catch (error) {
       console.error(error);
       showToast("error", "Error", "Failed to update location.");
@@ -552,6 +542,8 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
         "Location Deleted",
         "The business location has been removed.",
       );
+      // Trigger a business data refresh to ensure UI is in sync
+      await fetchBusinessData();
     } catch (error) {
       console.error(error);
       showToast("error", "Error", "Failed to delete location.");
@@ -675,6 +667,8 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
         "Locations Added",
         "New business locations have been added successfully.",
       );
+      // Trigger a business data refresh to ensure UI is in sync
+      await fetchBusinessData();
     } catch (error) {
       console.error(error);
       showToast("error", "Error", "Failed to save locations.");
@@ -696,7 +690,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
           className="border border-gray-200 rounded-lg p-4 bg-gray-50"
         >
           <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-12 lg:col-span-3">
+            <div className="col-span-12 lg:col-span-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Name
               </label>
@@ -728,7 +722,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
                 placeholder="Enter Address"
               />
             </div>
-            <div className="col-span-12 lg:col-span-3 mb-4">
+            <div className="col-span-12 lg:col-span-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Phone Number
               </label>
@@ -746,35 +740,35 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
                   }
                   onKeyDown={handlePhoneKeyDown}
                   placeholder="Enter phone number"
-                  className="flex-1 px-4 py-2 bg-white border border-l-0 border-gray-300 rounded-r-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors"
+                  className="flex-1 min-w-0 px-4 py-2 bg-white border border-l-0 border-gray-300 rounded-r-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors"
                 />
               </div>
             </div>
-            <div className="col-span-12 lg:col-span-2 flex flex-col gap-2 justify-center items-stretch">
+            <div className="col-span-12 flex flex-row gap-3 justify-end mt-4 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => resetLocationForm(location.id)}
+                className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold transition-all duration-200"
+              >
+                Cancel
+              </button>
               <button
                 type="button"
                 onClick={() => handleSaveExistingLocation(location.id)}
                 disabled={isSaving}
-                className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-white bg-[#15BA5C] hover:bg-[#0f8f47] disabled:opacity-60"
+                className="min-w-[140px] flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-white bg-[#15BA5C] hover:bg-[#12a04f] disabled:opacity-60 font-semibold transition-all duration-200 shadow-md active:scale-95"
               >
                 {isSaving ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Saving</span>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Saving...</span>
                   </>
                 ) : (
                   <>
-                    <Check className="h-4 w-4" />
-                    <span>Save</span>
+                    <Check className="h-5 w-5" />
+                    <span>Save Changes</span>
                   </>
                 )}
-              </button>
-              <button
-                type="button"
-                onClick={() => resetLocationForm(location.id)}
-                className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
-              >
-                Cancel
               </button>
             </div>
           </div>
@@ -898,7 +892,7 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
                   placeholder="Enter Address"
                 />
               </div>
-              <div className="col-span-12 lg:col-span-4 mb-4">
+              <div className="col-span-12 lg:col-span-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Phone Number
                 </label>
@@ -916,18 +910,18 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
                     }
                     onKeyDown={handlePhoneKeyDown}
                     placeholder="Enter phone number"
-                    className="flex-1 px-4 py-2 bg-white border border-l-0 border-gray-300 rounded-r-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors"
+                    className="flex-1 min-w-0 px-4 py-2 bg-white border border-l-0 border-gray-300 rounded-r-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#15BA5C] transition-colors"
                   />
                 </div>
               </div>
-              <div className="col-span-12 lg:col-span-1 mb-5 flex justify-end">
+              <div className="col-span-12 lg:col-span-1 flex justify-end pb-1">
                 <button
                   type="button"
                   onClick={() => removeNewLocation(index)}
-                  className="w-[40px] h-[40px] flex items-center justify-center text-[#E33629] border border-[#E33629] rounded-lg hover:bg-[#E33629] hover:text-white"
+                  className="w-[42px] h-[42px] flex items-center justify-center text-[#E33629] border border-gray-200 rounded-lg hover:border-[#E33629] hover:bg-red-50 transition-all duration-200 shadow-sm"
                   title="Remove location"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -943,22 +937,22 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
           + Add a New Location
         </button>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-4">
           <button
             onClick={handleSaveNewLocations}
-            className="flex items-center justify-center gap-2 bg-[#15BA5C] w-full text-white py-3 rounded-[10px] font-medium text-base mt-5 disabled:opacity-60"
+            className="flex items-center justify-center gap-2 bg-[#15BA5C] hover:bg-[#12a04f] w-full text-white py-3.5 rounded-[12px] font-bold text-lg mt-4 disabled:opacity-60 transition-all duration-200 shadow-lg active:scale-[0.98]"
             type="button"
             disabled={!canSaveNewLocations || isSavingNewLocations}
           >
             {isSavingNewLocations ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Saving Locations</span>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Saving New Locations...</span>
               </>
             ) : (
               <>
-                <Check className="h-4 w-4" />
-                <span>Save Locations</span>
+                <Check className="h-5 w-5" />
+                <span>Save All New Locations</span>
               </>
             )}
           </button>

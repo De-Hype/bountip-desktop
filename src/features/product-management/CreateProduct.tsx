@@ -4,6 +4,7 @@ import AssetsFiles from "@/assets";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
 import useBusinessStore from "@/stores/useBusinessStore";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
+import { SYNC_ACTIONS } from "../../../electron/types/action.types";
 
 type ProductCreatePayload = {
   name: string;
@@ -553,7 +554,7 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
         // Queue a sync operation for creation
         await api.queueAdd({
           tableName: "system_default",
-          action: "create",
+          action: SYNC_ACTIONS.CREATE,
           id: result.id,
           data: {
             id: result.id,

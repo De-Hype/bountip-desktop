@@ -33,6 +33,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   },
   saveOutletOnboarding: async (payload) => electron.ipcRenderer.invoke("db:saveOutletOnboarding", payload),
   getOutlets: async () => electron.ipcRenderer.invoke("db:getOutlets"),
+  getCustomers: async () => electron.ipcRenderer.invoke("db:getCustomers"),
   getBusinesses: async () => electron.ipcRenderer.invoke("db:getBusinesses"),
   updateBusinessDetails: async (payload) => electron.ipcRenderer.invoke("db:updateBusinessDetails", payload),
   updatePaymentTier: async (payload) => electron.ipcRenderer.invoke("db:updatePaymentTier", payload),

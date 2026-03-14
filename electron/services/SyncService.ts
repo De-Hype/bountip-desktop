@@ -364,7 +364,7 @@ export class SyncService {
           id: item.id,
           tableName: op.tableName || op.table || op.type,
           recordId: op.recordId || op.id,
-          payload: JSON.stringify(op.data || op.payload || {}),
+          payload: op.data || op.payload || {},
           sourceDeviceId: deviceId,
           action: op.action || op.op,
           timestamp: item.created_at,
@@ -387,6 +387,7 @@ export class SyncService {
           "x-app-version": app.getVersion(),
         },
       });
+      console.log("This is the response",await response.json())
 
       if (response.ok) {
         const ids = itemsToSync.map((i: any) => i.id);

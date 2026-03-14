@@ -186,6 +186,7 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
+  ipcMain.handle("db:getCustomers", () => dbService.getCustomers());
   ipcMain.handle("db:getBusinesses", () => dbService.getBusinesses());
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>

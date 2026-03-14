@@ -5,48 +5,59 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CustomerList from "@/features/customer-management/customers/CustomerList";
 import { Plus } from "lucide-react";
 import CreateCustomer from "@/features/customer-management/customers/CreateCustomer";
-import { useState } from "react";
-
-const customerStats = [
-  {
-    label: "Total Customers",
-    value: "0",
-    bgColor: "#0485FC0D",
-    iconColor: "#0485FC1A",
-    image: CustomerManagementAssets.UserStar,
-  },
-  {
-    label: "Total Active Customers",
-    value: "0",
-    bgColor: "#15BA5C0D",
-    iconColor: "#15BA5C1A",
-    image: CustomerManagementAssets.UserStatsGreen,
-  },
-  {
-    label: "Total Inactive Customers",
-    value: "0",
-    bgColor: "#F8BD000D",
-    iconColor: "#F8BD001A",
-    image: CustomerManagementAssets.UserStatsYellow,
-  },
-  {
-    label: "Total Individual Customers",
-    value: "0",
-    bgColor: "#9747FF0D",
-    iconColor: "#9747FF1A",
-    image: CustomerManagementAssets.UserStatsPurple,
-  },
-  {
-    label: "Total Organizations",
-    value: "0",
-    bgColor: "#307B320D",
-    iconColor: "#307B321A",
-    image: CustomerManagementAssets.UserStatsTeal,
-  },
-];
+import { useState, useMemo } from "react";
+import useCustomerStore from "@/stores/useCustomerStore";
 
 const CustomerManagement = () => {
   const [isCustomerCreationOpen, setIsCustomerCreationOpen] = useState(false);
+  const { customers, isLoading } = useCustomerStore();
+
+  const customerStats = useMemo(
+    () => [
+      {
+        label: "Total Customers",
+        value: customers.length.toString(),
+        bgColor: "#0485FC0D",
+        iconColor: "#0485FC1A",
+        image: CustomerManagementAssets.UserStar,
+      },
+      {
+        label: "Total Active Customers",
+        value: customers.filter((c) => c.status === "Active").length.toString(),
+        bgColor: "#15BA5C0D",
+        iconColor: "#15BA5C1A",
+        image: CustomerManagementAssets.UserStatsGreen,
+      },
+      {
+        label: "Total Inactive Customers",
+        value: customers
+          .filter((c) => c.status === "Inactive")
+          .length.toString(),
+        bgColor: "#F8BD000D",
+        iconColor: "#F8BD001A",
+        image: CustomerManagementAssets.UserStatsYellow,
+      },
+      {
+        label: "Total Individual Customers",
+        value: customers
+          .filter((c) => c.type === "Individual")
+          .length.toString(),
+        bgColor: "#9747FF0D",
+        iconColor: "#9747FF1A",
+        image: CustomerManagementAssets.UserStatsPurple,
+      },
+      {
+        label: "Total Organizations",
+        value: customers
+          .filter((c) => c.type === "Organization")
+          .length.toString(),
+        bgColor: "#307B320D",
+        iconColor: "#307B321A",
+        image: CustomerManagementAssets.UserStatsTeal,
+      },
+    ],
+    [customers],
+  );
 
   return (
     <section className="">
@@ -123,7 +134,11 @@ const CustomerManagement = () => {
                           </div>
 
                           <span className="text-4xl sm:text-3xl font-bold text-[#1C1B20]">
-                            {stats.value}
+                            {isLoading ? (
+                              <span className="block h-8 w-12 bg-gray-200/50 animate-pulse rounded" />
+                            ) : (
+                              stats.value
+                            )}
                           </span>
                         </div>
                       </div>
