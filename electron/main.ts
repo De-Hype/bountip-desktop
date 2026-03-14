@@ -8,7 +8,9 @@ import {
 } from "electron";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 import { DatabaseService } from "./services/DatabaseService";
 import { AuthService } from "./services/AuthService";
 import { NetworkService } from "./services/NetworkService";
@@ -53,6 +55,10 @@ protocol.registerSchemesAsPrivileged([
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load environment variables from .env.local
+dotenv.config({ path: path.join(process.cwd(), ".env.local") });
+dotenv.config(); // Fallback to .env
 
 // Initialize Services
 let dbService: DatabaseService;
@@ -269,56 +275,92 @@ app.whenReady().then(() => {
     assetService.importLocalAsset(filePath),
   );
 
-  ipcMain.handle(
-    "net:uploadImage",
-    async (_event, { buffer, name, type, token }) => {
-      const baseUrl = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
-      const url = `${baseUrl}/static/upload`;
+  ipcMain.handle("net:uploadImage", async (_event, { buffer, name, type }) => {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_KEY_SECRET;
+    if (!cloudName || !apiKey || !apiSecret) {
+      console.error("[Main] Cloudinary credentials missing in environment");
+      return {
+        ok: false,
+        status: 500,
+        error: "Cloudinary credentials not configured",
+      };
+    }
 
-      const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+    const timestamp = Math.round(new Date().getTime() / 1000).toString();
 
-      // Construct multipart body manually for net.fetch
-      const chunks = [];
-      chunks.push(Buffer.from(`--${boundary}\r\n`));
-      chunks.push(
-        Buffer.from(
-          `Content-Disposition: form-data; name="image"; filename="${name}"\r\n`,
-        ),
-      );
-      chunks.push(Buffer.from(`Content-Type: ${type}\r\n\r\n`));
-      chunks.push(Buffer.from(buffer));
-      chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`));
-      const body = Buffer.concat(chunks);
+    // Create signature
+    const signatureStr = `timestamp=${timestamp}${apiSecret}`;
+    const signature = crypto
+      .createHash("sha1")
+      .update(signatureStr)
+      .digest("hex");
 
-      try {
-        const response = await net.fetch(url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "*/*",
-            "Content-Type": `multipart/form-data; boundary=${boundary}`,
-            Origin: "https://sea-turtle-app-73wxj.ondigitalocean.app",
-            Referer: "https://sea-turtle-app-73wxj.ondigitalocean.app/",
+    const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+    const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+
+    // Construct multipart body manually for net.fetch
+    const chunks = [];
+    chunks.push(Buffer.from(`--${boundary}\r\n`));
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="file"; filename="${name}"\r\n`,
+      ),
+    );
+    chunks.push(Buffer.from(`Content-Type: ${type}\r\n\r\n`));
+    chunks.push(Buffer.from(buffer));
+    chunks.push(Buffer.from(`\r\n--${boundary}\r\n`));
+
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="api_key"\r\n\r\n${apiKey}\r\n--${boundary}\r\n`,
+      ),
+    );
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="timestamp"\r\n\r\n${timestamp}\r\n--${boundary}\r\n`,
+      ),
+    );
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="signature"\r\n\r\n${signature}\r\n--${boundary}--\r\n`,
+      ),
+    );
+
+    const body = Buffer.concat(chunks);
+
+    try {
+      const response = await net.fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        },
+        body,
+      });
+
+      const data = await response.json();
+      console.log("Cloudinary Upload Response:", data);
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        data: {
+          data: {
+            url: data.secure_url || data.url,
+            ...data,
           },
-          body,
-        });
-
-        const data = await response.json();
-        return {
-          ok: response.ok,
-          status: response.status,
-          data,
-        };
-      } catch (error: any) {
-        console.error("[Main] Upload error:", error);
-        return {
-          ok: false,
-          status: 500,
-          error: error.message,
-        };
-      }
-    },
-  );
+        },
+      };
+    } catch (error: any) {
+      console.error("[Main] Cloudinary upload error:", error);
+      return {
+        ok: false,
+        status: 500,
+        error: error.message,
+      };
+    }
+  });
 
   ipcMain.handle("sync:flush", () => syncService.flushQueue());
   ipcMain.handle("sync:trigger", (_event, forceFullPull?: boolean) =>

@@ -359,12 +359,35 @@ export class SyncService {
 
       const records = itemsToSync.map((item: any) => {
         const op = JSON.parse(item.op);
+
+        // Sanitize payload: convert SQLite 0/1 back to boolean for known fields
+        const rawPayload = op.data || op.payload || {};
+        const sanitizedPayload: any = { ...rawPayload };
+
+        const booleanFields = [
+          "isMainLocation",
+          "isActive",
+          "whatsappChannel",
+          "emailChannel",
+          "isDeleted",
+          "isOnboarded",
+          "isOfflineImage",
+          "isEmailVerified",
+          "isPin",
+        ];
+
+        for (const field of booleanFields) {
+          if (typeof sanitizedPayload[field] === "number") {
+            sanitizedPayload[field] = sanitizedPayload[field] === 1;
+          }
+        }
+
         // Map local queue format to API expected format
         return {
           id: item.id,
           tableName: op.tableName || op.table || op.type,
           recordId: op.recordId || op.id,
-          payload: op.data || op.payload || {},
+          payload: sanitizedPayload,
           sourceDeviceId: deviceId,
           action: op.action || op.op,
           timestamp: item.created_at,

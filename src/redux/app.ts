@@ -55,10 +55,9 @@ export const appApi = createApi({
     uploadImage: builder.mutation<ImageUploadResponse, FormData>({
       queryFn: async (formData, _queryApi, _extraOptions) => {
         try {
-          const token = tokenManager.getAccessToken();
           const api = getElectronAPI();
 
-          // If in Electron, use the native bridge to bypass CORS
+          // If in Electron, use the native bridge to bypass CORS and hide secret
           if (api && (api as any).uploadImage) {
             const file = formData.get("image") as File;
             if (!file) throw new Error("No image file in FormData");
@@ -68,7 +67,6 @@ export const appApi = createApi({
               buffer: new Uint8Array(buffer),
               name: file.name,
               type: file.type,
-              token: token || "",
             });
 
             if (!result.ok) {
@@ -83,28 +81,16 @@ export const appApi = createApi({
           }
 
           // Fallback for web or if bridge is unavailable
-          const url = `${baseUrl}/static/upload`;
-          const response = await fetch(url, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "*/*",
-            },
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            return {
-              error: {
-                status: response.status,
-                data: errorData,
+          // Signed uploads are ONLY allowed via the Electron bridge to protect secrets
+          return {
+            error: {
+              status: 400,
+              data: {
+                message:
+                  "Image upload is only supported in the Desktop application.",
               },
-            };
-          }
-
-          const data = await response.json();
-          return { data };
+            },
+          };
         } catch (error: any) {
           console.error("[IMAGE] Upload error:", error);
           return {

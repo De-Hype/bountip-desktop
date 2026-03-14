@@ -1,5 +1,6 @@
 import { DatabaseService } from "../../services/DatabaseService";
 import { v4 as uuidv4 } from "uuid";
+import { SYNC_ACTIONS } from "../../types/action.types";
 
 // Helper to get current tiers
 const getTiers = (db: DatabaseService, outletId: string): any[] => {
@@ -38,7 +39,7 @@ const saveTiers = (db: DatabaseService, outletId: string, priceTier: any[]) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId,
     });

@@ -34,6 +34,7 @@ import {
 } from "../features/product/productPersistence";
 import { v4 as uuidv4 } from "uuid";
 import { LocalUserProfile } from "../types/user.types";
+import { SYNC_ACTIONS } from "../types/action.types";
 
 export class DatabaseService {
   private db: Database.Database;
@@ -478,11 +479,39 @@ export class DatabaseService {
       )
       .run(record);
 
+    // 2. Queue Sync
+    console.log(`[DatabaseService] Queuing sync for system_default: ${key}`);
+    this.addToQueue({
+      table: "system_default",
+      action: SYNC_ACTIONS.CREATE,
+      data: {
+        ...record,
+        data: data, // Send parsed data to sync
+      },
+      id: id,
+    });
+
     return record;
   }
 
   deleteSystemDefault(id: string) {
+    const record = this.db
+      .prepare("SELECT * FROM system_default WHERE id = ?")
+      .get(id) as any;
+
     this.db.prepare("DELETE FROM system_default WHERE id = ?").run(id);
+
+    if (record) {
+      console.log(
+        `[DatabaseService] Queuing sync for system_default delete: ${id}`,
+      );
+      this.addToQueue({
+        table: "system_default",
+        action: SYNC_ACTIONS.DELETE,
+        data: record,
+        id: id,
+      });
+    }
   }
 
   getPendingQueue() {
@@ -569,7 +598,7 @@ export class DatabaseService {
           isOfflineImage = COALESCE(@isOfflineImage, isOfflineImage),
           localLogoPath = COALESCE(@localLogoPath, localLogoPath),
           isOnboarded = 1,
-          updatedAt = COALESCE(@updatedAt, updatedAt)
+          updatedAt = @updatedAt
         WHERE id = @outletId
       `,
       )
@@ -585,6 +614,20 @@ export class DatabaseService {
         localLogoPath: payload.data.localLogoPath,
         updatedAt: now,
       });
+
+    // 2. Queue Sync
+    const fullOutlet = this.getOutlet(payload.outletId);
+    if (fullOutlet) {
+      console.log(
+        `[DatabaseService] Queuing sync for onboarded outlet: ${payload.outletId}`,
+      );
+      this.addToQueue({
+        table: "business_outlet",
+        action: SYNC_ACTIONS.UPDATE,
+        data: fullOutlet,
+        id: payload.outletId,
+      });
+    }
   }
 
   run(sql: string, params: any = []) {

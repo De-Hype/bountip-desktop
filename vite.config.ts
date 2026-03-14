@@ -16,6 +16,11 @@ export default defineConfig({
               external: ["better-sqlite3", "keytar", "koffi"],
             },
           },
+          define: {
+            "process.env.CLOUDINARY_CLOUD_NAME": JSON.stringify(process.env.CLOUDINARY_CLOUD_NAME),
+            "process.env.CLOUDINARY_API_KEY": JSON.stringify(process.env.CLOUDINARY_API_KEY),
+            "process.env.CLOUDINARY_API_KEY_SECRET": JSON.stringify(process.env.CLOUDINARY_API_KEY_SECRET),
+          },
         },
       },
       preload: {

@@ -93,6 +93,28 @@ To give the app to new people, send them to:
 
 ---
 
+## 🔐 Environment Variables & Secrets
+
+The application requires certain credentials to be set in your environment for features like image uploads to work.
+
+### Local Development
+Create a `.env.local` file in the root directory and add the following:
+```env
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_KEY_SECRET=your_api_secret
+```
+
+### GitHub Actions (Automated Builds)
+To ensure the packaged application has these credentials, you must add them as **Repository Secrets** in GitHub:
+1. Go to your repo on GitHub: **Settings** > **Secrets and variables** > **Actions**.
+2. Click **New repository secret** for each of the following:
+   - `CLOUDINARY_CLOUD_NAME`
+   - `CLOUDINARY_API_KEY`
+   - `CLOUDINARY_API_KEY_SECRET`
+
+---
+
 ## 🛠 Tech Stack
 - **Framework**: React (Vite)
 - **Desktop**: Electron

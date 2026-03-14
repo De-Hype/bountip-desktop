@@ -104,7 +104,7 @@ export const updateOutlet = async (
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId,
     });
@@ -133,7 +133,7 @@ export const deleteOutlet = async (
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE", // Sync usually handles soft delete as an update to isDeleted flag
+      action: SYNC_ACTIONS.DELETE, // Sync usually handles soft delete as an update to isDeleted flag
       data: fullOutlet,
       id: outletId,
     });

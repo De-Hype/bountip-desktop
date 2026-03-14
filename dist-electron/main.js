@@ -1,24 +1,361 @@
-import require$$1$3, { app, BrowserWindow, net, protocol, ipcMain, nativeImage } from "electron";
+import require$$1$2, { app, BrowserWindow, net, protocol, ipcMain, nativeImage } from "electron";
 import fs$1 from "fs";
 import path from "path";
-import require$$4$1, { pathToFileURL, fileURLToPath } from "url";
-import Database from "better-sqlite3";
 import crypto, { randomUUID } from "crypto";
+import require$$4$2, { pathToFileURL, fileURLToPath } from "url";
+import require$$2 from "os";
+import Database from "better-sqlite3";
 import keytar from "keytar";
 import dgram from "dgram";
 import net$1 from "net";
 import require$$0 from "constants";
 import require$$0$1 from "stream";
-import require$$4 from "util";
+import require$$4$1 from "util";
 import require$$5 from "assert";
-import require$$1$4 from "child_process";
+import require$$1$3 from "child_process";
 import require$$0$2 from "events";
 import require$$1 from "tty";
-import require$$1$1 from "os";
-import require$$1$2 from "string_decoder";
+import require$$1$1 from "string_decoder";
 import require$$14 from "zlib";
-import require$$4$2 from "http";
-import require$$1$5 from "https";
+import require$$4$3 from "http";
+import require$$1$4 from "https";
+var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
+function getDefaultExportFromCjs(x) {
+  return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
+}
+var main$3 = { exports: {} };
+const version = "17.3.1";
+const require$$4 = {
+  version
+};
+var hasRequiredMain$3;
+function requireMain$3() {
+  if (hasRequiredMain$3) return main$3.exports;
+  hasRequiredMain$3 = 1;
+  const fs2 = fs$1;
+  const path$1 = path;
+  const os = require$$2;
+  const crypto$1 = crypto;
+  const packageJson2 = require$$4;
+  const version2 = packageJson2.version;
+  const TIPS = [
+    "🔐 encrypt with Dotenvx: https://dotenvx.com",
+    "🔐 prevent committing .env to code: https://dotenvx.com/precommit",
+    "🔐 prevent building .env in docker: https://dotenvx.com/prebuild",
+    "🤖 agentic secret storage: https://dotenvx.com/as2",
+    "⚡️ secrets for agents: https://dotenvx.com/as2",
+    "🛡️ auth for agents: https://vestauth.com",
+    "🛠️  run anywhere with `dotenvx run -- yourcommand`",
+    "⚙️  specify custom .env file path with { path: '/custom/path/.env' }",
+    "⚙️  enable debug logging with { debug: true }",
+    "⚙️  override existing env vars with { override: true }",
+    "⚙️  suppress all logs with { quiet: true }",
+    "⚙️  write to custom object with { processEnv: myObject }",
+    "⚙️  load multiple .env files with { path: ['.env.local', '.env'] }"
+  ];
+  function _getRandomTip() {
+    return TIPS[Math.floor(Math.random() * TIPS.length)];
+  }
+  function parseBoolean(value) {
+    if (typeof value === "string") {
+      return !["false", "0", "no", "off", ""].includes(value.toLowerCase());
+    }
+    return Boolean(value);
+  }
+  function supportsAnsi() {
+    return process.stdout.isTTY;
+  }
+  function dim(text) {
+    return supportsAnsi() ? `\x1B[2m${text}\x1B[0m` : text;
+  }
+  const LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
+  function parse(src2) {
+    const obj = {};
+    let lines = src2.toString();
+    lines = lines.replace(/\r\n?/mg, "\n");
+    let match;
+    while ((match = LINE.exec(lines)) != null) {
+      const key = match[1];
+      let value = match[2] || "";
+      value = value.trim();
+      const maybeQuote = value[0];
+      value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
+      if (maybeQuote === '"') {
+        value = value.replace(/\\n/g, "\n");
+        value = value.replace(/\\r/g, "\r");
+      }
+      obj[key] = value;
+    }
+    return obj;
+  }
+  function _parseVault(options) {
+    options = options || {};
+    const vaultPath = _vaultPath(options);
+    options.path = vaultPath;
+    const result = DotenvModule.configDotenv(options);
+    if (!result.parsed) {
+      const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
+      err.code = "MISSING_DATA";
+      throw err;
+    }
+    const keys = _dotenvKey(options).split(",");
+    const length = keys.length;
+    let decrypted;
+    for (let i = 0; i < length; i++) {
+      try {
+        const key = keys[i].trim();
+        const attrs = _instructions(result, key);
+        decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
+        break;
+      } catch (error2) {
+        if (i + 1 >= length) {
+          throw error2;
+        }
+      }
+    }
+    return DotenvModule.parse(decrypted);
+  }
+  function _warn(message) {
+    console.error(`[dotenv@${version2}][WARN] ${message}`);
+  }
+  function _debug(message) {
+    console.log(`[dotenv@${version2}][DEBUG] ${message}`);
+  }
+  function _log(message) {
+    console.log(`[dotenv@${version2}] ${message}`);
+  }
+  function _dotenvKey(options) {
+    if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
+      return options.DOTENV_KEY;
+    }
+    if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
+      return process.env.DOTENV_KEY;
+    }
+    return "";
+  }
+  function _instructions(result, dotenvKey) {
+    let uri;
+    try {
+      uri = new URL(dotenvKey);
+    } catch (error2) {
+      if (error2.code === "ERR_INVALID_URL") {
+        const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      }
+      throw error2;
+    }
+    const key = uri.password;
+    if (!key) {
+      const err = new Error("INVALID_DOTENV_KEY: Missing key part");
+      err.code = "INVALID_DOTENV_KEY";
+      throw err;
+    }
+    const environment = uri.searchParams.get("environment");
+    if (!environment) {
+      const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
+      err.code = "INVALID_DOTENV_KEY";
+      throw err;
+    }
+    const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
+    const ciphertext = result.parsed[environmentKey];
+    if (!ciphertext) {
+      const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
+      err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
+      throw err;
+    }
+    return { ciphertext, key };
+  }
+  function _vaultPath(options) {
+    let possibleVaultPath = null;
+    if (options && options.path && options.path.length > 0) {
+      if (Array.isArray(options.path)) {
+        for (const filepath of options.path) {
+          if (fs2.existsSync(filepath)) {
+            possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
+          }
+        }
+      } else {
+        possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
+      }
+    } else {
+      possibleVaultPath = path$1.resolve(process.cwd(), ".env.vault");
+    }
+    if (fs2.existsSync(possibleVaultPath)) {
+      return possibleVaultPath;
+    }
+    return null;
+  }
+  function _resolveHome(envPath) {
+    return envPath[0] === "~" ? path$1.join(os.homedir(), envPath.slice(1)) : envPath;
+  }
+  function _configVault(options) {
+    const debug = parseBoolean(process.env.DOTENV_CONFIG_DEBUG || options && options.debug);
+    const quiet = parseBoolean(process.env.DOTENV_CONFIG_QUIET || options && options.quiet);
+    if (debug || !quiet) {
+      _log("Loading env from encrypted .env.vault");
+    }
+    const parsed = DotenvModule._parseVault(options);
+    let processEnv = process.env;
+    if (options && options.processEnv != null) {
+      processEnv = options.processEnv;
+    }
+    DotenvModule.populate(processEnv, parsed, options);
+    return { parsed };
+  }
+  function configDotenv(options) {
+    const dotenvPath = path$1.resolve(process.cwd(), ".env");
+    let encoding = "utf8";
+    let processEnv = process.env;
+    if (options && options.processEnv != null) {
+      processEnv = options.processEnv;
+    }
+    let debug = parseBoolean(processEnv.DOTENV_CONFIG_DEBUG || options && options.debug);
+    let quiet = parseBoolean(processEnv.DOTENV_CONFIG_QUIET || options && options.quiet);
+    if (options && options.encoding) {
+      encoding = options.encoding;
+    } else {
+      if (debug) {
+        _debug("No encoding is specified. UTF-8 is used by default");
+      }
+    }
+    let optionPaths = [dotenvPath];
+    if (options && options.path) {
+      if (!Array.isArray(options.path)) {
+        optionPaths = [_resolveHome(options.path)];
+      } else {
+        optionPaths = [];
+        for (const filepath of options.path) {
+          optionPaths.push(_resolveHome(filepath));
+        }
+      }
+    }
+    let lastError;
+    const parsedAll = {};
+    for (const path2 of optionPaths) {
+      try {
+        const parsed = DotenvModule.parse(fs2.readFileSync(path2, { encoding }));
+        DotenvModule.populate(parsedAll, parsed, options);
+      } catch (e) {
+        if (debug) {
+          _debug(`Failed to load ${path2} ${e.message}`);
+        }
+        lastError = e;
+      }
+    }
+    const populated = DotenvModule.populate(processEnv, parsedAll, options);
+    debug = parseBoolean(processEnv.DOTENV_CONFIG_DEBUG || debug);
+    quiet = parseBoolean(processEnv.DOTENV_CONFIG_QUIET || quiet);
+    if (debug || !quiet) {
+      const keysCount = Object.keys(populated).length;
+      const shortPaths = [];
+      for (const filePath of optionPaths) {
+        try {
+          const relative = path$1.relative(process.cwd(), filePath);
+          shortPaths.push(relative);
+        } catch (e) {
+          if (debug) {
+            _debug(`Failed to load ${filePath} ${e.message}`);
+          }
+          lastError = e;
+        }
+      }
+      _log(`injecting env (${keysCount}) from ${shortPaths.join(",")} ${dim(`-- tip: ${_getRandomTip()}`)}`);
+    }
+    if (lastError) {
+      return { parsed: parsedAll, error: lastError };
+    } else {
+      return { parsed: parsedAll };
+    }
+  }
+  function config(options) {
+    if (_dotenvKey(options).length === 0) {
+      return DotenvModule.configDotenv(options);
+    }
+    const vaultPath = _vaultPath(options);
+    if (!vaultPath) {
+      _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`);
+      return DotenvModule.configDotenv(options);
+    }
+    return DotenvModule._configVault(options);
+  }
+  function decrypt(encrypted, keyStr) {
+    const key = Buffer.from(keyStr.slice(-64), "hex");
+    let ciphertext = Buffer.from(encrypted, "base64");
+    const nonce = ciphertext.subarray(0, 12);
+    const authTag = ciphertext.subarray(-16);
+    ciphertext = ciphertext.subarray(12, -16);
+    try {
+      const aesgcm = crypto$1.createDecipheriv("aes-256-gcm", key, nonce);
+      aesgcm.setAuthTag(authTag);
+      return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
+    } catch (error2) {
+      const isRange = error2 instanceof RangeError;
+      const invalidKeyLength = error2.message === "Invalid key length";
+      const decryptionFailed = error2.message === "Unsupported state or unable to authenticate data";
+      if (isRange || invalidKeyLength) {
+        const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      } else if (decryptionFailed) {
+        const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
+        err.code = "DECRYPTION_FAILED";
+        throw err;
+      } else {
+        throw error2;
+      }
+    }
+  }
+  function populate(processEnv, parsed, options = {}) {
+    const debug = Boolean(options && options.debug);
+    const override = Boolean(options && options.override);
+    const populated = {};
+    if (typeof parsed !== "object") {
+      const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
+      err.code = "OBJECT_REQUIRED";
+      throw err;
+    }
+    for (const key of Object.keys(parsed)) {
+      if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
+        if (override === true) {
+          processEnv[key] = parsed[key];
+          populated[key] = parsed[key];
+        }
+        if (debug) {
+          if (override === true) {
+            _debug(`"${key}" is already defined and WAS overwritten`);
+          } else {
+            _debug(`"${key}" is already defined and was NOT overwritten`);
+          }
+        }
+      } else {
+        processEnv[key] = parsed[key];
+        populated[key] = parsed[key];
+      }
+    }
+    return populated;
+  }
+  const DotenvModule = {
+    configDotenv,
+    _configVault,
+    _parseVault,
+    config,
+    decrypt,
+    parse,
+    populate
+  };
+  main$3.exports.configDotenv = DotenvModule.configDotenv;
+  main$3.exports._configVault = DotenvModule._configVault;
+  main$3.exports._parseVault = DotenvModule._parseVault;
+  main$3.exports.config = DotenvModule.config;
+  main$3.exports.decrypt = DotenvModule.decrypt;
+  main$3.exports.parse = DotenvModule.parse;
+  main$3.exports.populate = DotenvModule.populate;
+  main$3.exports = DotenvModule;
+  return main$3.exports;
+}
+var mainExports$1 = requireMain$3();
+const dotenv = /* @__PURE__ */ getDefaultExportFromCjs(mainExports$1);
 const userCreateSql = `
   CREATE TABLE IF NOT EXISTS user (
     id TEXT PRIMARY KEY,
@@ -1137,10 +1474,6 @@ function buildProductSyncOp(row, id, ts) {
     ts
   };
 }
-var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
-function getDefaultExportFromCjs(x) {
-  return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
-}
 var rng;
 var hasRequiredRng;
 function requireRng() {
@@ -1300,6 +1633,12 @@ function requireUuid$1() {
   return uuid_1;
 }
 var uuidExports = requireUuid$1();
+var SYNC_ACTIONS = /* @__PURE__ */ ((SYNC_ACTIONS2) => {
+  SYNC_ACTIONS2["CREATE"] = "CREATE";
+  SYNC_ACTIONS2["UPDATE"] = "UPDATE";
+  SYNC_ACTIONS2["DELETE"] = "DELETE";
+  return SYNC_ACTIONS2;
+})(SYNC_ACTIONS || {});
 class DatabaseService {
   constructor() {
     const userDataPath = app.getPath("userData");
@@ -1582,10 +1921,33 @@ class DatabaseService {
     this.db.prepare(
       "INSERT INTO system_default (id, key, data, outletId, recordId, version) VALUES (@id, @key, @data, @outletId, @recordId, @version)"
     ).run(record);
+    console.log(`[DatabaseService] Queuing sync for system_default: ${key}`);
+    this.addToQueue({
+      table: "system_default",
+      action: SYNC_ACTIONS.CREATE,
+      data: {
+        ...record,
+        data
+        // Send parsed data to sync
+      },
+      id
+    });
     return record;
   }
   deleteSystemDefault(id) {
+    const record = this.db.prepare("SELECT * FROM system_default WHERE id = ?").get(id);
     this.db.prepare("DELETE FROM system_default WHERE id = ?").run(id);
+    if (record) {
+      console.log(
+        `[DatabaseService] Queuing sync for system_default delete: ${id}`
+      );
+      this.addToQueue({
+        table: "system_default",
+        action: SYNC_ACTIONS.DELETE,
+        data: record,
+        id
+      });
+    }
   }
   getPendingQueue() {
     const rows = this.db.prepare(
@@ -1639,7 +2001,7 @@ class DatabaseService {
           isOfflineImage = COALESCE(@isOfflineImage, isOfflineImage),
           localLogoPath = COALESCE(@localLogoPath, localLogoPath),
           isOnboarded = 1,
-          updatedAt = COALESCE(@updatedAt, updatedAt)
+          updatedAt = @updatedAt
         WHERE id = @outletId
       `
     ).run({
@@ -1654,6 +2016,18 @@ class DatabaseService {
       localLogoPath: payload.data.localLogoPath,
       updatedAt: now
     });
+    const fullOutlet = this.getOutlet(payload.outletId);
+    if (fullOutlet) {
+      console.log(
+        `[DatabaseService] Queuing sync for onboarded outlet: ${payload.outletId}`
+      );
+      this.addToQueue({
+        table: "business_outlet",
+        action: SYNC_ACTIONS.UPDATE,
+        data: fullOutlet,
+        id: payload.outletId
+      });
+    }
   }
   run(sql, params = []) {
     return this.db.prepare(sql).run(params);
@@ -2553,7 +2927,7 @@ function requireGracefulFs() {
   var polyfills2 = requirePolyfills();
   var legacy = requireLegacyStreams();
   var clone = requireClone();
-  var util2 = require$$4;
+  var util2 = require$$4$1;
   var gracefulQueue;
   var previousSymbol;
   if (typeof Symbol === "function" && typeof Symbol.for === "function") {
@@ -3133,7 +3507,7 @@ function requireStat() {
   hasRequiredStat = 1;
   const fs2 = /* @__PURE__ */ requireFs();
   const path$1 = path;
-  const util2 = require$$4;
+  const util2 = require$$4$1;
   function getStats(src2, dest, opts) {
     const statFunc = opts.dereference ? (file2) => fs2.stat(file2, { bigint: true }) : (file2) => fs2.lstat(file2, { bigint: true });
     return Promise.all([
@@ -5194,7 +5568,7 @@ var hasRequiredSupportsColor;
 function requireSupportsColor() {
   if (hasRequiredSupportsColor) return supportsColor_1;
   hasRequiredSupportsColor = 1;
-  const os = require$$1$1;
+  const os = require$$2;
   const tty = require$$1;
   const hasFlag2 = requireHasFlag();
   const { env } = process;
@@ -5270,10 +5644,10 @@ function requireSupportsColor() {
       return 3;
     }
     if ("TERM_PROGRAM" in env) {
-      const version = Number.parseInt((env.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
+      const version2 = Number.parseInt((env.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
       switch (env.TERM_PROGRAM) {
         case "iTerm.app":
-          return version >= 3 ? 3 : 2;
+          return version2 >= 3 ? 3 : 2;
         case "Apple_Terminal":
           return 2;
       }
@@ -5309,7 +5683,7 @@ function requireNode$1() {
   hasRequiredNode$1 = 1;
   (function(module, exports$1) {
     const tty = require$$1;
-    const util2 = require$$4;
+    const util2 = require$$4$1;
     exports$1.init = init;
     exports$1.log = log2;
     exports$1.formatArgs = formatArgs;
@@ -5566,7 +5940,7 @@ function requireHttpExecutor() {
   const debug_12 = requireSrc$1();
   const fs_1 = fs$1;
   const stream_1 = require$$0$1;
-  const url_1 = require$$4$1;
+  const url_1 = require$$4$2;
   const CancellationToken_1 = requireCancellationToken();
   const error_1 = requireError();
   const ProgressCallbackTransform_1 = requireProgressCallbackTransform();
@@ -6275,7 +6649,7 @@ function requireUuid() {
     UuidEncoding2[UuidEncoding2["BINARY"] = 1] = "BINARY";
     UuidEncoding2[UuidEncoding2["OBJECT"] = 2] = "OBJECT";
   })(UuidEncoding || (UuidEncoding = {}));
-  function uuidNamed(name, hashMethod, version, namespace, encoding = UuidEncoding.ASCII) {
+  function uuidNamed(name, hashMethod, version2, namespace, encoding = UuidEncoding.ASCII) {
     const hash = (0, crypto_1.createHash)(hashMethod);
     const nameIsNotAString = typeof name !== "string";
     if (nameIsNotAString && !Buffer.isBuffer(name)) {
@@ -6287,17 +6661,17 @@ function requireUuid() {
     let result;
     switch (encoding) {
       case UuidEncoding.BINARY:
-        buffer[6] = buffer[6] & 15 | version;
+        buffer[6] = buffer[6] & 15 | version2;
         buffer[8] = buffer[8] & 63 | 128;
         result = buffer;
         break;
       case UuidEncoding.OBJECT:
-        buffer[6] = buffer[6] & 15 | version;
+        buffer[6] = buffer[6] & 15 | version2;
         buffer[8] = buffer[8] & 63 | 128;
         result = new UUID(buffer);
         break;
       default:
-        result = byte2hex[buffer[0]] + byte2hex[buffer[1]] + byte2hex[buffer[2]] + byte2hex[buffer[3]] + "-" + byte2hex[buffer[4]] + byte2hex[buffer[5]] + "-" + byte2hex[buffer[6] & 15 | version] + byte2hex[buffer[7]] + "-" + byte2hex[buffer[8] & 63 | 128] + byte2hex[buffer[9]] + "-" + byte2hex[buffer[10]] + byte2hex[buffer[11]] + byte2hex[buffer[12]] + byte2hex[buffer[13]] + byte2hex[buffer[14]] + byte2hex[buffer[15]];
+        result = byte2hex[buffer[0]] + byte2hex[buffer[1]] + byte2hex[buffer[2]] + byte2hex[buffer[3]] + "-" + byte2hex[buffer[4]] + byte2hex[buffer[5]] + "-" + byte2hex[buffer[6] & 15 | version2] + byte2hex[buffer[7]] + "-" + byte2hex[buffer[8] & 63 | 128] + byte2hex[buffer[9]] + "-" + byte2hex[buffer[10]] + byte2hex[buffer[11]] + byte2hex[buffer[12]] + byte2hex[buffer[13]] + byte2hex[buffer[14]] + byte2hex[buffer[15]];
         break;
     }
     return result;
@@ -6522,7 +6896,7 @@ function requireSax() {
       SAXStream.prototype.write = function(data) {
         if (typeof Buffer === "function" && typeof Buffer.isBuffer === "function" && Buffer.isBuffer(data)) {
           if (!this._decoder) {
-            var SD = require$$1$2.StringDecoder;
+            var SD = require$$1$1.StringDecoder;
             this._decoder = new SD("utf8");
           }
           data = this._decoder.write(data);
@@ -11012,31 +11386,31 @@ function requireSemver$1() {
   const parseOptions = requireParseOptions();
   const { compareIdentifiers } = requireIdentifiers();
   class SemVer {
-    constructor(version, options) {
+    constructor(version2, options) {
       options = parseOptions(options);
-      if (version instanceof SemVer) {
-        if (version.loose === !!options.loose && version.includePrerelease === !!options.includePrerelease) {
-          return version;
+      if (version2 instanceof SemVer) {
+        if (version2.loose === !!options.loose && version2.includePrerelease === !!options.includePrerelease) {
+          return version2;
         } else {
-          version = version.version;
+          version2 = version2.version;
         }
-      } else if (typeof version !== "string") {
-        throw new TypeError(`Invalid version. Must be a string. Got type "${typeof version}".`);
+      } else if (typeof version2 !== "string") {
+        throw new TypeError(`Invalid version. Must be a string. Got type "${typeof version2}".`);
       }
-      if (version.length > MAX_LENGTH) {
+      if (version2.length > MAX_LENGTH) {
         throw new TypeError(
           `version is longer than ${MAX_LENGTH} characters`
         );
       }
-      debug("SemVer", version, options);
+      debug("SemVer", version2, options);
       this.options = options;
       this.loose = !!options.loose;
       this.includePrerelease = !!options.includePrerelease;
-      const m = version.trim().match(options.loose ? re2[t.LOOSE] : re2[t.FULL]);
+      const m = version2.trim().match(options.loose ? re2[t.LOOSE] : re2[t.FULL]);
       if (!m) {
-        throw new TypeError(`Invalid Version: ${version}`);
+        throw new TypeError(`Invalid Version: ${version2}`);
       }
-      this.raw = version;
+      this.raw = version2;
       this.major = +m[1];
       this.minor = +m[2];
       this.patch = +m[3];
@@ -11286,12 +11660,12 @@ function requireParse() {
   if (hasRequiredParse) return parse_1;
   hasRequiredParse = 1;
   const SemVer = requireSemver$1();
-  const parse = (version, options, throwErrors = false) => {
-    if (version instanceof SemVer) {
-      return version;
+  const parse = (version2, options, throwErrors = false) => {
+    if (version2 instanceof SemVer) {
+      return version2;
     }
     try {
-      return new SemVer(version, options);
+      return new SemVer(version2, options);
     } catch (er) {
       if (!throwErrors) {
         return null;
@@ -11308,8 +11682,8 @@ function requireValid$1() {
   if (hasRequiredValid$1) return valid_1;
   hasRequiredValid$1 = 1;
   const parse = requireParse();
-  const valid2 = (version, options) => {
-    const v = parse(version, options);
+  const valid2 = (version2, options) => {
+    const v = parse(version2, options);
     return v ? v.version : null;
   };
   valid_1 = valid2;
@@ -11321,8 +11695,8 @@ function requireClean() {
   if (hasRequiredClean) return clean_1;
   hasRequiredClean = 1;
   const parse = requireParse();
-  const clean = (version, options) => {
-    const s = parse(version.trim().replace(/^[=v]+/, ""), options);
+  const clean = (version2, options) => {
+    const s = parse(version2.trim().replace(/^[=v]+/, ""), options);
     return s ? s.version : null;
   };
   clean_1 = clean;
@@ -11334,7 +11708,7 @@ function requireInc() {
   if (hasRequiredInc) return inc_1;
   hasRequiredInc = 1;
   const SemVer = requireSemver$1();
-  const inc = (version, release, options, identifier, identifierBase) => {
+  const inc = (version2, release, options, identifier, identifierBase) => {
     if (typeof options === "string") {
       identifierBase = identifier;
       identifier = options;
@@ -11342,7 +11716,7 @@ function requireInc() {
     }
     try {
       return new SemVer(
-        version instanceof SemVer ? version.version : version,
+        version2 instanceof SemVer ? version2.version : version2,
         options
       ).inc(release, identifier, identifierBase).version;
     } catch (er) {
@@ -11432,8 +11806,8 @@ function requirePrerelease() {
   if (hasRequiredPrerelease) return prerelease_1;
   hasRequiredPrerelease = 1;
   const parse = requireParse();
-  const prerelease = (version, options) => {
-    const parsed = parse(version, options);
+  const prerelease = (version2, options) => {
+    const parsed = parse(version2, options);
     return parsed && parsed.prerelease.length ? parsed.prerelease : null;
   };
   prerelease_1 = prerelease;
@@ -11621,24 +11995,24 @@ function requireCoerce() {
   const SemVer = requireSemver$1();
   const parse = requireParse();
   const { safeRe: re2, t } = requireRe();
-  const coerce = (version, options) => {
-    if (version instanceof SemVer) {
-      return version;
+  const coerce = (version2, options) => {
+    if (version2 instanceof SemVer) {
+      return version2;
     }
-    if (typeof version === "number") {
-      version = String(version);
+    if (typeof version2 === "number") {
+      version2 = String(version2);
     }
-    if (typeof version !== "string") {
+    if (typeof version2 !== "string") {
       return null;
     }
     options = options || {};
     let match = null;
     if (!options.rtl) {
-      match = version.match(options.includePrerelease ? re2[t.COERCEFULL] : re2[t.COERCE]);
+      match = version2.match(options.includePrerelease ? re2[t.COERCEFULL] : re2[t.COERCE]);
     } else {
       const coerceRtlRegex = options.includePrerelease ? re2[t.COERCERTLFULL] : re2[t.COERCERTL];
       let next;
-      while ((next = coerceRtlRegex.exec(version)) && (!match || match.index + match[0].length !== version.length)) {
+      while ((next = coerceRtlRegex.exec(version2)) && (!match || match.index + match[0].length !== version2.length)) {
         if (!match || next.index + next[0].length !== match.index + match[0].length) {
           match = next;
         }
@@ -11822,19 +12196,19 @@ function requireRange() {
       });
     }
     // if ANY of the sets match ALL of its comparators, then pass
-    test(version) {
-      if (!version) {
+    test(version2) {
+      if (!version2) {
         return false;
       }
-      if (typeof version === "string") {
+      if (typeof version2 === "string") {
         try {
-          version = new SemVer(version, this.options);
+          version2 = new SemVer(version2, this.options);
         } catch (er) {
           return false;
         }
       }
       for (let i = 0; i < this.set.length; i++) {
-        if (testSet(this.set[i], version, this.options)) {
+        if (testSet(this.set[i], version2, this.options)) {
           return true;
         }
       }
@@ -12049,13 +12423,13 @@ function requireRange() {
     }
     return `${from} ${to}`.trim();
   };
-  const testSet = (set2, version, options) => {
+  const testSet = (set2, version2, options) => {
     for (let i = 0; i < set2.length; i++) {
-      if (!set2[i].test(version)) {
+      if (!set2[i].test(version2)) {
         return false;
       }
     }
-    if (version.prerelease.length && !options.includePrerelease) {
+    if (version2.prerelease.length && !options.includePrerelease) {
       for (let i = 0; i < set2.length; i++) {
         debug(set2[i].semver);
         if (set2[i].semver === Comparator.ANY) {
@@ -12063,7 +12437,7 @@ function requireRange() {
         }
         if (set2[i].semver.prerelease.length > 0) {
           const allowed = set2[i].semver;
-          if (allowed.major === version.major && allowed.minor === version.minor && allowed.patch === version.patch) {
+          if (allowed.major === version2.major && allowed.minor === version2.minor && allowed.patch === version2.patch) {
             return true;
           }
         }
@@ -12124,19 +12498,19 @@ function requireComparator() {
     toString() {
       return this.value;
     }
-    test(version) {
-      debug("Comparator.test", version, this.options.loose);
-      if (this.semver === ANY || version === ANY) {
+    test(version2) {
+      debug("Comparator.test", version2, this.options.loose);
+      if (this.semver === ANY || version2 === ANY) {
         return true;
       }
-      if (typeof version === "string") {
+      if (typeof version2 === "string") {
         try {
-          version = new SemVer(version, this.options);
+          version2 = new SemVer(version2, this.options);
         } catch (er) {
           return false;
         }
       }
-      return cmp(version, this.operator, this.semver, this.options);
+      return cmp(version2, this.operator, this.semver, this.options);
     }
     intersects(comp, options) {
       if (!(comp instanceof Comparator)) {
@@ -12193,13 +12567,13 @@ function requireSatisfies() {
   if (hasRequiredSatisfies) return satisfies_1;
   hasRequiredSatisfies = 1;
   const Range = requireRange();
-  const satisfies = (version, range2, options) => {
+  const satisfies = (version2, range2, options) => {
     try {
       range2 = new Range(range2, options);
     } catch (er) {
       return false;
     }
-    return range2.test(version);
+    return range2.test(version2);
   };
   satisfies_1 = satisfies;
   return satisfies_1;
@@ -12361,8 +12735,8 @@ function requireOutside() {
   const lt = requireLt();
   const lte = requireLte();
   const gte = requireGte();
-  const outside = (version, range2, hilo, options) => {
-    version = new SemVer(version, options);
+  const outside = (version2, range2, hilo, options) => {
+    version2 = new SemVer(version2, options);
     range2 = new Range(range2, options);
     let gtfn, ltefn, ltfn, comp, ecomp;
     switch (hilo) {
@@ -12383,7 +12757,7 @@ function requireOutside() {
       default:
         throw new TypeError('Must provide a hilo val of "<" or ">"');
     }
-    if (satisfies(version, range2, options)) {
+    if (satisfies(version2, range2, options)) {
       return false;
     }
     for (let i = 0; i < range2.set.length; ++i) {
@@ -12405,9 +12779,9 @@ function requireOutside() {
       if (high.operator === comp || high.operator === ecomp) {
         return false;
       }
-      if ((!low.operator || low.operator === comp) && ltefn(version, low.semver)) {
+      if ((!low.operator || low.operator === comp) && ltefn(version2, low.semver)) {
         return false;
-      } else if (low.operator === ecomp && ltfn(version, low.semver)) {
+      } else if (low.operator === ecomp && ltfn(version2, low.semver)) {
         return false;
       }
     }
@@ -12422,7 +12796,7 @@ function requireGtr() {
   if (hasRequiredGtr) return gtr_1;
   hasRequiredGtr = 1;
   const outside = requireOutside();
-  const gtr = (version, range2, options) => outside(version, range2, ">", options);
+  const gtr = (version2, range2, options) => outside(version2, range2, ">", options);
   gtr_1 = gtr;
   return gtr_1;
 }
@@ -12432,7 +12806,7 @@ function requireLtr() {
   if (hasRequiredLtr) return ltr_1;
   hasRequiredLtr = 1;
   const outside = requireOutside();
-  const ltr = (version, range2, options) => outside(version, range2, "<", options);
+  const ltr = (version2, range2, options) => outside(version2, range2, "<", options);
   ltr_1 = ltr;
   return ltr_1;
 }
@@ -12462,12 +12836,12 @@ function requireSimplify() {
     let first = null;
     let prev = null;
     const v = versions.sort((a, b) => compare(a, b, options));
-    for (const version of v) {
-      const included = satisfies(version, range2, options);
+    for (const version2 of v) {
+      const included = satisfies(version2, range2, options);
       if (included) {
-        prev = version;
+        prev = version2;
         if (!first) {
-          first = version;
+          first = version2;
         }
       } else {
         if (prev) {
@@ -13585,7 +13959,7 @@ function requireAppAdapter() {
   Object.defineProperty(AppAdapter, "__esModule", { value: true });
   AppAdapter.getAppCacheDir = getAppCacheDir;
   const path$1 = path;
-  const os_1 = require$$1$1;
+  const os_1 = require$$2;
   function getAppCacheDir() {
     const homedir = (0, os_1.homedir)();
     let result;
@@ -13609,7 +13983,7 @@ function requireElectronAppAdapter() {
   const path$1 = path;
   const AppAdapter_1 = requireAppAdapter();
   let ElectronAppAdapter$1 = class ElectronAppAdapter {
-    constructor(app2 = require$$1$3.app) {
+    constructor(app2 = require$$1$2.app) {
       this.app = app2;
     }
     whenReady() {
@@ -13658,7 +14032,7 @@ function requireElectronHttpExecutor() {
     const builder_util_runtime_1 = requireOut();
     exports$1.NET_SESSION_NAME = "electron-updater";
     function getNetSession() {
-      return require$$1$3.session.fromPartition(exports$1.NET_SESSION_NAME, {
+      return require$$1$2.session.fromPartition(exports$1.NET_SESSION_NAME, {
         cache: false
       });
     }
@@ -13699,7 +14073,7 @@ function requireElectronHttpExecutor() {
         if (this.cachedSession == null) {
           this.cachedSession = getNetSession();
         }
-        const request = require$$1$3.net.request({
+        const request = require$$1$2.net.request({
           ...options,
           session: this.cachedSession
         });
@@ -13775,7 +14149,7 @@ function requireUtil() {
   util.newUrlFromBase = newUrlFromBase;
   util.getChannelFilename = getChannelFilename;
   util.blockmapFiles = blockmapFiles;
-  const url_1 = require$$4$1;
+  const url_1 = require$$4$2;
   const escapeRegExp = requireLodash_escaperegexp();
   function newBaseUrl(url) {
     const result = new url_1.URL(url);
@@ -14043,7 +14417,7 @@ function requireGitHubProvider() {
   GitHubProvider.computeReleaseNotes = computeReleaseNotes;
   const builder_util_runtime_1 = requireOut();
   const semver2 = requireSemver();
-  const url_1 = require$$4$1;
+  const url_1 = require$$4$2;
   const util_1 = requireUtil();
   const Provider_1 = requireProvider();
   const hrefRegExp = /\/tag\/([^/]+)$/;
@@ -14275,7 +14649,7 @@ function requirePrivateGitHubProvider() {
   const builder_util_runtime_1 = requireOut();
   const js_yaml_1 = requireJsYaml();
   const path$1 = path;
-  const url_1 = require$$4$1;
+  const url_1 = require$$4$2;
   const util_1 = requireUtil();
   const GitHubProvider_1 = requireGitHubProvider();
   const Provider_1 = requireProvider();
@@ -14328,11 +14702,11 @@ function requirePrivateGitHubProvider() {
       }
       const url = (0, util_1.newUrlFromBase)(basePath, this.baseUrl);
       try {
-        const version = JSON.parse(await this.httpRequest(url, this.configureHeaders("application/vnd.github.v3+json"), cancellationToken));
+        const version2 = JSON.parse(await this.httpRequest(url, this.configureHeaders("application/vnd.github.v3+json"), cancellationToken));
         if (allowPrerelease) {
-          return version.find((it) => it.prerelease) || version[0];
+          return version2.find((it) => it.prerelease) || version2[0];
         } else {
-          return version;
+          return version2;
         }
       } catch (e) {
         throw (0, builder_util_runtime_1.newError)(`Unable to find latest version on GitHub (${url}), please ensure a production release exists: ${e.stack || e.message}`, "ERR_UPDATER_LATEST_VERSION_NOT_FOUND");
@@ -14948,7 +15322,7 @@ function requireDifferentialDownloader() {
   const fs_extra_1 = /* @__PURE__ */ requireLib();
   const fs_1 = fs$1;
   const DataSplitter_1 = requireDataSplitter();
-  const url_1 = require$$4$1;
+  const url_1 = require$$4$2;
   const downloadPlanBuilder_1 = requireDownloadPlanBuilder();
   const multipleRangeDownloader_1 = requireMultipleRangeDownloader();
   const ProgressDifferentialDownloadCallbackTransform_1 = requireProgressDifferentialDownloadCallbackTransform();
@@ -15252,7 +15626,7 @@ function requireAppUpdater() {
   AppUpdater.NoOpLogger = AppUpdater.AppUpdater = void 0;
   const builder_util_runtime_1 = requireOut();
   const crypto_1 = crypto;
-  const os_1 = require$$1$1;
+  const os_1 = require$$2;
   const events_1 = require$$0$2;
   const fs_extra_1 = /* @__PURE__ */ requireLib();
   const js_yaml_1 = requireJsYaml();
@@ -15450,12 +15824,12 @@ function requireAppUpdater() {
         }
         void it.downloadPromise.then(() => {
           const notificationContent = AppUpdater2.formatDownloadNotification(it.updateInfo.version, this.app.name, downloadNotification);
-          new require$$1$3.Notification(notificationContent).show();
+          new require$$1$2.Notification(notificationContent).show();
         });
         return it;
       });
     }
-    static formatDownloadNotification(version, appName, downloadNotification) {
+    static formatDownloadNotification(version2, appName, downloadNotification) {
       if (downloadNotification == null) {
         downloadNotification = {
           title: "A new update is ready to install",
@@ -15463,8 +15837,8 @@ function requireAppUpdater() {
         };
       }
       downloadNotification = {
-        title: downloadNotification.title.replace("{appName}", appName).replace("{version}", version),
-        body: downloadNotification.body.replace("{appName}", appName).replace("{version}", version)
+        title: downloadNotification.title.replace("{appName}", appName).replace("{version}", version2),
+        body: downloadNotification.body.replace("{appName}", appName).replace("{version}", version2)
       };
       return downloadNotification;
     }
@@ -15706,7 +16080,7 @@ function requireAppUpdater() {
         downloadOptions.onProgress = (it) => this.emit(types_1.DOWNLOAD_PROGRESS, it);
       }
       const updateInfo = taskOptions.downloadUpdateOptions.updateInfoAndProvider.info;
-      const version = updateInfo.version;
+      const version2 = updateInfo.version;
       const packageInfo = fileInfo.packageInfo;
       function getCacheUpdateFileName() {
         const urlPath = decodeURIComponent(taskOptions.fileInfo.url.pathname);
@@ -15721,7 +16095,7 @@ function requireAppUpdater() {
       await (0, fs_extra_1.mkdir)(cacheDir, { recursive: true });
       const updateFileName = getCacheUpdateFileName();
       let updateFile = path$1.join(cacheDir, updateFileName);
-      const packageFile = packageInfo == null ? null : path$1.join(cacheDir, `package-${version}${path$1.extname(packageInfo.path) || ".7z"}`);
+      const packageFile = packageInfo == null ? null : path$1.join(cacheDir, `package-${version2}${path$1.extname(packageInfo.path) || ".7z"}`);
       const done = async (isSaveCache) => {
         await downloadedUpdateHelper.setDownloadedFile(updateFile, packageFile, updateInfo, fileInfo, updateFileName, isSaveCache);
         await taskOptions.done({
@@ -15754,7 +16128,7 @@ function requireAppUpdater() {
         }
         throw e;
       }
-      log2.info(`New version ${version} has been downloaded to ${updateFile}`);
+      log2.info(`New version ${version2} has been downloaded to ${updateFile}`);
       return await done(true);
     }
     async differentialDownloadInstaller(fileInfo, downloadUpdateOptions, installerPath, provider, oldInstallerFileName) {
@@ -15803,8 +16177,8 @@ function requireAppUpdater() {
     }
   };
   AppUpdater.AppUpdater = AppUpdater$1;
-  function hasPrereleaseComponents(version) {
-    const versionPrereleaseComponent = (0, semver_1.prerelease)(version);
+  function hasPrereleaseComponents(version2) {
+    const versionPrereleaseComponent = (0, semver_1.prerelease)(version2);
     return versionPrereleaseComponent != null && versionPrereleaseComponent.length > 0;
   }
   class NoOpLogger {
@@ -15827,7 +16201,7 @@ function requireBaseUpdater() {
   hasRequiredBaseUpdater = 1;
   Object.defineProperty(BaseUpdater, "__esModule", { value: true });
   BaseUpdater.BaseUpdater = void 0;
-  const child_process_1 = require$$1$4;
+  const child_process_1 = require$$1$3;
   const AppUpdater_1 = requireAppUpdater();
   let BaseUpdater$1 = class BaseUpdater extends AppUpdater_1.AppUpdater {
     constructor(options, app2) {
@@ -15840,7 +16214,7 @@ function requireBaseUpdater() {
       const isInstalled = this.install(isSilent, isSilent ? isForceRunAfter : this.autoRunAppAfterInstall);
       if (isInstalled) {
         setImmediate(() => {
-          require$$1$3.autoUpdater.emit("before-quit-for-update");
+          require$$1$2.autoUpdater.emit("before-quit-for-update");
           this.app.quit();
         });
       } else {
@@ -16018,7 +16392,7 @@ function requireAppImageUpdater() {
   Object.defineProperty(AppImageUpdater, "__esModule", { value: true });
   AppImageUpdater.AppImageUpdater = void 0;
   const builder_util_runtime_1 = requireOut();
-  const child_process_1 = require$$1$4;
+  const child_process_1 = require$$1$3;
   const fs_extra_1 = /* @__PURE__ */ requireLib();
   const fs_1 = fs$1;
   const path$1 = path;
@@ -16297,15 +16671,15 @@ function requireMacUpdater() {
   const fs_extra_1 = /* @__PURE__ */ requireLib();
   const fs_1 = fs$1;
   const path$1 = path;
-  const http_1 = require$$4$2;
+  const http_1 = require$$4$3;
   const AppUpdater_1 = requireAppUpdater();
   const Provider_1 = requireProvider();
-  const child_process_1 = require$$1$4;
+  const child_process_1 = require$$1$3;
   const crypto_1 = crypto;
   let MacUpdater$1 = class MacUpdater extends AppUpdater_1.AppUpdater {
     constructor(options, app2) {
       super(options, app2);
-      this.nativeUpdater = require$$1$3.autoUpdater;
+      this.nativeUpdater = require$$1$2.autoUpdater;
       this.squirrelDownloadedUpdate = false;
       this.nativeUpdater.on("error", (it) => {
         this._logger.warn(it);
@@ -16536,8 +16910,8 @@ function requireWindowsExecutableCodeSignatureVerifier() {
   Object.defineProperty(windowsExecutableCodeSignatureVerifier, "__esModule", { value: true });
   windowsExecutableCodeSignatureVerifier.verifySignature = verifySignature;
   const builder_util_runtime_1 = requireOut();
-  const child_process_1 = require$$1$4;
-  const os = require$$1$1;
+  const child_process_1 = require$$1$3;
+  const os = require$$2;
   const path$1 = path;
   function verifySignature(publisherNames, unescapedTempUpdateFile, logger) {
     return new Promise((resolve, reject) => {
@@ -16651,7 +17025,7 @@ function requireNsisUpdater() {
   const Provider_1 = requireProvider();
   const fs_extra_1 = /* @__PURE__ */ requireLib();
   const windowsExecutableCodeSignatureVerifier_1 = requireWindowsExecutableCodeSignatureVerifier();
-  const url_1 = require$$4$1;
+  const url_1 = require$$4$2;
   let NsisUpdater$1 = class NsisUpdater extends BaseUpdater_1.BaseUpdater {
     constructor(options, app2) {
       super(options, app2);
@@ -16766,7 +17140,7 @@ function requireNsisUpdater() {
         if (errorCode === "UNKNOWN" || errorCode === "EACCES") {
           callUsingElevation();
         } else if (errorCode === "ENOENT") {
-          require$$1$3.shell.openPath(installerPath).catch((err) => this.dispatchError(err));
+          require$$1$2.shell.openPath(installerPath).catch((err) => this.dispatchError(err));
         } else {
           this.dispatchError(e);
         }
@@ -17665,8 +18039,8 @@ var hasRequiredNodeExternalApi;
 function requireNodeExternalApi() {
   if (hasRequiredNodeExternalApi) return NodeExternalApi_1;
   hasRequiredNodeExternalApi = 1;
-  const childProcess = require$$1$4;
-  const os = require$$1$1;
+  const childProcess = require$$1$3;
+  const os = require$$2;
   const path$1 = path;
   const packageJson2 = requirePackageJson();
   class NodeExternalApi {
@@ -18010,7 +18384,7 @@ function requireInitialize() {
   if (hasRequiredInitialize) return initialize;
   hasRequiredInitialize = 1;
   const fs2 = fs$1;
-  const os = require$$1$1;
+  const os = require$$2;
   const path$1 = path;
   const preloadInitializeFn = requireElectronLogPreload();
   let preloadInitialized = false;
@@ -18574,7 +18948,7 @@ function requireObject() {
   if (hasRequiredObject) return object.exports;
   hasRequiredObject = 1;
   (function(module) {
-    const util2 = require$$4;
+    const util2 = require$$4$1;
     module.exports = {
       serialize,
       maxDepth({ data, transport, depth = transport?.depth ?? 6 }) {
@@ -18835,7 +19209,7 @@ function requireFile$1() {
   hasRequiredFile$1 = 1;
   const EventEmitter = require$$0$2;
   const fs2 = fs$1;
-  const os = require$$1$1;
+  const os = require$$2;
   class File extends EventEmitter {
     asyncWriteQueue = [];
     bytesWritten = 0;
@@ -19064,7 +19438,7 @@ function requireFile() {
   if (hasRequiredFile) return file;
   hasRequiredFile = 1;
   const fs2 = fs$1;
-  const os = require$$1$1;
+  const os = require$$2;
   const path$1 = path;
   const FileRegistry = requireFileRegistry();
   const { transform } = requireTransform();
@@ -19228,8 +19602,8 @@ var hasRequiredRemote;
 function requireRemote() {
   if (hasRequiredRemote) return remote;
   hasRequiredRemote = 1;
-  const http = require$$4$2;
-  const https = require$$1$5;
+  const http = require$$4$3;
+  const https = require$$1$4;
   const { transform } = requireTransform();
   const { removeStyles } = requireStyle();
   const { toJSON, maxDepth } = requireObject();
@@ -19351,7 +19725,7 @@ var hasRequiredMain;
 function requireMain() {
   if (hasRequiredMain) return main;
   hasRequiredMain = 1;
-  const electron = require$$1$3;
+  const electron = require$$1$2;
   const ElectronExternalApi = requireElectronExternalApi();
   const { initialize: initialize2 } = requireInitialize();
   const createDefaultLogger = requireCreateDefaultLogger();
@@ -19628,12 +20002,6 @@ class AssetService {
     });
   }
 }
-var SYNC_ACTIONS = /* @__PURE__ */ ((SYNC_ACTIONS2) => {
-  SYNC_ACTIONS2["CREATE"] = "CREATE";
-  SYNC_ACTIONS2["UPDATE"] = "UPDATE";
-  SYNC_ACTIONS2["DELETE"] = "DELETE";
-  return SYNC_ACTIONS2;
-})(SYNC_ACTIONS || {});
 const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
 const SYNC_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync";
 const UPLOAD_ENDPOINT = `${API_URL}/upload`;
@@ -19895,11 +20263,29 @@ class SyncService {
       console.log("Device ID used for sync:", deviceId);
       const records = itemsToSync.map((item) => {
         const op = JSON.parse(item.op);
+        const rawPayload = op.data || op.payload || {};
+        const sanitizedPayload = { ...rawPayload };
+        const booleanFields = [
+          "isMainLocation",
+          "isActive",
+          "whatsappChannel",
+          "emailChannel",
+          "isDeleted",
+          "isOnboarded",
+          "isOfflineImage",
+          "isEmailVerified",
+          "isPin"
+        ];
+        for (const field of booleanFields) {
+          if (typeof sanitizedPayload[field] === "number") {
+            sanitizedPayload[field] = sanitizedPayload[field] === 1;
+          }
+        }
         return {
           id: item.id,
           tableName: op.tableName || op.table || op.type,
           recordId: op.recordId || op.id,
-          payload: op.data || op.payload || {},
+          payload: sanitizedPayload,
           sourceDeviceId: deviceId,
           action: op.action || op.op,
           timestamp: item.created_at,
@@ -20043,7 +20429,7 @@ const saveTiers = (db, outletId, priceTier) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20118,7 +20504,7 @@ const updateReceiptSettings = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20146,7 +20532,7 @@ const updateLabelSettings = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20202,7 +20588,7 @@ const updateOperatingHours = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20230,7 +20616,7 @@ const updatePaymentMethods = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20258,7 +20644,7 @@ const updateTaxSettings = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20286,7 +20672,7 @@ const updateServiceCharges = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20355,7 +20741,7 @@ const updateOutlet = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.UPDATE,
       data: fullOutlet,
       id: outletId
     });
@@ -20373,7 +20759,7 @@ const deleteOutlet = async (db, payload) => {
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
-      action: "UPDATE",
+      action: SYNC_ACTIONS.DELETE,
       // Sync usually handles soft delete as an update to isDeleted flag
       data: fullOutlet,
       id: outletId
@@ -20395,6 +20781,8 @@ protocol.registerSchemesAsPrivileged([
 ]);
 const __filename$1 = fileURLToPath(import.meta.url);
 const __dirname$1 = path.dirname(__filename$1);
+dotenv.config({ path: path.join(process.cwd(), ".env.local") });
+dotenv.config();
 let dbService;
 let authService;
 let networkService;
@@ -20584,57 +20972,96 @@ app.whenReady().then(() => {
     "assets:import",
     (_event, filePath) => assetService.importLocalAsset(filePath)
   );
-  ipcMain.handle(
-    "net:uploadImage",
-    async (_event, { buffer, name, type: type2, token }) => {
-      const baseUrl = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
-      const url = `${baseUrl}/static/upload`;
-      const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
-      const chunks = [];
-      chunks.push(Buffer.from(`--${boundary}\r
+  ipcMain.handle("net:uploadImage", async (_event, { buffer, name, type: type2 }) => {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_KEY_SECRET;
+    if (!cloudName || !apiKey || !apiSecret) {
+      console.error("[Main] Cloudinary credentials missing in environment");
+      return {
+        ok: false,
+        status: 500,
+        error: "Cloudinary credentials not configured"
+      };
+    }
+    const timestamp2 = Math.round((/* @__PURE__ */ new Date()).getTime() / 1e3).toString();
+    const signatureStr = `timestamp=${timestamp2}${apiSecret}`;
+    const signature = crypto.createHash("sha1").update(signatureStr).digest("hex");
+    const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+    const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+    const chunks = [];
+    chunks.push(Buffer.from(`--${boundary}\r
 `));
-      chunks.push(
-        Buffer.from(
-          `Content-Disposition: form-data; name="image"; filename="${name}"\r
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="file"; filename="${name}"\r
 `
-        )
-      );
-      chunks.push(Buffer.from(`Content-Type: ${type2}\r
+      )
+    );
+    chunks.push(Buffer.from(`Content-Type: ${type2}\r
 \r
 `));
-      chunks.push(Buffer.from(buffer));
-      chunks.push(Buffer.from(`\r
---${boundary}--\r
+    chunks.push(Buffer.from(buffer));
+    chunks.push(Buffer.from(`\r
+--${boundary}\r
 `));
-      const body = Buffer.concat(chunks);
-      try {
-        const response = await net.fetch(url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "*/*",
-            "Content-Type": `multipart/form-data; boundary=${boundary}`,
-            Origin: "https://sea-turtle-app-73wxj.ondigitalocean.app",
-            Referer: "https://sea-turtle-app-73wxj.ondigitalocean.app/"
-          },
-          body
-        });
-        const data = await response.json();
-        return {
-          ok: response.ok,
-          status: response.status,
-          data
-        };
-      } catch (error2) {
-        console.error("[Main] Upload error:", error2);
-        return {
-          ok: false,
-          status: 500,
-          error: error2.message
-        };
-      }
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="api_key"\r
+\r
+${apiKey}\r
+--${boundary}\r
+`
+      )
+    );
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="timestamp"\r
+\r
+${timestamp2}\r
+--${boundary}\r
+`
+      )
+    );
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="signature"\r
+\r
+${signature}\r
+--${boundary}--\r
+`
+      )
+    );
+    const body = Buffer.concat(chunks);
+    try {
+      const response = await net.fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": `multipart/form-data; boundary=${boundary}`
+        },
+        body
+      });
+      const data = await response.json();
+      console.log("Cloudinary Upload Response:", data);
+      return {
+        ok: response.ok,
+        status: response.status,
+        data: {
+          data: {
+            url: data.secure_url || data.url,
+            ...data
+          }
+        }
+      };
+    } catch (error2) {
+      console.error("[Main] Cloudinary upload error:", error2);
+      return {
+        ok: false,
+        status: 500,
+        error: error2.message
+      };
     }
-  );
+  });
   ipcMain.handle("sync:flush", () => syncService.flushQueue());
   ipcMain.handle(
     "sync:trigger",
