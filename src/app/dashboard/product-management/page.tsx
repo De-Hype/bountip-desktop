@@ -1,9 +1,12 @@
 import CatalogueProductList from "@/features/product-management/CatalogueProductList";
 import CreateProduct from "@/features/product-management/CreateProduct";
+import EditProduct from "@/features/product-management/EditProduct";
 import BulkUploadData from "@/features/product-management/BulkUploadModal";
 import { Download, Plus, ChevronDown, Upload, CloudUpload } from "lucide-react";
 import { useState } from "react";
 import useBusinessStore from "@/stores/useBusinessStore";
+import useToastStore from "@/stores/toastStore";
+import * as XLSX from "xlsx";
 
 const ProductManagementPage = () => {
   const [activeTab, setActiveTab] = useState<"catalogue" | "basket">(
@@ -11,12 +14,116 @@ const ProductManagementPage = () => {
   );
   const [isBulkMenuOpen, setIsBulkMenuOpen] = useState(false);
   const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
+  const [isEditProductOpen, setIsEditProductOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const { selectedOutlet } = useBusinessStore();
+  const { showToast } = useToastStore();
   const [lastUpdated, setLastUpdated] = useState(0);
 
   const refreshProducts = () => {
     setLastUpdated(Date.now());
+  };
+
+  const handleEditProduct = (product: any) => {
+    setSelectedProduct(product);
+    setIsEditProductOpen(true);
+  };
+
+  const handleExport = async () => {
+    if (!selectedOutlet?.id) {
+      showToast("error", "No outlet selected", "Please select an outlet first");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const api = window.electronAPI;
+      if (!api || !api.dbQuery) {
+        throw new Error("Database API not available");
+      }
+
+      // Fetch all non-deleted products for this outlet
+      const products = await api.dbQuery(
+        "SELECT * FROM product WHERE outletId = ? AND isDeleted = 0 ORDER BY name ASC",
+        [selectedOutlet.id],
+      );
+
+      if (!products || products.length === 0) {
+        showToast(
+          "warning",
+          "No products to export",
+          "You don't have any products in this outlet",
+        );
+        return;
+      }
+
+      // Format data for export
+      const exportData = products.map((p: any) => ({
+        Name: p.name || "",
+        Description: p.description || "",
+        Category: p.category || "",
+        Price: p.price || 0,
+        "Preparation Area": p.preparationArea || "",
+        Allergens: p.allergenList ? JSON.parse(p.allergenList).join(", ") : "",
+        Weight: p.weight || "",
+        "Weight Unit": p.weightScale || "",
+        "Packaging Method": p.packagingMethod
+          ? JSON.parse(p.packagingMethod).join(", ")
+          : "",
+        "Lead Time (mins)": p.leadTime || 0,
+        Status: p.isActive ? "Active" : "Inactive",
+        "Available at Storefront": p.availableAtStorefront ? "Yes" : "No",
+      }));
+
+      // Create workbook and worksheet
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
+
+      // Set column widths
+      const colWidths = [
+        { wch: 30 }, // Name
+        { wch: 40 }, // Description
+        { wch: 20 }, // Category
+        { wch: 10 }, // Price
+        { wch: 20 }, // Preparation Area
+        { wch: 30 }, // Allergens
+        { wch: 10 }, // Weight
+        { wch: 15 }, // Weight Unit
+        { wch: 20 }, // Packaging Method
+        { wch: 15 }, // Lead Time
+        { wch: 10 }, // Status
+        { wch: 20 }, // Available at Storefront
+      ];
+      worksheet["!cols"] = colWidths;
+
+      // Generate filename
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
+      const outletName = selectedOutlet?.name || "outlet";
+      const filename = `products_${outletName.replace(/\s+/g, "_").toLowerCase()}_${timestamp}.xlsx`;
+
+      // Export file
+      XLSX.writeFile(workbook, filename);
+      showToast(
+        "success",
+        "Export Successful",
+        `Successfully exported ${products.length} products`,
+      );
+    } catch (error) {
+      console.error("Export failed:", error);
+      showToast(
+        "error",
+        "Export Failed",
+        "An error occurred while exporting products",
+      );
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -98,7 +205,9 @@ const ProductManagementPage = () => {
 
             <button
               type="button"
-              className="inline-flex cursor-pointer h-11 items-center gap-2 rounded-[10px] border border-[#15BA5C] px-4 py-2 text-sm font-medium bg-white hover:bg-[#F2FFF8] transition-colors"
+              onClick={handleExport}
+              disabled={isExporting}
+              className="inline-flex cursor-pointer h-11 items-center gap-2 rounded-[10px] border border-[#15BA5C] px-4 py-2 text-sm font-medium bg-white hover:bg-[#F2FFF8] transition-colors disabled:opacity-50"
             >
               <svg
                 width="22"
@@ -127,13 +236,27 @@ const ProductManagementPage = () => {
           </div>
         )}
       </div>
-      {activeTab === "catalogue" && (
-        <CatalogueProductList lastUpdated={lastUpdated} />
+      {activeTab === "catalogue" ? (
+        <CatalogueProductList
+          lastUpdated={lastUpdated}
+          onEdit={handleEditProduct}
+        />
+      ) : (
+        <div className="flex h-64 items-center justify-center text-[#737373]">
+          Basket feature coming soon
+        </div>
       )}
 
       <CreateProduct
         isOpen={isCreateProductOpen}
         onClose={() => setIsCreateProductOpen(false)}
+        onSuccess={refreshProducts}
+      />
+
+      <EditProduct
+        isOpen={isEditProductOpen}
+        product={selectedProduct}
+        onClose={() => setIsEditProductOpen(false)}
         onSuccess={refreshProducts}
       />
 

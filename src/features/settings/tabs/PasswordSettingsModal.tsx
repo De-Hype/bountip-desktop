@@ -3,7 +3,7 @@ import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import SettingFiles from "@/assets/icons/settings";
-import { COOKIE_NAMES, deleteCookie } from "@/utils/cookiesUtils";
+import { COOKIE_NAMES } from "@/utils/cookiesUtils";
 import useToastStore from "@/stores/toastStore";
 
 interface PasswordSettingsModalProps {
@@ -13,7 +13,7 @@ interface PasswordSettingsModalProps {
 
 export const PasswordSettingsModal: React.FC<PasswordSettingsModalProps> = ({
   isOpen,
-  onClose
+  onClose,
 }) => {
   const [formData, setFormData] = useState({
     currentPassword: "",
@@ -32,7 +32,7 @@ export const PasswordSettingsModal: React.FC<PasswordSettingsModalProps> = ({
     hasNumber: false,
     hasSpecial: false,
   });
-  const {showToast}=useToastStore()
+  const { showToast } = useToastStore();
 
   const handlePasswordChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -53,7 +53,8 @@ export const PasswordSettingsModal: React.FC<PasswordSettingsModalProps> = ({
 
     // Validation
     if (!currentPassword || !newPassword || !confirmPassword) {
-      return showToast("error",
+      return showToast(
+        "error",
         "Password Update Failed!",
         "Please fill all the Password fields",
       );
@@ -106,9 +107,6 @@ export const PasswordSettingsModal: React.FC<PasswordSettingsModalProps> = ({
       hasNumber: false,
       hasSpecial: false,
     });
-
-    deleteCookie(COOKIE_NAMES.BOUNTIP_LOGIN_USER);
-    deleteCookie(COOKIE_NAMES.BOUNTIP_LOGIN_USER_TOKENS);
 
     onClose();
     setIsLoading(false);

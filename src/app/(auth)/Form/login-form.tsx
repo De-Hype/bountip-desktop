@@ -16,7 +16,7 @@ import { userStorage } from "@/services/userStorage";
 import businessService from "@/services/businessService";
 import AssetsFiles from "@/assets";
 import PinInput from "./PinInput";
-import { COOKIE_NAMES, getCookie } from "@/utils/cookiesUtils";
+import { COOKIE_NAMES } from "@/utils/cookiesUtils";
 import { useLoginPinMutation } from "@/redux/auth";
 import { useNetworkStore } from "@/stores/useNetworkStore";
 import useBusinessStore from "@/stores/useBusinessStore";
@@ -192,7 +192,6 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       });
 
       // Save Login hash for future offline login
-      const api = (window as any).electronAPI;
       if (api?.saveLoginHash) {
         api.saveLoginHash(data.email, data.password);
       }
@@ -362,17 +361,17 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     e.preventDefault();
 
     // Offline Login Check
-    const api = (window as any).electronAPI;
+    const electronApi = (window as any).electronAPI;
 
     if (!isOnline) {
-      if (api?.verifyPinHash) {
+      if (electronApi?.verifyPinHash) {
         try {
-          const isValid = await api.verifyPinHash(pin);
+          const isValid = await electronApi.verifyPinHash(pin);
           if (isValid) {
             // Get cached user and tokens if possible, or just user
             // Ideally we need tokens to be authenticated, but offline we might just need user data
             // For now, let's try to load user from DB
-            const user = await api.getUser();
+            const user = await electronApi.getUser();
             if (user) {
               setAuth({
                 user: {
@@ -403,11 +402,12 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     }
 
     if (pin.length < 4) return;
-    const emailCookie = getCookie<string | { email?: string }>(
-      COOKIE_NAMES.TOKEN_USER_EMAIL,
-    );
-    const email =
-      typeof emailCookie === "string" ? emailCookie : emailCookie?.email || "";
+    let email = "";
+
+    if (electronApi?.cacheGet) {
+      email = await electronApi.cacheGet(COOKIE_NAMES.TOKEN_USER_EMAIL);
+    }
+
     if (!email) {
       showToast(
         "error",
@@ -440,12 +440,11 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       });
 
       // Save PIN hash for future offline login
-      const api = (window as any).electronAPI;
-      if (api?.savePinHash) {
-        api.savePinHash(pin);
+      if (electronApi?.savePinHash) {
+        electronApi.savePinHash(pin);
       }
-      if (api?.saveUser) {
-        api.saveUser(user);
+      if (electronApi?.saveUser) {
+        electronApi.saveUser(user);
       }
 
       // try {

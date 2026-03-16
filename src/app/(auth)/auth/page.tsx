@@ -38,7 +38,7 @@ const AuthPageContent = () => {
             alt="Logo"
           />
           <h3 className="text-[#1E1E1E] font-bold text-[45px] mt-5">
-            Welcome Backs
+            Welcome Back
           </h3>
           <p className="text-[#1E1E1E] text-[25px] font-light text-center">
             Welcome back, Please Enter your details

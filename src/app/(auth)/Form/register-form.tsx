@@ -18,7 +18,7 @@ import { tokenManager } from "@/utils/tokenManager";
 import { useAuthStore } from "@/stores/authStore";
 import useToastStore from "@/stores/toastStore";
 import { userStorage } from "@/services/userStorage";
-import { COOKIE_NAMES, setCookie } from "@/utils/cookiesUtils";
+import { COOKIE_NAMES } from "@/utils/cookiesUtils";
 
 export const signupSchema = z.object({
   businessName: z.string().min(1, "Business name is required"),
@@ -78,12 +78,6 @@ export const RegistrationForm = ({ onToggleMode }: RegistrationFormProps) => {
       const api = (window as any).electronAPI;
       if (api?.cachePut) {
         await api.cachePut(COOKIE_NAMES.REG_USER_EMAIL, {
-          email: user.email,
-          name: user.fullName,
-        });
-      } else {
-        // Fallback for web or older builds
-        setCookie(COOKIE_NAMES.REG_USER_EMAIL, {
           email: user.email,
           name: user.fullName,
         });

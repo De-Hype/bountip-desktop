@@ -28,10 +28,14 @@ interface Product {
 }
 
 interface CatalogueProductListProps {
-  lastUpdated?: number;
+  lastUpdated: number;
+  onEdit?: (product: any) => void;
 }
 
-const CatalogueProductList = ({ lastUpdated }: CatalogueProductListProps) => {
+const CatalogueProductList = ({
+  lastUpdated,
+  onEdit,
+}: CatalogueProductListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [hideImages, setHideImages] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -392,7 +396,8 @@ const CatalogueProductList = ({ lastUpdated }: CatalogueProductListProps) => {
               {paginatedProducts.map((product) => (
                 <div
                   key={product.id}
-                  className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center px-6 py-4 border-b border-[#F3F4F6] hover:bg-gray-50 transition-colors"
+                  onClick={() => onEdit?.(product)}
+                  className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center px-6 py-4 border-b border-[#F3F4F6] hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   {/* Product Name & Image */}
                   <div className="flex items-center gap-3">
@@ -458,12 +463,17 @@ const CatalogueProductList = ({ lastUpdated }: CatalogueProductListProps) => {
                     )}
                   </div>
 
-                  {/* Availability */}
-                  <div className="justify-self-end">
-                    <Switch
-                      checked={!!product.availableAtStorefront}
-                      onChange={() => {}}
-                    />
+                  {/* Availability & Actions */}
+                  <div className="justify-self-end flex items-center gap-4">
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center"
+                    >
+                      <Switch
+                        checked={!!product.availableAtStorefront}
+                        onChange={() => {}}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -473,7 +483,8 @@ const CatalogueProductList = ({ lastUpdated }: CatalogueProductListProps) => {
               {paginatedProducts.map((product) => (
                 <div
                   key={product.id}
-                  className="flex flex-col rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
+                  onClick={() => onEdit?.(product)}
+                  className="group flex flex-col rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden cursor-pointer"
                 >
                   {hideImages ? (
                     <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#15BA5C]" />
@@ -542,10 +553,12 @@ const CatalogueProductList = ({ lastUpdated }: CatalogueProductListProps) => {
                       )}
                     </div>
 
-                    <Switch
-                      checked={!!product.availableAtStorefront}
-                      onChange={() => {}}
-                    />
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Switch
+                        checked={!!product.availableAtStorefront}
+                        onChange={() => {}}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}

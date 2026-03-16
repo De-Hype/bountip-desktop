@@ -20,12 +20,7 @@ import {
 } from "../Form/AuthForm";
 import useToastStore from "@/stores/toastStore";
 import authService from "@/services/authService";
-import {
-  COOKIE_NAMES,
-  getCookie,
-  setCookie,
-  deleteCookie,
-} from "@/utils/cookiesUtils";
+import { COOKIE_NAMES } from "@/utils/cookiesUtils";
 
 const ResetPasswordPageContent = () => {
   const navigate = useNavigate();
@@ -43,11 +38,6 @@ const ResetPasswordPageContent = () => {
             return;
           }
         }
-
-        const v = getCookie<string | { email?: string }>(
-          COOKIE_NAMES.RESET_USER_EMAIL,
-        );
-        setEmail(typeof v === "string" ? v : v?.email || "");
       } finally {
         setIsFetchingEmail(false);
       }
@@ -105,7 +95,6 @@ const ResetPasswordPageContent = () => {
               if (api?.cachePut) {
                 api.cachePut(COOKIE_NAMES.RESET_USER_EMAIL, null);
               }
-              deleteCookie(COOKIE_NAMES.RESET_USER_EMAIL);
               setTimeout(() => goToStep("success"), 500);
             }}
           />
@@ -160,8 +149,6 @@ function ForgotPassword({
       const api = (window as any).electronAPI;
       if (api?.cachePut) {
         await api.cachePut(COOKIE_NAMES.RESET_USER_EMAIL, email);
-      } else {
-        setCookie(COOKIE_NAMES.RESET_USER_EMAIL, email, 1);
       }
       onEmailSaved(email);
       showToast("success", "Code sent", "Reset code sent to your email.");

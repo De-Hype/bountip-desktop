@@ -20439,9 +20439,38 @@ class SyncService {
             sanitizedPayload[field] = sanitizedPayload[field] === 1;
           }
         }
+        const jsonFieldsMap = {
+          business_outlet: [
+            "operatingHours",
+            "taxSettings",
+            "serviceCharges",
+            "paymentMethods",
+            "priceTier",
+            "receiptSettings",
+            "labelSettings",
+            "invoiceSettings",
+            "bankDetails",
+            "generalSettings"
+          ],
+          payment_terms: ["paymentInInstallment"],
+          system_default: ["data"]
+        };
+        const tableName = op.tableName || op.table || op.type;
+        const fieldsToParse = jsonFieldsMap[tableName] || [];
+        for (const field of fieldsToParse) {
+          if (typeof sanitizedPayload[field] === "string") {
+            try {
+              const parsed = JSON.parse(sanitizedPayload[field]);
+              if (parsed && typeof parsed === "object") {
+                sanitizedPayload[field] = parsed;
+              }
+            } catch (e) {
+            }
+          }
+        }
         return {
           id: item.id,
-          tableName: op.tableName || op.table || op.type,
+          tableName,
           recordId: op.recordId || op.id,
           payload: sanitizedPayload,
           sourceDeviceId: deviceId,

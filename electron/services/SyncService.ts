@@ -382,10 +382,45 @@ export class SyncService {
           }
         }
 
+        // Auto-parse JSON strings for business_outlet and other tables
+        const jsonFieldsMap: Record<string, string[]> = {
+          business_outlet: [
+            "operatingHours",
+            "taxSettings",
+            "serviceCharges",
+            "paymentMethods",
+            "priceTier",
+            "receiptSettings",
+            "labelSettings",
+            "invoiceSettings",
+            "bankDetails",
+            "generalSettings",
+          ],
+          payment_terms: ["paymentInInstallment"],
+          system_default: ["data"],
+        };
+
+        const tableName = op.tableName || op.table || op.type;
+        const fieldsToParse = jsonFieldsMap[tableName] || [];
+
+        for (const field of fieldsToParse) {
+          if (typeof sanitizedPayload[field] === "string") {
+            try {
+              const parsed = JSON.parse(sanitizedPayload[field]);
+              // Only assign if it's actually an object or array (not just a string that happens to be valid JSON like "true")
+              if (parsed && typeof parsed === "object") {
+                sanitizedPayload[field] = parsed;
+              }
+            } catch (e) {
+              // Not valid JSON or already parsed, skip
+            }
+          }
+        }
+
         // Map local queue format to API expected format
         return {
           id: item.id,
-          tableName: op.tableName || op.table || op.type,
+          tableName: tableName,
           recordId: op.recordId || op.id,
           payload: sanitizedPayload,
           sourceDeviceId: deviceId,
@@ -410,7 +445,7 @@ export class SyncService {
           "x-app-version": app.getVersion(),
         },
       });
-      console.log("This is the response",await response.json())
+      console.log("This is the response", await response.json());
 
       if (response.ok) {
         const ids = itemsToSync.map((i: any) => i.id);

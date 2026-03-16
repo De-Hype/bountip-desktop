@@ -3,7 +3,7 @@ import AssetsFiles from "@/assets";
 import { Mail } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import { COOKIE_NAMES, getCookie, deleteCookie } from "@/utils/cookiesUtils";
+import { COOKIE_NAMES } from "@/utils/cookiesUtils";
 import { tokenManager } from "@/utils/tokenManager";
 import authService from "@/services/authService";
 import { useAuthStore } from "@/stores/authStore";
@@ -40,14 +40,6 @@ const VerifyPage = () => {
             setRegContext(context);
             return;
           }
-        }
-
-        // Fallback to cookie
-        const cookie = getCookie<{ email?: string; name?: string }>(
-          COOKIE_NAMES.REG_USER_EMAIL,
-        );
-        if (cookie) {
-          setRegContext(cookie);
         }
       } finally {
         setIsFetchingContext(false);
@@ -249,7 +241,9 @@ const VerifyPage = () => {
       }
 
       // Clear registration cookie now that the user is verified
-      deleteCookie(COOKIE_NAMES.REG_USER_EMAIL);
+      if (api?.cachePut) {
+        api.cachePut(COOKIE_NAMES.REG_USER_EMAIL, null);
+      }
 
       showToast(
         "success",
