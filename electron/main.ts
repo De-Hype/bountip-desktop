@@ -151,9 +151,8 @@ app.whenReady().then(() => {
   syncService = new SyncService(dbService, networkService, p2pService);
 
   // IPC Handlers
-  ipcMain.on("auth:storeTokens", async (_event, payload) => {
-    await authService.storeTokens(payload);
-    syncService.triggerSync();
+  ipcMain.on("auth:storeTokens", (_event, payload) => {
+    authService.storeTokens(payload);
   });
   ipcMain.on("auth:clearTokens", () => authService.clearTokens());
   ipcMain.handle("auth:getTokens", () => authService.getTokens());
@@ -444,7 +443,16 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform !== "darwin") {
+    if (dbService) {
+      try {
+        dbService.close();
+      } catch (e) {
+        console.error("[Main] Error closing database:", e);
+      }
+    }
+    app.quit();
+  }
 });
 
 app.on("activate", () => {

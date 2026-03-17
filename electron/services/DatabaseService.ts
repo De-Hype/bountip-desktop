@@ -195,6 +195,13 @@ export class DatabaseService {
     }
   }
 
+  close() {
+    if (this.db) {
+      this.db.close();
+      console.log("[DatabaseService] Database closed.");
+    }
+  }
+
   query(sql: string, params: any[] = []) {
     try {
       const stmt = this.db.prepare(sql);
@@ -368,6 +375,31 @@ export class DatabaseService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Gets the next global sync version and increments the counter in the database.
+   * This ensures a strictly increasing integer for all sync operations.
+   */
+  getNextSyncVersion(): number {
+    const row = this.db
+      .prepare("SELECT value FROM identity WHERE key = ?")
+      .get("last_sync_version") as { value: string } | undefined;
+
+    let currentVersion = 1;
+    if (row) {
+      try {
+        const parsed = JSON.parse(row.value) as { version?: number };
+        currentVersion = parsed.version ?? 1;
+      } catch {}
+    }
+
+    const nextVersion = currentVersion + 1;
+    this.db
+      .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
+      .run("last_sync_version", JSON.stringify({ version: nextVersion }));
+
+    return nextVersion;
   }
 
   // Cache Methods

@@ -155,22 +155,37 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
       try {
         const queue = (await api.queueList()) || [];
-        const failed: any[] = [];
+        const remaining: any[] = [];
 
         for (const op of queue) {
-          try {
-            if (op.method === "POST")
-              await httpService.post(op.path, op.data, true, true);
-            if (op.method === "PATCH")
-              await httpService.patch(op.path, op.data, true, true);
-            if (op.method === "DELETE")
-              await httpService.delete(op.path, op.data, true, true);
-          } catch {
-            failed.push(op);
+          // Only process legacy HTTP-style ops in the frontend.
+          // Entity-style ops ({ table, action, data }) are handled by SyncService in main.
+          if (op.method) {
+            try {
+              if (op.method === "POST")
+                await httpService.post(op.path, op.data, true, true);
+              else if (op.method === "PATCH")
+                await httpService.patch(op.path, op.data, true, true);
+              else if (op.method === "DELETE")
+                await httpService.delete(op.path, op.data, true, true);
+              else {
+                // Method exists but not handled here; preserve for other processors
+                remaining.push(op);
+              }
+            } catch {
+              // On error, keep the item in the queue for retry
+              remaining.push(op);
+            }
+          } else {
+            // Preserve unknown formats (likely entity-style ops)
+            remaining.push(op);
           }
         }
 
-        await api.queueSet(failed);
+        // Only update the queue if it was modified (items successfully processed)
+        if (remaining.length !== queue.length) {
+          await api.queueSet(remaining);
+        }
       } finally {
         setIsSyncing(false);
       }

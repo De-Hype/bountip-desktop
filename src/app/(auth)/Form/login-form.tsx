@@ -173,6 +173,11 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
 
       const { tokens, user } = response.data;
 
+      // Wipe any existing data before syncing to prevent cross-user leakage
+      if (api?.wipeData) {
+        await api.wipeData();
+      }
+
       tokenManager.setTokens(tokens.accessToken, tokens.refreshToken);
       setFailedAttempts(0);
       setLockUntil(null);
@@ -207,7 +212,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
 
       // Wipe any existing data before syncing to prevent cross-user leakage
       if (api?.wipeData) {
-        await api.wipeData();
+        // await api.wipeData();
       }
 
       // Save user to local storage and DB after wipe

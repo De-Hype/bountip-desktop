@@ -4,11 +4,11 @@ import { P2PService } from "./P2PService";
 import { net, app } from "electron";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { SYNC_ACTIONS } from "../types/action.types";
 
 const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
 const SYNC_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync";
-const UPLOAD_ENDPOINT = `${API_URL}/upload`; // Assumed endpoint
 const PUSH_ENDPOINT = `${SYNC_ENDPOINT}/push`;
 const PULL_ENDPOINT = `${SYNC_ENDPOINT}/pull`;
 const MIN_PULL_INTERVAL_MS = 5 * 60 * 1000;
@@ -176,13 +176,13 @@ export class SyncService {
 
       url.searchParams.set("userId", String(userId));
 
-      /* 
+      
       const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
       console.log(`[SyncService] lastSyncTimestamp: ${lastSyncTimestamp}`);
       if (lastSyncTimestamp) {
         url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
       }
-      */
+      
 
       console.log(`[SyncService] Fetching from: ${url.toString()}`);
 
@@ -262,17 +262,75 @@ export class SyncService {
 
         const fileName = path.basename(filePath);
         const fileBuffer = fs.readFileSync(filePath);
-        const blob = new Blob([fileBuffer]);
-        const formData = new FormData();
-        formData.append("image", blob, fileName);
 
-        console.log(
-          `[SyncService] Uploading ${fileName} to ${UPLOAD_ENDPOINT}...`,
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+        const apiKey = process.env.CLOUDINARY_API_KEY;
+        const apiSecret = process.env.CLOUDINARY_API_KEY_SECRET;
+
+        if (!cloudName || !apiKey || !apiSecret) {
+          console.error(
+            "[SyncService] Cloudinary credentials missing in environment",
+          );
+          this.db.failImageUpload(item.id, "Cloudinary credentials missing");
+          continue;
+        }
+
+        const timestamp = Math.round(new Date().getTime() / 1000).toString();
+        const signatureStr = `timestamp=${timestamp}${apiSecret}`;
+        const signature = crypto
+          .createHash("sha1")
+          .update(signatureStr)
+          .digest("hex");
+
+        const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+        const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+
+        // Construct multipart body manually for net.fetch
+        const chunks = [];
+        chunks.push(Buffer.from(`--${boundary}\r\n`));
+        chunks.push(
+          Buffer.from(
+            `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`,
+          ),
+        );
+        // Basic type detection
+        const ext = path.extname(fileName).toLowerCase();
+        const type =
+          ext === ".png"
+            ? "image/png"
+            : ext === ".webp"
+              ? "image/webp"
+              : "image/jpeg";
+        chunks.push(Buffer.from(`Content-Type: ${type}\r\n\r\n`));
+        chunks.push(fileBuffer);
+        chunks.push(Buffer.from(`\r\n--${boundary}\r\n`));
+
+        chunks.push(
+          Buffer.from(
+            `Content-Disposition: form-data; name="api_key"\r\n\r\n${apiKey}\r\n--${boundary}\r\n`,
+          ),
+        );
+        chunks.push(
+          Buffer.from(
+            `Content-Disposition: form-data; name="timestamp"\r\n\r\n${timestamp}\r\n--${boundary}\r\n`,
+          ),
+        );
+        chunks.push(
+          Buffer.from(
+            `Content-Disposition: form-data; name="signature"\r\n\r\n${signature}\r\n--${boundary}--\r\n`,
+          ),
         );
 
-        const response = await fetch(UPLOAD_ENDPOINT, {
+        const body = Buffer.concat(chunks);
+
+        console.log(`[SyncService] Uploading ${fileName} to Cloudinary...`);
+
+        const response = await net.fetch(url, {
           method: "POST",
-          body: formData,
+          headers: {
+            "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          },
+          body,
         });
 
         if (!response.ok) {
@@ -284,7 +342,7 @@ export class SyncService {
         }
 
         const data = (await response.json()) as any;
-        const newUrl = data.url || data.data?.url;
+        const newUrl = data.secure_url || data.url;
 
         if (newUrl) {
           console.log(`[SyncService] Upload successful. URL: ${newUrl}`);
@@ -426,7 +484,7 @@ export class SyncService {
           sourceDeviceId: deviceId,
           action: op.action || op.op,
           timestamp: item.created_at,
-          version: 1,
+          version: this.db.getNextSyncVersion(),
           syncedTo: [],
           createdAt: item.created_at,
           updatedAt: item.created_at,

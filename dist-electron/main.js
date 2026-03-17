@@ -1781,6 +1781,12 @@ class DatabaseService {
       }
     }
   }
+  close() {
+    if (this.db) {
+      this.db.close();
+      console.log("[DatabaseService] Database closed.");
+    }
+  }
   query(sql, params = []) {
     try {
       const stmt = this.db.prepare(sql);
@@ -1881,6 +1887,24 @@ class DatabaseService {
     } catch {
       return null;
     }
+  }
+  /**
+   * Gets the next global sync version and increments the counter in the database.
+   * This ensures a strictly increasing integer for all sync operations.
+   */
+  getNextSyncVersion() {
+    const row = this.db.prepare("SELECT value FROM identity WHERE key = ?").get("last_sync_version");
+    let currentVersion = 1;
+    if (row) {
+      try {
+        const parsed = JSON.parse(row.value);
+        currentVersion = parsed.version ?? 1;
+      } catch {
+      }
+    }
+    const nextVersion = currentVersion + 1;
+    this.db.prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)").run("last_sync_version", JSON.stringify({ version: nextVersion }));
+    return nextVersion;
   }
   // Cache Methods
   getCache(key) {
@@ -20160,9 +20184,7 @@ class AssetService {
     });
   }
 }
-const API_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
 const SYNC_ENDPOINT = "https://seahorse-app-jb6pe.ondigitalocean.app/sync";
-const UPLOAD_ENDPOINT = `${API_URL}/upload`;
 const PUSH_ENDPOINT = `${SYNC_ENDPOINT}/push`;
 const PULL_ENDPOINT = `${SYNC_ENDPOINT}/pull`;
 const MIN_PULL_INTERVAL_MS = 5 * 60 * 1e3;
@@ -20284,6 +20306,11 @@ class SyncService {
       }
       const url = new URL(PULL_ENDPOINT);
       url.searchParams.set("userId", String(userId));
+      const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
+      console.log(`[SyncService] lastSyncTimestamp: ${lastSyncTimestamp}`);
+      if (lastSyncTimestamp) {
+        url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
+      }
       console.log(`[SyncService] Fetching from: ${url.toString()}`);
       const response = await net.fetch(url.toString(), {
         method: "GET",
@@ -20347,15 +20374,74 @@ class SyncService {
         }
         const fileName = path.basename(filePath);
         const fileBuffer = fs$1.readFileSync(filePath);
-        const blob = new Blob([fileBuffer]);
-        const formData = new FormData();
-        formData.append("image", blob, fileName);
-        console.log(
-          `[SyncService] Uploading ${fileName} to ${UPLOAD_ENDPOINT}...`
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+        const apiKey = process.env.CLOUDINARY_API_KEY;
+        const apiSecret = process.env.CLOUDINARY_API_KEY_SECRET;
+        if (!cloudName || !apiKey || !apiSecret) {
+          console.error(
+            "[SyncService] Cloudinary credentials missing in environment"
+          );
+          this.db.failImageUpload(item.id, "Cloudinary credentials missing");
+          continue;
+        }
+        const timestamp2 = Math.round((/* @__PURE__ */ new Date()).getTime() / 1e3).toString();
+        const signatureStr = `timestamp=${timestamp2}${apiSecret}`;
+        const signature = crypto.createHash("sha1").update(signatureStr).digest("hex");
+        const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+        const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+        const chunks = [];
+        chunks.push(Buffer.from(`--${boundary}\r
+`));
+        chunks.push(
+          Buffer.from(
+            `Content-Disposition: form-data; name="file"; filename="${fileName}"\r
+`
+          )
         );
-        const response = await fetch(UPLOAD_ENDPOINT, {
+        const ext = path.extname(fileName).toLowerCase();
+        const type2 = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+        chunks.push(Buffer.from(`Content-Type: ${type2}\r
+\r
+`));
+        chunks.push(fileBuffer);
+        chunks.push(Buffer.from(`\r
+--${boundary}\r
+`));
+        chunks.push(
+          Buffer.from(
+            `Content-Disposition: form-data; name="api_key"\r
+\r
+${apiKey}\r
+--${boundary}\r
+`
+          )
+        );
+        chunks.push(
+          Buffer.from(
+            `Content-Disposition: form-data; name="timestamp"\r
+\r
+${timestamp2}\r
+--${boundary}\r
+`
+          )
+        );
+        chunks.push(
+          Buffer.from(
+            `Content-Disposition: form-data; name="signature"\r
+\r
+${signature}\r
+--${boundary}--\r
+`
+          )
+        );
+        const body = Buffer.concat(chunks);
+        console.log(`[SyncService] Uploading ${fileName} to Cloudinary...`);
+        const response = await net.fetch(url, {
           method: "POST",
-          body: formData
+          headers: {
+            "Content-Type": `multipart/form-data; boundary=${boundary}`
+          },
+          body
         });
         if (!response.ok) {
           const txt = await response.text();
@@ -20365,7 +20451,7 @@ class SyncService {
           continue;
         }
         const data = await response.json();
-        const newUrl = data.url || data.data?.url;
+        const newUrl = data.secure_url || data.url;
         if (newUrl) {
           console.log(`[SyncService] Upload successful. URL: ${newUrl}`);
           this.db.updateRecordColumn(
@@ -20476,7 +20562,7 @@ class SyncService {
           sourceDeviceId: deviceId,
           action: op.action || op.op,
           timestamp: item.created_at,
-          version: 1,
+          version: this.db.getNextSyncVersion(),
           syncedTo: [],
           createdAt: item.created_at,
           updatedAt: item.created_at
@@ -21039,9 +21125,8 @@ app.whenReady().then(() => {
   p2pService.start();
   assetService = new AssetService(p2pService);
   syncService = new SyncService(dbService, networkService, p2pService);
-  ipcMain.on("auth:storeTokens", async (_event, payload) => {
-    await authService.storeTokens(payload);
-    syncService.triggerSync();
+  ipcMain.on("auth:storeTokens", (_event, payload) => {
+    authService.storeTokens(payload);
   });
   ipcMain.on("auth:clearTokens", () => authService.clearTokens());
   ipcMain.handle("auth:getTokens", () => authService.getTokens());
@@ -21322,7 +21407,16 @@ ${signature}\r
   createWindow();
 });
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform !== "darwin") {
+    if (dbService) {
+      try {
+        dbService.close();
+      } catch (e) {
+        console.error("[Main] Error closing database:", e);
+      }
+    }
+    app.quit();
+  }
 });
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
