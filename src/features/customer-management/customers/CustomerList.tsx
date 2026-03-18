@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import useCustomerStore, { Customer } from "@/stores/useCustomerStore";
+import { useBusinessStore } from "@/stores/useBusinessStore";
 import CustomerFilters from "./CustomerFilters";
 import CreateCustomer from "./CreateCustomer";
 import BulkUploadCustomers from "./BulkUploadCustomers";
@@ -43,9 +44,11 @@ const CustomerList = () => {
   const [isCustomerCreationOpen, setIsCustomerCreationOpen] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
 
+  const { selectedOutlet } = useBusinessStore();
+
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    fetchCustomers(selectedOutlet?.id);
+  }, [selectedOutlet?.id]);
 
   const totalPages = Math.max(
     1,

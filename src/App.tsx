@@ -27,6 +27,7 @@ import ProductManagementPage from "./app/dashboard/product-management/page";
 import RecipeManagementPage from "./app/dashboard/recipe-management/page";
 import InventoryPage from "./app/dashboard/inventory/page";
 import CustomerManagementPage from "./app/dashboard/customer-management/page";
+import POSPage from "./app/dashboard/pos/page";
 import DatabaseViewerPage from "./app/dashboard/debug/database/page";
 
 /**
@@ -100,6 +101,7 @@ export default function App() {
                 path="product-management"
                 element={<ProductManagementPage />}
               />
+              <Route path="pos" element={<POSPage />} />
               <Route path="debug/database" element={<DatabaseViewerPage />} />
             </Route>
 

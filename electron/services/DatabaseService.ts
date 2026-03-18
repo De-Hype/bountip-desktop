@@ -28,6 +28,18 @@ import {
   buildCustomerUpsertParams,
 } from "../features/schemas/customers.schema";
 import {
+  orderUpsertSql,
+  buildOrderUpsertParams,
+} from "../features/schemas/order.schema";
+import {
+  cartUpsertSql,
+  buildCartUpsertParams,
+} from "../features/schemas/cart.schema";
+import {
+  cartItemUpsertSql,
+  buildCartItemUpsertParams,
+} from "../features/schemas/cart_item.schema";
+import {
   createProductRecord,
   buildProductSyncOp,
   ProductCreatePayload,
@@ -48,20 +60,87 @@ export class DatabaseService {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
     this.db = new Database(dbPath);
+    this.initConnection(true);
+  }
+
+  private initConnection(isInitial = false) {
+    if (!isInitial) {
+      const userDataPath = app.getPath("userData");
+      const dbPath = path.join(userDataPath, "bountip.db");
+
+      // Ensure directory exists
+      const dir = path.dirname(dbPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+      this.db = new Database(dbPath);
+      console.log("[DatabaseService] Connection re-initialized.");
+    }
+
+    // Always run schema init.
+    // CREATE TABLE IF NOT EXISTS is safe and ensures new tables
+    // added to the code are created in an existing database file.
     this.initSchema();
     this.ensureDeviceId();
   }
 
+  private prepare(sql: string) {
+    try {
+      return this.db.prepare(sql);
+    } catch (error: any) {
+      const isReadonly =
+        error.code === "SQLITE_READONLY_DBMOVED" ||
+        error.message?.includes("readonly database") ||
+        error.message?.includes("database is locked");
+      const isMissingTable = error.message?.includes("no such table");
+
+      if (isReadonly || isMissingTable) {
+        console.warn(
+          `[DatabaseService] Database error (${error.code || "MISSING_TABLE"}). Re-initializing connection...`,
+        );
+        try {
+          this.db.close();
+        } catch {}
+        this.initConnection();
+        return this.db.prepare(sql);
+      }
+      throw error;
+    }
+  }
+
+  private transaction<T extends any[]>(fn: (...args: T) => void) {
+    try {
+      return this.db.transaction(fn);
+    } catch (error: any) {
+      const isReadonly =
+        error.code === "SQLITE_READONLY_DBMOVED" ||
+        error.message?.includes("readonly database") ||
+        error.message?.includes("database is locked");
+      const isMissingTable = error.message?.includes("no such table");
+
+      if (isReadonly || isMissingTable) {
+        console.warn(
+          `[DatabaseService] Transaction error (${error.code || "MISSING_TABLE"}). Re-initializing connection...`,
+        );
+        try {
+          this.db.close();
+        } catch {}
+        this.initConnection();
+        return this.db.transaction(fn);
+      }
+      throw error;
+    }
+  }
+
   private ensureDeviceId() {
-    const row = this.db
-      .prepare("SELECT value FROM identity WHERE key = ?")
-      .get("device_id") as { value: string } | undefined;
+    const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
+      "device_id",
+    ) as { value: string } | undefined;
 
     if (!row) {
       const deviceId = uuidv4();
-      this.db
-        .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
-        .run("device_id", JSON.stringify({ deviceId }));
+      this.prepare(
+        "INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)",
+      ).run("device_id", JSON.stringify({ deviceId }));
       console.log("[DatabaseService] Generated new deviceId:", deviceId);
     } else {
       console.log("[DatabaseService] Existing deviceId loaded.");
@@ -193,6 +272,67 @@ export class DatabaseService {
         }
       }
     }
+
+    // Migration: Add missing columns to orders
+    const orderColumns = ["cartId", "recordId", "version"];
+    for (const col of orderColumns) {
+      try {
+        const type = col === "version" ? "INTEGER DEFAULT 0" : "TEXT";
+        this.db.exec(`ALTER TABLE orders ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (orders.${col}):`, e);
+        }
+      }
+    }
+
+    // Migration: Add missing columns to cart
+    const cartColumns = [
+      "outletId",
+      "itemCount",
+      "totalQuantity",
+      "totalAmount",
+      "customerId",
+      "recordId",
+      "version",
+    ];
+    for (const col of cartColumns) {
+      try {
+        let type = "TEXT";
+        if (col === "version" || col === "itemCount" || col === "totalQuantity")
+          type = "INTEGER DEFAULT 0";
+        if (col === "totalAmount") type = "REAL DEFAULT 0";
+
+        this.db.exec(`ALTER TABLE cart ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (cart.${col}):`, e);
+        }
+      }
+    }
+
+    // Migration: Add missing columns to cart_item
+    const cartItemColumns = [
+      "cartId",
+      "priceTierDiscount",
+      "priceTierMarkup",
+      "recordId",
+      "version",
+    ];
+    for (const col of cartItemColumns) {
+      try {
+        let type = "TEXT";
+        if (col === "version") type = "INTEGER DEFAULT 0";
+        if (col === "priceTierDiscount" || col === "priceTierMarkup")
+          type = "REAL DEFAULT 0";
+
+        this.db.exec(`ALTER TABLE cart_item ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (cart_item.${col}):`, e);
+        }
+      }
+    }
   }
 
   close() {
@@ -204,7 +344,7 @@ export class DatabaseService {
 
   query(sql: string, params: any[] = []) {
     try {
-      const stmt = this.db.prepare(sql);
+      const stmt = this.prepare(sql);
       if (stmt.reader) {
         return stmt.all(params);
       } else {
@@ -218,23 +358,65 @@ export class DatabaseService {
 
   // Identity Methods
   getIdentity(): any {
-    const row = this.db
-      .prepare("SELECT value FROM identity WHERE key = ?")
-      .get("user_identity") as { value: string } | undefined;
+    const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
+      "user_identity",
+    ) as { value: string } | undefined;
     return row ? JSON.parse(row.value) : null;
   }
 
   saveIdentity(identity: any) {
     const current = this.getIdentity() || {};
     const updated = { ...current, ...identity };
-    this.db
-      .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
-      .run("user_identity", JSON.stringify(updated));
+    this.prepare(
+      "INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)",
+    ).run("user_identity", JSON.stringify(updated));
+
+    // If the identity contains user information, also update the user table
+    // while ensuring only one row exists.
+    if (identity.id || identity.email || identity.fullName) {
+      try {
+        const u = {
+          ...updated,
+          id: updated.id ?? updated.userId ?? updated.user?.id,
+          email: updated.email ?? updated.user?.email,
+          fullName: updated.fullName ?? updated.user?.fullName,
+        };
+
+        if (u.id) {
+          this.prepare("DELETE FROM user").run();
+          this.prepare(userUpsertSql).run(
+            this.sanitize(buildUserUpsertParams(u)),
+          );
+        }
+      } catch (err) {
+        console.error("Failed to sync identity to user table:", err);
+      }
+    }
+  }
+
+  private toSqliteValue(value: any) {
+    if (value === null || value === undefined) return null;
+    const t = typeof value;
+    if (t === "number" || t === "string" || t === "bigint") return value;
+    if (typeof Buffer !== "undefined" && (Buffer as any).isBuffer?.(value)) {
+      return value;
+    }
+    if (value instanceof Date) return value.toISOString();
+    if (t === "boolean") return value ? 1 : 0;
+    return JSON.stringify(value);
+  }
+
+  private sanitize(obj: any) {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(obj)) {
+      result[key] = this.toSqliteValue(val);
+    }
+    return result;
   }
 
   getUserProfile(): LocalUserProfile {
     const identity = this.getIdentity();
-    const row = this.db.prepare("SELECT * FROM user LIMIT 1").get() as
+    const row = this.prepare("SELECT * FROM user LIMIT 1").get() as
       | {
           id?: string;
           email?: string;
@@ -318,7 +500,7 @@ export class DatabaseService {
       if (fromIdentity) return String(fromIdentity);
     }
 
-    const row = this.db.prepare("SELECT id FROM user LIMIT 1").get() as
+    const row = this.prepare("SELECT id FROM user LIMIT 1").get() as
       | { id?: string }
       | undefined;
     if (row && row.id) return String(row.id);
@@ -327,15 +509,15 @@ export class DatabaseService {
   }
 
   saveLoginHash(hash: string) {
-    this.db
-      .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
-      .run("login_hash", JSON.stringify({ hash }));
+    this.prepare(
+      "INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)",
+    ).run("login_hash", JSON.stringify({ hash }));
   }
 
   getLoginHash(): string | null {
-    const row = this.db
-      .prepare("SELECT value FROM identity WHERE key = ?")
-      .get("login_hash") as { value: string } | undefined;
+    const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
+      "login_hash",
+    ) as { value: string } | undefined;
     if (!row) return null;
     try {
       const parsed = JSON.parse(row.value) as { hash?: string };
@@ -346,15 +528,15 @@ export class DatabaseService {
   }
 
   savePinHash(hash: string) {
-    this.db
-      .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
-      .run("pin_hash", JSON.stringify({ hash }));
+    this.prepare(
+      "INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)",
+    ).run("pin_hash", JSON.stringify({ hash }));
   }
 
   getPinHash(): string | null {
-    const row = this.db
-      .prepare("SELECT value FROM identity WHERE key = ?")
-      .get("pin_hash") as { value: string } | undefined;
+    const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
+      "pin_hash",
+    ) as { value: string } | undefined;
     if (!row) return null;
     try {
       const parsed = JSON.parse(row.value) as { hash?: string };
@@ -365,9 +547,9 @@ export class DatabaseService {
   }
 
   getDeviceId(): string | null {
-    const row = this.db
-      .prepare("SELECT value FROM identity WHERE key = ?")
-      .get("device_id") as { value: string } | undefined;
+    const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
+      "device_id",
+    ) as { value: string } | undefined;
     if (!row) return null;
     try {
       const parsed = JSON.parse(row.value) as { deviceId?: string };
@@ -382,9 +564,9 @@ export class DatabaseService {
    * This ensures a strictly increasing integer for all sync operations.
    */
   getNextSyncVersion(): number {
-    const row = this.db
-      .prepare("SELECT value FROM identity WHERE key = ?")
-      .get("last_sync_version") as { value: string } | undefined;
+    const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
+      "last_sync_version",
+    ) as { value: string } | undefined;
 
     let currentVersion = 1;
     if (row) {
@@ -395,25 +577,26 @@ export class DatabaseService {
     }
 
     const nextVersion = currentVersion + 1;
-    this.db
-      .prepare("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)")
-      .run("last_sync_version", JSON.stringify({ version: nextVersion }));
+    this.prepare(
+      "INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)",
+    ).run("last_sync_version", JSON.stringify({ version: nextVersion }));
 
     return nextVersion;
   }
 
   // Cache Methods
   getCache(key: string): any {
-    const row = this.db
-      .prepare("SELECT value FROM cache WHERE key = ?")
-      .get(key) as { value: string } | undefined;
+    const row = this.prepare("SELECT value FROM cache WHERE key = ?").get(
+      key,
+    ) as { value: string } | undefined;
     return row ? JSON.parse(row.value) : null;
   }
 
   putCache(key: string, value: any) {
-    this.db
-      .prepare("INSERT OR REPLACE INTO cache (key, value) VALUES (?, ?)")
-      .run(key, JSON.stringify(value));
+    this.prepare("INSERT OR REPLACE INTO cache (key, value) VALUES (?, ?)").run(
+      key,
+      JSON.stringify(value),
+    );
   }
 
   // Image Queue Methods
@@ -423,29 +606,25 @@ export class DatabaseService {
     recordId: string;
     columnName: string;
   }) {
-    this.db
-      .prepare(
-        "INSERT INTO image_upload_queue (localPath, tableName, recordId, columnName, status) VALUES (@localPath, @tableName, @recordId, @columnName, 'pending')",
-      )
-      .run(item);
+    this.prepare(
+      "INSERT INTO image_upload_queue (localPath, tableName, recordId, columnName, status) VALUES (@localPath, @tableName, @recordId, @columnName, 'pending')",
+    ).run(item);
   }
 
   getPendingImageUploads() {
-    return this.db
-      .prepare("SELECT * FROM image_upload_queue WHERE status = 'pending'")
-      .all() as any[];
+    return this.prepare(
+      "SELECT * FROM image_upload_queue WHERE status = 'pending'",
+    ).all() as any[];
   }
 
   markImageAsUploaded(id: number) {
-    this.db.prepare("DELETE FROM image_upload_queue WHERE id = ?").run(id);
+    this.prepare("DELETE FROM image_upload_queue WHERE id = ?").run(id);
   }
 
   failImageUpload(id: number, error: string) {
-    this.db
-      .prepare(
-        "UPDATE image_upload_queue SET status = 'failed', last_error = ? WHERE id = ?",
-      )
-      .run(error, id);
+    this.prepare(
+      "UPDATE image_upload_queue SET status = 'failed', last_error = ? WHERE id = ?",
+    ).run(error, id);
   }
 
   updateRecordColumn(
@@ -470,28 +649,29 @@ export class DatabaseService {
     // We can do that in SyncService or here if we detect it.
     // Let's just do the update here.
     const sql = `UPDATE ${tableName} SET ${columnName} = ?, updatedAt = ? WHERE id = ?`;
-    this.db.prepare(sql).run(value, now, recordId);
+    this.prepare(sql).run(value, now, recordId);
   }
 
   // Queue Methods
   addToQueue(op: any) {
     // Avoid duplicates if op is identical?
     // For now, append is fine.
-    this.db
-      .prepare("INSERT INTO sync_queue (op, status) VALUES (?, ?)")
-      .run(JSON.stringify(op), "pending");
+    this.prepare("INSERT INTO sync_queue (op, status) VALUES (?, ?)").run(
+      JSON.stringify(op),
+      "pending",
+    );
   }
 
   // System Default Methods
   getSystemDefaults(key: string, outletId?: string) {
     if (outletId) {
-      return this.db
-        .prepare("SELECT * FROM system_default WHERE key = ? AND outletId = ?")
-        .all(key, outletId) as any[];
+      return this.prepare(
+        "SELECT * FROM system_default WHERE key = ? AND outletId = ?",
+      ).all(key, outletId) as any[];
     }
-    return this.db
-      .prepare("SELECT * FROM system_default WHERE key = ?")
-      .all(key) as any[];
+    return this.prepare("SELECT * FROM system_default WHERE key = ?").all(
+      key,
+    ) as any[];
   }
 
   addSystemDefault(key: string, data: any, outletId: string) {
@@ -505,11 +685,9 @@ export class DatabaseService {
       version: 0,
     };
 
-    this.db
-      .prepare(
-        "INSERT INTO system_default (id, key, data, outletId, recordId, version) VALUES (@id, @key, @data, @outletId, @recordId, @version)",
-      )
-      .run(record);
+    this.prepare(
+      "INSERT INTO system_default (id, key, data, outletId, recordId, version) VALUES (@id, @key, @data, @outletId, @recordId, @version)",
+    ).run(record);
 
     // 2. Queue Sync
     console.log(`[DatabaseService] Queuing sync for system_default: ${key}`);
@@ -527,11 +705,11 @@ export class DatabaseService {
   }
 
   deleteSystemDefault(id: string) {
-    const record = this.db
-      .prepare("SELECT * FROM system_default WHERE id = ?")
-      .get(id) as any;
+    const record = this.prepare(
+      "SELECT * FROM system_default WHERE id = ?",
+    ).get(id) as any;
 
-    this.db.prepare("DELETE FROM system_default WHERE id = ?").run(id);
+    this.prepare("DELETE FROM system_default WHERE id = ?").run(id);
 
     if (record) {
       console.log(
@@ -547,53 +725,47 @@ export class DatabaseService {
   }
 
   getPendingQueue() {
-    const rows = this.db
-      .prepare(
-        "SELECT op FROM sync_queue WHERE status = 'pending' ORDER BY id ASC",
-      )
-      .all() as { op: string }[];
+    const rows = this.prepare(
+      "SELECT op FROM sync_queue WHERE status = 'pending' ORDER BY id ASC",
+    ).all() as { op: string }[];
     return rows.map((r) => JSON.parse(r.op));
   }
 
   // Get Raw Queue Items with ID
   getPendingQueueItems() {
-    return this.db
-      .prepare(
-        "SELECT * FROM sync_queue WHERE status = 'pending' ORDER BY id ASC",
-      )
-      .all();
+    return this.prepare(
+      "SELECT * FROM sync_queue WHERE status = 'pending' ORDER BY id ASC",
+    ).all();
   }
 
   markAsSynced(ids: number[]) {
     if (ids.length === 0) return;
     const placeholders = ids.map(() => "?").join(",");
-    this.db
-      .prepare(`DELETE FROM sync_queue WHERE id IN (${placeholders})`)
-      .run(...ids);
+    this.prepare(`DELETE FROM sync_queue WHERE id IN (${placeholders})`).run(
+      ...ids,
+    );
   }
 
   markAsFailed(id: number, error: string) {
     // Increment retry count, if > 3 mark as dead letter?
     // User said: "if i had an api request that got an error, no need to retry it again"
     // So we mark it as failed immediately and stop trying.
-    this.db
-      .prepare(
-        "UPDATE sync_queue SET status = 'failed', last_error = ? WHERE id = ?",
-      )
-      .run(error, id);
+    this.prepare(
+      "UPDATE sync_queue SET status = 'failed', last_error = ? WHERE id = ?",
+    ).run(error, id);
   }
 
   clearQueue() {
-    this.db.prepare("DELETE FROM sync_queue").run();
+    this.prepare("DELETE FROM sync_queue").run();
   }
 
   setQueue(list: any[]) {
-    const insert = this.db.prepare(
+    const insert = this.prepare(
       "INSERT INTO sync_queue (op, status) VALUES (?, ?)",
     );
-    const clear = this.db.prepare("DELETE FROM sync_queue");
+    const clear = this.prepare("DELETE FROM sync_queue");
 
-    const transaction = this.db.transaction((ops) => {
+    const transaction = this.transaction((ops) => {
       clear.run();
       for (const op of ops) insert.run(JSON.stringify(op), "pending");
     });
@@ -616,9 +788,8 @@ export class DatabaseService {
     };
   }) {
     const now = new Date().toISOString();
-    this.db
-      .prepare(
-        `
+    this.prepare(
+      `
         UPDATE business_outlet
         SET
           country = COALESCE(@country, country),
@@ -633,19 +804,18 @@ export class DatabaseService {
           updatedAt = @updatedAt
         WHERE id = @outletId
       `,
-      )
-      .run({
-        outletId: payload.outletId,
-        country: payload.data.country,
-        address: payload.data.address,
-        businessType: payload.data.businessType,
-        currency: payload.data.currency,
-        revenueRange: payload.data.revenueRange,
-        logoUrl: payload.data.logoUrl,
-        isOfflineImage: payload.data.isOfflineImage,
-        localLogoPath: payload.data.localLogoPath,
-        updatedAt: now,
-      });
+    ).run({
+      outletId: payload.outletId,
+      country: payload.data.country,
+      address: payload.data.address,
+      businessType: payload.data.businessType,
+      currency: payload.data.currency,
+      revenueRange: payload.data.revenueRange,
+      logoUrl: payload.data.logoUrl,
+      isOfflineImage: payload.data.isOfflineImage,
+      localLogoPath: payload.data.localLogoPath,
+      updatedAt: now,
+    });
 
     // 2. Queue Sync
     const fullOutlet = this.getOutlet(payload.outletId);
@@ -663,44 +833,40 @@ export class DatabaseService {
   }
 
   run(sql: string, params: any = []) {
-    return this.db.prepare(sql).run(params);
+    return this.prepare(sql).run(params);
   }
 
   getOfflineImages() {
-    return this.db
-      .prepare("SELECT * FROM business_outlet WHERE isOfflineImage = 1")
-      .all() as any[];
+    return this.prepare(
+      "SELECT * FROM business_outlet WHERE isOfflineImage = 1",
+    ).all() as any[];
   }
 
   updateOfflineImage(id: string, logoUrl: string) {
     const now = new Date().toISOString();
-    this.db
-      .prepare(
-        "UPDATE business_outlet SET logoUrl = ?, isOfflineImage = 0, localLogoPath = NULL, updatedAt = ? WHERE id = ?",
-      )
-      .run(logoUrl, now, id);
+    this.prepare(
+      "UPDATE business_outlet SET logoUrl = ?, isOfflineImage = 0, localLogoPath = NULL, updatedAt = ? WHERE id = ?",
+    ).run(logoUrl, now, id);
   }
 
   getOutlet(id: string) {
-    return this.db
-      .prepare("SELECT * FROM business_outlet WHERE id = ?")
-      .get(id) as any;
+    return this.prepare("SELECT * FROM business_outlet WHERE id = ?").get(
+      id,
+    ) as any;
   }
 
   getOutlets() {
-    return this.db.prepare("SELECT * FROM business_outlet").all() as any[];
+    return this.prepare("SELECT * FROM business_outlet").all() as any[];
   }
 
   getCustomers() {
-    return this.db.prepare("SELECT * FROM customers").all() as any[];
+    return this.prepare("SELECT * FROM customers").all() as any[];
   }
 
   getPaymentTerms(outletId: string) {
-    return this.db
-      .prepare(
-        "SELECT * FROM payment_terms WHERE outletId = ? AND deletedAt IS NULL",
-      )
-      .all(outletId) as any[];
+    return this.prepare(
+      "SELECT * FROM payment_terms WHERE outletId = ? AND deletedAt IS NULL",
+    ).all(outletId) as any[];
   }
 
   savePaymentTerm(payload: {
@@ -731,9 +897,8 @@ export class DatabaseService {
       deletedAt: null,
     };
 
-    this.db
-      .prepare(
-        `
+    this.prepare(
+      `
       INSERT INTO payment_terms (
         id, name, paymentType, instantPayment, paymentOnDelivery, 
         paymentInInstallment, outletId, version, createdAt, updatedAt, deletedAt
@@ -749,8 +914,7 @@ export class DatabaseService {
         version = version + 1,
         updatedAt = excluded.updatedAt
     `,
-      )
-      .run(data);
+    ).run(data);
 
     // Queue Sync
     this.addToQueue({
@@ -768,13 +932,14 @@ export class DatabaseService {
 
   deletePaymentTerm(id: string) {
     const now = new Date().toISOString();
-    this.db
-      .prepare("UPDATE payment_terms SET deletedAt = ? WHERE id = ?")
-      .run(now, id);
+    this.prepare("UPDATE payment_terms SET deletedAt = ? WHERE id = ?").run(
+      now,
+      id,
+    );
 
-    const record = this.db
-      .prepare("SELECT * FROM payment_terms WHERE id = ?")
-      .get(id) as any;
+    const record = this.prepare("SELECT * FROM payment_terms WHERE id = ?").get(
+      id,
+    ) as any;
 
     if (record) {
       this.addToQueue({
@@ -787,59 +952,61 @@ export class DatabaseService {
   }
 
   getBusinesses() {
-    return this.db.prepare("SELECT * FROM business").all() as any[];
+    return this.prepare("SELECT * FROM business").all() as any[];
   }
 
-  applyPullData(payload: { currentTimestamp: string; data: any }) {
+  applyPullData(payload: {
+    currentTimestamp: string;
+    data: any;
+    syncType?: "full" | "incremental";
+  }) {
     const { data } = payload;
 
-    const toSqliteValue = (value: any) => {
-      if (value === null || value === undefined) return null;
-      const t = typeof value;
-      if (t === "number" || t === "string" || t === "bigint") return value;
-      if (typeof Buffer !== "undefined" && (Buffer as any).isBuffer?.(value)) {
-        return value;
+    const tx = this.transaction(() => {
+      if (Array.isArray(data.carts) && data.carts.length > 0) {
+        const stmt = this.prepare(cartUpsertSql);
+        for (const c of data.carts) {
+          stmt.run(this.sanitize(buildCartUpsertParams(c)));
+        }
       }
-      if (value instanceof Date) return value.toISOString();
-      if (t === "boolean") return value ? 1 : 0;
-      return JSON.stringify(value);
-    };
 
-    const sanitize = (obj: any) => {
-      const result: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(obj)) {
-        result[key] = toSqliteValue(val);
+      if (Array.isArray(data.cartItems) && data.cartItems.length > 0) {
+        const stmt = this.prepare(cartItemUpsertSql);
+        for (const ci of data.cartItems) {
+          stmt.run(this.sanitize(buildCartItemUpsertParams(ci)));
+        }
       }
-      return result;
-    };
 
-    const tx = this.db.transaction(() => {
       if (data.user) {
         const u = data.user;
-        this.db.prepare(userUpsertSql).run(sanitize(buildUserUpsertParams(u)));
+        // Ensure only one user exists in the local database
+        this.prepare("DELETE FROM user").run();
+        this.prepare(userUpsertSql).run(
+          this.sanitize(buildUserUpsertParams(u)),
+        );
       }
 
       if (Array.isArray(data.businesses) && data.businesses.length > 0) {
-        const stmt = this.db.prepare(businessUpsertSql);
+        const stmt = this.prepare(businessUpsertSql);
 
         for (const b of data.businesses) {
-          stmt.run(sanitize(buildBusinessUpsertParams(b)));
+          stmt.run(this.sanitize(buildBusinessUpsertParams(b)));
         }
       }
 
       if (Array.isArray(data.outlets) && data.outlets.length > 0) {
-        const stmt = this.db.prepare(businessOutletUpsertSql);
+        const stmt = this.prepare(businessOutletUpsertSql);
 
         for (const o of data.outlets) {
-          stmt.run(sanitize(buildBusinessOutletUpsertParams(o)));
+          stmt.run(this.sanitize(buildBusinessOutletUpsertParams(o)));
         }
       }
 
       if (Array.isArray(data.products) && data.products.length > 0) {
-        const stmt = this.db.prepare(productUpsertSql);
+        const stmt = this.prepare(productUpsertSql);
 
         for (const p of data.products) {
-          stmt.run(sanitize(buildProductUpsertParams(p)));
+          stmt.run(this.sanitize(buildProductUpsertParams(p)));
         }
       }
 
@@ -847,23 +1014,31 @@ export class DatabaseService {
         Array.isArray(data.systemDefaults) &&
         data.systemDefaults.length > 0
       ) {
-        const stmt = this.db.prepare(systemDefaultUpsertSql);
+        const stmt = this.prepare(systemDefaultUpsertSql);
 
         for (const s of data.systemDefaults) {
-          stmt.run(sanitize(buildSystemDefaultUpsertParams(s)));
+          stmt.run(this.sanitize(buildSystemDefaultUpsertParams(s)));
         }
       }
 
       if (Array.isArray(data.customers) && data.customers.length > 0) {
-        const stmt = this.db.prepare(customerUpsertSql);
+        const stmt = this.prepare(customerUpsertSql);
 
         for (const c of data.customers) {
-          stmt.run(sanitize(buildCustomerUpsertParams(c)));
+          stmt.run(this.sanitize(buildCustomerUpsertParams(c)));
+        }
+      }
+
+      if (Array.isArray(data.orders) && data.orders.length > 0) {
+        const stmt = this.prepare(orderUpsertSql);
+
+        for (const o of data.orders) {
+          stmt.run(this.sanitize(buildOrderUpsertParams(o)));
         }
       }
 
       if (Array.isArray(data.paymentTerms) && data.paymentTerms.length > 0) {
-        const stmt = this.db.prepare(`
+        const stmt = this.prepare(`
           INSERT INTO payment_terms (
             id, name, paymentType, instantPayment, paymentOnDelivery, 
             paymentInInstallment, outletId, recordId, version, 
@@ -883,6 +1058,7 @@ export class DatabaseService {
             version = excluded.version,
             updatedAt = excluded.updatedAt,
             deletedAt = excluded.deletedAt
+          WHERE excluded.version >= payment_terms.version OR excluded.updatedAt >= payment_terms.updatedAt OR payment_terms.updatedAt IS NULL
         `);
 
         for (const pt of data.paymentTerms) {
@@ -926,7 +1102,7 @@ export class DatabaseService {
     const now = new Date().toISOString();
     const createdIds: string[] = [];
 
-    const tx = this.db.transaction(() => {
+    const tx = this.transaction(() => {
       for (const p of data) {
         const id = p.id || uuidv4();
         // Ensure outletId is set
@@ -948,8 +1124,8 @@ export class DatabaseService {
     const now = new Date().toISOString();
     const createdIds: string[] = [];
 
-    const tx = this.db.transaction(() => {
-      const stmt = this.db.prepare(customerUpsertSql);
+    const tx = this.transaction(() => {
+      const stmt = this.prepare(customerUpsertSql);
       for (const c of data) {
         const id = c.id || uuidv4();
         const customerData = {
@@ -972,7 +1148,7 @@ export class DatabaseService {
           table: "customers",
           action: SYNC_ACTIONS.CREATE,
           data: customerData,
-          id: id,
+          id,
         });
 
         createdIds.push(id);
@@ -990,24 +1166,22 @@ export class DatabaseService {
    */
   wipeUserData() {
     console.log("[DatabaseService] Wiping user data for fresh login...");
-    const tx = this.db.transaction(() => {
+    const tx = this.transaction(() => {
       // 1. Clear core entity tables
       for (const schema of schemas) {
-        this.db.prepare(`DELETE FROM ${schema.name}`).run();
+        this.prepare(`DELETE FROM ${schema.name}`).run();
       }
 
       // 2. Clear sync and image queues
-      this.db.prepare("DELETE FROM sync_queue").run();
-      this.db.prepare("DELETE FROM image_upload_queue").run();
+      this.prepare("DELETE FROM sync_queue").run();
+      this.prepare("DELETE FROM image_upload_queue").run();
 
       // 3. Clear cache and identity (except for device-specific stuff if needed)
       // We keep deviceId if it exists in identity, but wipe user-specific keys
-      this.db
-        .prepare(
-          "DELETE FROM identity WHERE key NOT IN ('device_id', 'pin_hash', 'login_hash')",
-        )
-        .run();
-      this.db.prepare("DELETE FROM cache").run();
+      this.prepare(
+        "DELETE FROM identity WHERE key NOT IN ('device_id', 'pin_hash', 'login_hash')",
+      ).run();
+      this.prepare("DELETE FROM cache").run();
     });
 
     try {

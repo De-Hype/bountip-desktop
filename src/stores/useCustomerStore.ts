@@ -38,14 +38,14 @@ interface CustomerState {
 
   // Actions
   setCustomers: (customers: Customer[]) => void;
-  fetchCustomers: () => Promise<void>;
+  fetchCustomers: (outletId?: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   setFilter: (key: string, value: any) => void;
   applyFilters: (newFilters: any) => void;
   resetFilters: () => void;
   setPage: (page: number) => void;
   setItemsPerPage: (items: number) => void;
-  setSort: (key: keyof Customer) => void;
+  setSort: (key: keyof Customer, direction?: "asc" | "desc") => void;
   addCustomer: (customer: Customer) => void;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
@@ -74,70 +74,72 @@ const useCustomerStore = create<CustomerState>((set) => ({
   },
 
   setCustomers: (customers) => set({ customers }),
-  fetchCustomers: async () => {
+  fetchCustomers: async (outletId) => {
     const state = useCustomerStore.getState();
     set({ isLoading: true, error: null });
     try {
       const api = (window as any).electronAPI;
       if (api) {
-        let sql = "SELECT * FROM customers WHERE 1=1";
+        let sqlWhere = " WHERE 1=1";
         const params: any[] = [];
+
+        if (outletId) {
+          sqlWhere += " AND c.outletId = ?";
+          params.push(outletId);
+        }
 
         // Search
         if (state.searchQuery) {
-          sql +=
-            " AND (name LIKE ? OR email LIKE ? OR phoneNumber LIKE ? OR customerCode LIKE ?)";
+          sqlWhere +=
+            " AND (c.name LIKE ? OR c.email LIKE ? OR c.phoneNumber LIKE ? OR c.customerCode LIKE ?)";
           const q = `%${state.searchQuery}%`;
           params.push(q, q, q, q);
         }
 
         // Filters
         if (state.filters.status !== "All") {
-          sql += " AND status = ?";
+          sqlWhere += " AND c.status = ?";
           params.push(state.filters.status.toLowerCase());
         }
         if (state.filters.type !== "All") {
-          sql += " AND customerType = ?";
+          sqlWhere += " AND c.customerType = ?";
           params.push(state.filters.type.toLowerCase());
         }
         if (state.filters.date) {
-          // Fix: Ensure we filter by date using the start of the day in local time
           const startOfDay = new Date(state.filters.date);
           startOfDay.setHours(0, 0, 0, 0);
           const endOfDay = new Date(state.filters.date);
           endOfDay.setHours(23, 59, 59, 999);
 
-          sql += " AND createdAt >= ? AND createdAt <= ?";
+          sqlWhere += " AND c.createdAt >= ? AND c.createdAt <= ?";
           params.push(startOfDay.toISOString(), endOfDay.toISOString());
         }
-        // paymentTermId not easily filtered without joining or mapping names
-        // if (state.filters.paymentTerm !== "All") { ... }
 
         // Sort
+        let sqlOrder = "";
         if (state.sortConfig.key) {
           const keyMap: any = {
-            name: "name",
-            email: "email",
-            phoneNumber: "phoneNumber",
-            type: "customerType",
-            status: "status",
-            createdAt: "createdAt",
+            name: "c.name",
+            email: "c.email",
+            phoneNumber: "c.phoneNumber",
+            type: "c.customerType",
+            status: "c.status",
+            createdAt: "c.createdAt",
           };
-          const col = keyMap[state.sortConfig.key] || "createdAt";
-          sql += ` ORDER BY ${col} ${state.sortConfig.direction.toUpperCase()}`;
+          const col = keyMap[state.sortConfig.key] || "c.createdAt";
+          sqlOrder = ` ORDER BY ${col} ${state.sortConfig.direction.toUpperCase()}`;
         } else {
-          sql += " ORDER BY createdAt DESC";
+          sqlOrder = " ORDER BY c.createdAt DESC";
         }
 
-        const result = await api.dbQuery(
-          `
+        const query = `
           SELECT c.*, pt.name as paymentTermName 
           FROM customers c
           LEFT JOIN payment_terms pt ON c.paymentTermId = pt.id
-          WHERE 1=1 ${sql.split("WHERE 1=1")[1]}
-        `,
-          params,
-        );
+          ${sqlWhere} ${sqlOrder}
+        `;
+
+        const result = await api.dbQuery(query, params);
         const mapped: Customer[] = result.map((c: any) => ({
           id: c.id,
           name: c.name || "Unknown",
@@ -152,8 +154,7 @@ const useCustomerStore = create<CustomerState>((set) => ({
           customerCode: c.customerCode,
         }));
 
-        // Fetch all customers for stats if it's the first load or if filters changed
-        // but stats should be based on the entire list
+        // Fetch all customers for stats
         const allResult = await api.dbQuery(`
           SELECT c.*, pt.name as paymentTermName 
           FROM customers c
@@ -184,7 +185,10 @@ const useCustomerStore = create<CustomerState>((set) => ({
     }
   },
   setSearchQuery: (query) => {
-    set({ searchQuery: query });
+    set((state) => ({
+      searchQuery: query,
+      pagination: { ...state.pagination, currentPage: 1 },
+    }));
     useCustomerStore.getState().fetchCustomers();
   },
   setFilter: (key, value) => {
@@ -221,13 +225,14 @@ const useCustomerStore = create<CustomerState>((set) => ({
     set((state) => ({
       pagination: { ...state.pagination, itemsPerPage: items, currentPage: 1 },
     })),
-  setSort: (key) => {
+  setSort: (key, direction) => {
     set((state) => {
-      const direction =
-        state.sortConfig.key === key && state.sortConfig.direction === "asc"
+      const newDirection =
+        direction ||
+        (state.sortConfig.key === key && state.sortConfig.direction === "asc"
           ? "desc"
-          : "asc";
-      return { sortConfig: { key, direction } };
+          : "asc");
+      return { sortConfig: { key, direction: newDirection } };
     });
     useCustomerStore.getState().fetchCustomers();
   },
