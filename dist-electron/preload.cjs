@@ -50,6 +50,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   updatePaymentMethods: async (payload) => electron.ipcRenderer.invoke("db:updatePaymentMethods", payload),
   updateOperatingHours: async (payload) => electron.ipcRenderer.invoke("db:updateOperatingHours", payload),
   updateTaxSettings: async (payload) => electron.ipcRenderer.invoke("db:updateTaxSettings", payload),
+  updateServiceCharges: async (payload) => electron.ipcRenderer.invoke("db:updateServiceCharges", payload),
   createOutlet: async (payload) => electron.ipcRenderer.invoke("db:createOutlet", payload),
   updateOutlet: async (payload) => electron.ipcRenderer.invoke("db:updateOutlet", payload),
   deleteOutlet: async (payload) => electron.ipcRenderer.invoke("db:deleteOutlet", payload),

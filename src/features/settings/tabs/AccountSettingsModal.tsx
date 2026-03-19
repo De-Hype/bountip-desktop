@@ -486,7 +486,7 @@ export const AccountSettingsModal: React.FC<{
             </div>
           )}
           {activeTab === "service" && (
-            <ServiceCharge storeId={outlet?.id ?? null} />
+            <ServiceCharge storeId={outlet?.id ?? null} onClose={onClose} />
           )}
         </div>
       )}
@@ -786,11 +786,12 @@ const TaxItemComponent: React.FC<TaxItemComponentProps> = ({
 
 interface ServiceChargeProps {
   storeId: string | null;
+  onClose: () => void;
 }
 
-const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId }) => {
+const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId, onClose }) => {
   const { showToast } = useToastStore();
-  const { selectedOutlet: outlet } = useBusinessStore();
+  const { selectedOutlet: outlet, updateOutletLocal } = useBusinessStore();
   const [serviceName, setServiceName] = useState("");
   const [serviceRate, setServiceRate] = useState("");
   const [selectedOption, setSelectedOption] = useState<
@@ -870,7 +871,17 @@ const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId }) => {
     setIsLoading(true);
 
     try {
-      const currentCharges = (outlet.serviceCharges as any)?.charges || [];
+      let currentServiceCharges = outlet.serviceCharges;
+      if (typeof currentServiceCharges === "string") {
+        try {
+          currentServiceCharges = JSON.parse(currentServiceCharges);
+        } catch (e) {
+          console.error("Failed to parse serviceCharges in handleSubmit", e);
+          currentServiceCharges = { charges: [] };
+        }
+      }
+
+      const currentCharges = (currentServiceCharges as any)?.charges || [];
       let updatedCharges = [...currentCharges];
 
       const newCharge = {
@@ -882,10 +893,23 @@ const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId }) => {
       };
 
       if (serviceChargeId) {
-        updatedCharges = updatedCharges.map((c: any) =>
-          c.id === serviceChargeId ? { ...c, ...newCharge } : c,
+        // Find the index of the charge we're updating
+        const existingIndex = updatedCharges.findIndex(
+          (c: any) => c.id === serviceChargeId,
         );
+
+        if (existingIndex !== -1) {
+          // Update the existing charge
+          updatedCharges[existingIndex] = {
+            ...updatedCharges[existingIndex],
+            ...newCharge,
+          };
+        } else {
+          // If for some reason it's not found, treat it as a new one
+          updatedCharges.push(newCharge);
+        }
       } else {
+        // If it's a new charge, add it to the list
         updatedCharges.push(newCharge);
       }
 
@@ -894,10 +918,10 @@ const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId }) => {
         const payload = { charges: updatedCharges };
         await api.updateServiceCharges({ outletId: storeId, charges: payload });
 
-        const status = await api.getNetworkStatus();
-        if (status.online) {
-          api.syncTrigger();
-        }
+        // Update local state in store
+        updateOutletLocal(storeId, {
+          serviceCharges: JSON.stringify(payload),
+        });
 
         const title = serviceChargeId
           ? "Service Charge Updated"
@@ -912,6 +936,9 @@ const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId }) => {
         if (!serviceChargeId) {
           setServiceChargeId(newCharge.id);
         }
+
+        // Close modal after successful save
+        onClose();
       }
     } catch (error) {
       console.error("Failed to save service charge:", error);
@@ -949,15 +976,16 @@ const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId }) => {
 
       const api = window.electronAPI;
       if (api) {
+        const payload = { charges: updatedCharges };
         await api.updateServiceCharges({
           outletId: storeId,
-          charges: { charges: updatedCharges },
+          charges: payload,
         });
 
-        const status = await api.getNetworkStatus();
-        if (status.online) {
-          api.syncTrigger();
-        }
+        // Update local state in store
+        updateOutletLocal(storeId, {
+          serviceCharges: JSON.stringify(payload),
+        });
 
         setServiceName("");
         setServiceRate("");
@@ -969,6 +997,9 @@ const ServiceCharge: React.FC<ServiceChargeProps> = ({ storeId }) => {
           "Service Charge Deleted",
           "Service Charge has been deleted successfully",
         );
+
+        // Close modal after successful delete
+        onClose();
       }
     } catch (error) {
       console.error("Failed to delete service charge:", error);
