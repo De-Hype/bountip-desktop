@@ -61,6 +61,7 @@ export interface Outlet {
   priceTier?: any;
   labelSettings?: any;
   invoiceSettings?: any;
+  taxSettings?: any;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -20,6 +20,7 @@ interface TaxItem {
   productSetup: "all" | "categories" | "certain";
   selectedCategories: Record<string, boolean>;
   selectedProducts: Record<string, boolean>;
+  isDeleted?: boolean; // Track deletions for sync
 }
 
 const parseRateValue = (rate: string | number): number => {
@@ -33,11 +34,11 @@ export const AccountSettingsModal: React.FC<{
   onClose: () => void;
 }> = ({ isOpen, onClose }) => {
   const { showToast } = useToastStore();
-  const { selectedOutlet: outlet } = useBusinessStore();
+  const { selectedOutlet: outlet, updateOutletLocal } = useBusinessStore();
   const [activeTab, setActiveTab] = useState<"taxes" | "service">("taxes");
   const [taxes, setTaxes] = useState<TaxItem[]>([]);
   const [categoriesList, setCategoriesList] = useState<DropdownOption[]>([]);
-  const [productOptions] = useState<DropdownOption[]>([]);
+  const [productOptions, setProductOptions] = useState<DropdownOption[]>([]);
   const [isLoadingTaxes, setIsLoadingTaxes] = useState(false);
   const [taxErrors, setTaxErrors] = useState<
     Record<string, { name: boolean; rate: boolean }>
@@ -160,7 +161,62 @@ export const AccountSettingsModal: React.FC<{
       setIsLoadingTaxes(false);
     }
   }, [isOpen, outlet]);
-  // Fetch categories and products are intentionally omitted to avoid API integration
+
+  // Fetch categories and products for the selected outlet
+  useEffect(() => {
+    if (!isOpen || !outlet) return;
+
+    const fetchData = async () => {
+      try {
+        const api = window.electronAPI;
+        if (!api?.dbQuery) return;
+
+        // 1. Fetch categories from system_default
+        const categoryResult = await api.dbQuery(
+          "SELECT data FROM system_default WHERE key = 'category' AND outletId = ?",
+          [outlet.id],
+        );
+
+        if (categoryResult && categoryResult[0]) {
+          try {
+            const parsedData = JSON.parse(categoryResult[0].data);
+            const categoryOptions: DropdownOption[] = Array.isArray(parsedData)
+              ? parsedData
+                  .map((c: any) => {
+                    const name = c.name || c;
+                    return {
+                      value: name,
+                      label: name,
+                    };
+                  })
+                  .sort((a, b) => a.label.localeCompare(b.label))
+              : [];
+            setCategoriesList(categoryOptions);
+          } catch (e) {
+            console.error("Failed to parse category data:", e);
+          }
+        }
+
+        // 2. Fetch active products from product table, sorted alphabetically
+        const productResult = await api.dbQuery(
+          "SELECT id, name FROM product WHERE outletId = ? AND isActive = 1 ORDER BY name ASC",
+          [outlet.id],
+        );
+
+        if (productResult) {
+          const options: DropdownOption[] = productResult.map((p: any) => ({
+            value: p.id,
+            label: p.name,
+          }));
+          setProductOptions(options);
+        }
+      } catch (error) {
+        console.error("Error fetching categories/products:", error);
+      }
+    };
+
+    fetchData();
+  }, [isOpen, outlet]);
 
   const addNewTax = () => {
     const newTax: TaxItem = {
@@ -201,12 +257,16 @@ export const AccountSettingsModal: React.FC<{
       showToast("error", "Failed to save tax", "Outlet not available");
       return;
     }
+
+    // Filter out deleted taxes for validation
+    const activeTaxes = taxes.filter((t) => !t.isDeleted);
+
     const errors: Record<string, { name: boolean; rate: boolean }> = {};
-    taxes.forEach((tax) => {
+    activeTaxes.forEach((tax) => {
       const numericRate = parseRateValue(tax.rate);
       errors[tax.id] = {
         name: !tax.name.trim(),
-        rate: numericRate <= 0 || isNaN(numericRate),
+        rate: numericRate < 0 || isNaN(numericRate),
       };
     });
     setTaxErrors(errors);
@@ -226,30 +286,49 @@ export const AccountSettingsModal: React.FC<{
     try {
       const api = window.electronAPI;
       if (api) {
-        // Offline-first update
-        const settings = { taxes };
+        // 1. Prepare data for storage & sync
+        // ONLY include taxes that are NOT marked for deletion
+        const activeTaxes = taxes.filter((tax) => !tax.isDeleted);
+        const taxesToSave = activeTaxes.map((tax) => ({
+          id: tax.id,
+          name: tax.name,
+          rate: parseRateValue(tax.rate),
+          applicationType: tax.includeInMenuPrices ? "included" : "checkout",
+          scope:
+            tax.productSetup === "all"
+              ? "all"
+              : tax.productSetup === "categories"
+                ? "category"
+                : "certain",
+          categoryIdList: Object.keys(tax.selectedCategories).filter(
+            (k) => tax.selectedCategories[k],
+          ),
+          productIdList: Object.keys(tax.selectedProducts).filter(
+            (k) => tax.selectedProducts[k],
+          ),
+        }));
+
+        const settings = { taxes: taxesToSave };
+
+        // 2. Update local DB
         await api.updateTaxSettings({ outletId: outlet.id, settings });
 
-        // Optimistic update for UI is already done via local state
-        // Trigger sync if online
-        const status = await api.getNetworkStatus();
-        if (status.online) {
-          api.syncTrigger();
-        }
+        // 3. Update local state in store
+        updateOutletLocal(outlet.id, {
+          taxSettings: JSON.stringify(settings),
+        });
 
         showToast(
           "success",
           "Save Successful!",
-          "Your Tax has been saved successfully",
+          "Your Tax settings have been saved and queued for sync",
         );
-      } else {
-        // Fallback for non-Electron environment (e.g. web)
-        console.warn("Electron API not found - saving locally only");
-        showToast(
-          "success",
-          "Save Successful!",
-          "Your Tax has been saved locally",
-        );
+
+        // Update local state to completely remove the items that were marked as deleted
+        setTaxes(activeTaxes);
+
+        // Close the modal after successful save
+        onClose();
       }
     } catch (error) {
       console.error("Failed to save tax:", error);
@@ -259,14 +338,74 @@ export const AccountSettingsModal: React.FC<{
     }
   };
 
-  const deleteTaxLocal = (id: string) => {
+  const deleteTaxLocal = async (id: string) => {
+    // If it's a temporary ID (not from DB yet), just filter it out
+    if (id.startsWith("new-")) {
+      setTaxes((prev) => prev.filter((tax) => tax.id !== id));
+      return;
+    }
+
     if (!outlet) {
       showToast("error", "Failed to delete tax", "Outlet not available");
       return;
     }
 
-    setTaxes((prev) => prev.filter((tax) => tax.id !== id));
-    showToast("success", "Tax Deleted", "Tax has been deleted successfully");
+    try {
+      // 1. Calculate the new state
+      const updatedTaxes = taxes.map((tax) =>
+        tax.id === id ? { ...tax, isDeleted: true } : tax,
+      );
+
+      // 2. Optimistically update local UI state (marked as deleted)
+      setTaxes(updatedTaxes);
+
+      const api = window.electronAPI;
+      if (api) {
+        // 3. Prepare data for storage & sync
+        // ONLY include taxes that are NOT marked for deletion
+        const activeTaxes = updatedTaxes.filter((tax) => !tax.isDeleted);
+        const taxesToSave = activeTaxes.map((tax) => ({
+          id: tax.id,
+          name: tax.name,
+          rate: parseRateValue(tax.rate),
+          applicationType: tax.includeInMenuPrices ? "included" : "checkout",
+          scope:
+            tax.productSetup === "all"
+              ? "all"
+              : tax.productSetup === "categories"
+                ? "category"
+                : "certain",
+          categoryIdList: Object.keys(tax.selectedCategories).filter(
+            (k) => tax.selectedCategories[k],
+          ),
+          productIdList: Object.keys(tax.selectedProducts).filter(
+            (k) => tax.selectedProducts[k],
+          ),
+        }));
+
+        const settings = { taxes: taxesToSave };
+
+        // 4. Update local DB (this also queues the sync)
+        await api.updateTaxSettings({ outletId: outlet.id, settings });
+
+        // 5. Update local state in store
+        updateOutletLocal(outlet.id, {
+          taxSettings: JSON.stringify(settings),
+        });
+
+        showToast(
+          "success",
+          "Tax Deleted",
+          "Tax has been removed and queued for sync",
+        );
+
+        // 6. Completely remove from local state now that it's synced
+        setTaxes(activeTaxes);
+      }
+    } catch (error) {
+      console.error("Failed to delete tax:", error);
+      showToast("error", "Delete Failed", "Failed to delete tax");
+    }
   };
 
   return (
@@ -303,19 +442,23 @@ export const AccountSettingsModal: React.FC<{
           </div>
           {activeTab === "taxes" && (
             <div className="space-y-6">
-              {taxes.map((tax, index) => (
-                <TaxItemComponent
-                  key={tax.id}
-                  tax={tax}
-                  index={index}
-                  categories={categoriesList}
-                  products={productOptions}
-                  onUpdate={updateTaxLocal}
-                  onAddCategory={addNewCategory}
-                  onDelete={deleteTaxLocal}
-                  taxErrors={taxErrors[tax.id] || { name: false, rate: false }}
-                />
-              ))}
+              {taxes
+                .filter((tax) => !tax.isDeleted)
+                .map((tax, index) => (
+                  <TaxItemComponent
+                    key={tax.id}
+                    tax={tax}
+                    index={index}
+                    categories={categoriesList}
+                    products={productOptions}
+                    onUpdate={updateTaxLocal}
+                    onAddCategory={addNewCategory}
+                    onDelete={deleteTaxLocal}
+                    taxErrors={
+                      taxErrors[tax.id] || { name: false, rate: false }
+                    }
+                  />
+                ))}
               <button
                 onClick={addNewTax}
                 className="w-full cursor-pointer mb-4 px-4 py-3 border border-[#15BA5C] text-[#15BA5C] rounded-lg hover:bg-green-50 transition-colors flex items-center justify-center bg-white"
@@ -617,9 +760,6 @@ const TaxItemComponent: React.FC<TaxItemComponentProps> = ({
               }
               placeholder="Select All that apply"
               label="Categories"
-              allowAddNew={true}
-              onAddNew={onAddCategory}
-              addNewLabel="Add Category"
               className="w-full"
             />
           </div>

@@ -45,7 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isInitialSyncing, setIsInitialSyncing] = useState(false);
-  const { isOnline } = useNetworkStore();
+  const { isOnline, hasCheckedStatus } = useNetworkStore();
   const [isSyncing, setIsSyncing] = useState(false);
 
   const SYNC_INTERVAL_MS = Number(
@@ -265,7 +265,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ReactQueryProvider>
         <div
           className={`fixed top-0 left-0 right-0 bg-red-600 text-white text-sm py-2 text-center z-50 transition-all duration-300 transform ${
-            !isOnline
+            hasCheckedStatus && !isOnline
               ? "translate-y-0 opacity-100"
               : "-translate-y-full opacity-0 pointer-events-none"
           }`}

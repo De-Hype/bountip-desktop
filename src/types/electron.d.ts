@@ -42,7 +42,8 @@ export interface ElectronAPI {
     paymentMethods: any;
   }) => Promise<{ success: boolean }>;
 
-  syncTrigger: () => void;
+  triggerSync: (forceFullPull?: boolean) => Promise<void>;
+  syncTrigger: () => void; // Deprecated, use triggerSync instead if possible
 
   getNetworkStatus: () => Promise<{ online: boolean }>;
   onNetworkStatus: (

@@ -17,12 +17,14 @@ const getElectronAPI = (): ElectronAPI | null => {
 
 type NetworkState = {
   isOnline: boolean;
+  hasCheckedStatus: boolean;
   setIsOnline: (online: boolean) => void;
 };
 
 export const useNetworkStore = create<NetworkState>((set) => ({
-  isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
-  setIsOnline: (online) => set({ isOnline: online }),
+  isOnline: true, // Default to true to avoid startup banner
+  hasCheckedStatus: false,
+  setIsOnline: (online) => set({ isOnline: online, hasCheckedStatus: true }),
 }));
 
 export const initializeNetworkListeners = () => {

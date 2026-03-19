@@ -21090,7 +21090,7 @@ ${signature}\r
           updatedAt: item.created_at
         };
       });
-      console.log("Recordss stuff", records);
+      console.log("Recordss stuff", records[0].payload.taxSettings);
       const payload = { records };
       console.log(payload);
       const response = await net.fetch(PUSH_ENDPOINT, {
