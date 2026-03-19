@@ -154,12 +154,19 @@ const useCustomerStore = create<CustomerState>((set) => ({
           customerCode: c.customerCode,
         }));
 
-        // Fetch all customers for stats
-        const allResult = await api.dbQuery(`
+        // Fetch all customers for stats - filtered by outletId if provided
+        let allSql = `
           SELECT c.*, pt.name as paymentTermName 
           FROM customers c
           LEFT JOIN payment_terms pt ON c.paymentTermId = pt.id
-        `);
+        `;
+        const allParams: any[] = [];
+        if (outletId) {
+          allSql += " WHERE c.outletId = ?";
+          allParams.push(outletId);
+        }
+
+        const allResult = await api.dbQuery(allSql, allParams);
         const allMapped: Customer[] = allResult.map((c: any) => ({
           id: c.id,
           name: c.name || "Unknown",

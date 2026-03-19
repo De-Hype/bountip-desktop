@@ -20,8 +20,15 @@ const CustomerManagement = () => {
   const [isCreateTermOpen, setIsCreateTermOpen] = useState(false);
   const [isEditTermOpen, setIsEditTermOpen] = useState(false);
   const [editTermMode, setEditTermMode] = useState<"view" | "edit">("view");
-  const { allCustomers, isLoading } = useCustomerStore();
+  const { allCustomers, isLoading, fetchCustomers } = useCustomerStore();
   const selectedOutlet = useBusinessStore((state) => state.selectedOutlet);
+
+  // Re-fetch customers when selected outlet changes
+  useEffect(() => {
+    if (selectedOutlet?.id) {
+      fetchCustomers(selectedOutlet.id);
+    }
+  }, [selectedOutlet?.id, fetchCustomers]);
 
   // Payment Terms State
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([]);
@@ -64,8 +71,8 @@ const CustomerManagement = () => {
     );
   }, [paymentTerms, termsSearchQuery]);
 
-  const customerStats = useMemo(
-    () => [
+  const customerStats = useMemo(() => {
+    return [
       {
         label: "Total Customers",
         value: allCustomers.length.toString(),
@@ -109,9 +116,8 @@ const CustomerManagement = () => {
         iconColor: "#307B321A",
         image: CustomerManagementAssets.UserStatsTeal,
       },
-    ],
-    [allCustomers],
-  );
+    ];
+  }, [allCustomers]);
 
   return (
     <section className="">

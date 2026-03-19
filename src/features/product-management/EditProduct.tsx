@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { X, Check } from "lucide-react";
+import { X, Check, Loader2, Trash2 } from "lucide-react";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
 import useBusinessStore from "@/stores/useBusinessStore";
 import useToastStore from "@/stores/toastStore";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import { SYNC_ACTIONS } from "../../../electron/types/action.types";
 import ImageHandler from "@/shared/Image/ImageHandler";
+import DeleteConfirmModal from "./DeleteConfirmModal";
 
 type ProductUpdatePayload = {
   id: string;
@@ -247,6 +248,10 @@ const EditProduct = ({
     Record<string, boolean>
   >({});
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isAddAllergenModalOpen, setIsAddAllergenModalOpen] = useState(false);
@@ -498,6 +503,7 @@ const EditProduct = ({
     const api = getElectronAPI();
     if (!api || !selectedOutletId || !product) return;
 
+    setIsUpdating(true);
     const selectedCategory = categories.find(
       (c) => c.id === selectedCategoryId,
     );
@@ -560,6 +566,82 @@ const EditProduct = ({
         "Update Failed",
         "Failed to update product. Please try again.",
       );
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    const api = getElectronAPI();
+    if (!api || !selectedOutletId || !product) return;
+
+    setIsDeleteConfirmOpen(false);
+    setIsDeleting(true);
+
+    const selectedCategory = categories.find(
+      (c) => c.id === selectedCategoryId,
+    );
+    const selectedPreparationArea = preparationAreas.find(
+      (a) => a.id === selectedPreparationAreaId,
+    );
+    const selectedPriceTier = priceTiers.find((tier) => tier.active);
+    const activePackagingMethods = packagingMethods
+      .filter((m) => selectedPackagingMethods[String(m.id)])
+      .map((m) => m.name);
+    const activeAllergens = allergens
+      .filter((a) => a.selected)
+      .map((a) => a.name);
+    const leadTimeTotalMinutes =
+      (Number(leadTimeDays) || 0) * 24 * 60 +
+      (Number(leadTimeHours) || 0) * 60 +
+      (Number(leadTimeMinutes) || 0);
+    const selectedWeightUnit = weightUnits.find(
+      (u) => u.id === selectedWeightUnitId,
+    );
+
+    const payload: ProductUpdatePayload = {
+      id: product.id,
+      name: productName,
+      description,
+      category: selectedCategory?.name ?? null,
+      preparationArea: selectedPreparationArea?.name ?? null,
+      price: defaultPrice ? Number(defaultPrice) : null,
+      priceTierId: selectedPriceTier ? [selectedPriceTier.name] : null,
+      allergens: activeAllergens,
+      allergenList: activeAllergens,
+      weight: weight ? Number(weight) : null,
+      weightScale: selectedWeightUnit?.name ?? null,
+      packagingMethod: activePackagingMethods,
+      leadTime: leadTimeTotalMinutes || null,
+      availableAtStorefront: product.availableAtStorefront as 0 | 1,
+      createdAtStorefront: 1 as 1,
+      isDeleted: 1 as 1, // SET TO DELETED
+      isActive: 0 as 0, // DEACTIVATE
+      productAvailableStock: null,
+      productCode: null,
+      logoUrl: logoUrl,
+      logoHash: null,
+      outletId: selectedOutletId,
+    };
+
+    try {
+      await api.createProduct(payload); // Using createProduct for upsert
+      showToast(
+        "success",
+        "Product Deleted",
+        `${productName} has been deleted successfully.`,
+      );
+      onSuccess?.();
+      onClose();
+    } catch (error) {
+      console.error("Failed to delete product:", error);
+      showToast(
+        "error",
+        "Delete Failed",
+        "Failed to delete product. Please try again.",
+      );
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1229,19 +1311,49 @@ const EditProduct = ({
           </div>
 
           <div className="flex items-center justify-end gap-3 px-8 py-4 border-t border-[#E5E7EB]">
-            {/* <button
+            <button
               type="button"
-              onClick={onClose}
-              className="rounded-[12px] border border-[#E5E7EB] px-6 py-3 text-sm font-bold text-[#6B7280]"
+              onClick={() => setIsDeleteConfirmOpen(true)}
+              disabled={isDeleting || isUpdating}
+              className={`rounded-[12px] w-full border px-6 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                isDeleting || isUpdating
+                  ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                  : "border-[#EF4444] text-[#EF4444] hover:bg-[#EF4444] hover:text-white cursor-pointer"
+              }`}
             >
-              Cancel
-            </button> */}
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </>
+              )}
+            </button>
             <button
               type="button"
               onClick={handleUpdateProduct}
-              className="rounded-[12px] w-full cursor-pointer bg-[#15BA5C] px-10 py-3 text-sm font-bold text-white hover:bg-[#13A652]"
+              disabled={isDeleting || isUpdating}
+              className={`rounded-[12px] w-full px-10 py-3 text-sm font-bold text-white transition-colors flex items-center justify-center gap-2 ${
+                isDeleting || isUpdating
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[#15BA5C] hover:bg-[#13A652] cursor-pointer"
+              }`}
             >
-              Update Product
+              {isUpdating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  Update Product
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -1278,13 +1390,22 @@ const EditProduct = ({
           onClose={() => setIsAddPreparationAreaModalOpen(false)}
           title="Add Preparation Area"
           fieldLabel="Area Name"
-          fieldPlaceholder="Enter area name"
+          fieldPlaceholder="Enter the name of the preparation area"
           submitLabel="Add Area"
           onSubmit={handlePreparationAreaAdded}
+        />
+
+        <DeleteConfirmModal
+          isOpen={isDeleteConfirmOpen}
+          onClose={() => setIsDeleteConfirmOpen(false)}
+          onConfirm={handleDeleteProduct}
+          productName={productName}
         />
       </div>
     </div>
   );
 };
+
+
 
 export default EditProduct;

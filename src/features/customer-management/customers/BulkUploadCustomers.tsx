@@ -72,11 +72,15 @@ const BulkUploadCustomers: React.FC<BulkUploadCustomersProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Function to detect duplicates by email or phone
-  const detectDuplicates = (customers: ParsedCustomer[]): ParsedCustomer[] => {
+  const detectDuplicates = async (
+    customers: ParsedCustomer[],
+  ): Promise<ParsedCustomer[]> => {
     const emails = new Set<string>();
     const phones = new Set<string>();
     const duplicateRows = new Set<number>();
+    const existingDuplicates = new Set<number>();
 
+    // 1. Detect duplicates within the uploaded file
     customers.forEach((customer) => {
       const email = customer.email.toLowerCase().trim();
       const phone = customer.phoneNumber.trim();
@@ -94,11 +98,84 @@ const BulkUploadCustomers: React.FC<BulkUploadCustomersProps> = ({
       }
     });
 
+    // 2. Detect duplicates against the system database
+    const api = (window as any).electronAPI;
+    if (api && api.dbQuery && selectedOutlet?.id) {
+      try {
+        const emailList = Array.from(emails).filter(Boolean);
+        const phoneList = Array.from(phones).filter(Boolean);
+
+        if (emailList.length > 0 || phoneList.length > 0) {
+          const emailPlaceholders = emailList.map(() => "?").join(",");
+          const phonePlaceholders = phoneList.map(() => "?").join(",");
+
+          let query = `SELECT email, phoneNumber FROM customers WHERE outletId = ? AND (`;
+          const queryParts = [];
+          const params = [selectedOutlet.id];
+
+          if (emailList.length > 0) {
+            queryParts.push(`email IN (${emailPlaceholders})`);
+            params.push(...emailList);
+          }
+
+          if (phoneList.length > 0) {
+            queryParts.push(`phoneNumber IN (${phonePlaceholders})`);
+            params.push(...phoneList);
+          }
+
+          query += queryParts.join(" OR ") + ")";
+
+          const existingRecords = await api.dbQuery(query, params);
+
+          if (existingRecords && existingRecords.length > 0) {
+            const existingEmails = new Set(
+              existingRecords
+                .map((r: any) => r.email?.toLowerCase().trim())
+                .filter(Boolean),
+            );
+            const existingPhones = new Set(
+              existingRecords
+                .map((r: any) => r.phoneNumber?.trim())
+                .filter(Boolean),
+            );
+
+            customers.forEach((customer) => {
+              const email = customer.email.toLowerCase().trim();
+              const phone = customer.phoneNumber.trim();
+
+              if (
+                (email && existingEmails.has(email)) ||
+                (phone && existingPhones.has(phone))
+              ) {
+                existingDuplicates.add(customer.row);
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Failed to check for existing customers:", error);
+      }
+    }
+
     return customers.map((customer) => {
-      const isDuplicate = duplicateRows.has(customer.row);
+      const isFileDuplicate = duplicateRows.has(customer.row);
+      const isSystemDuplicate = existingDuplicates.has(customer.row);
+      const isDuplicate = isFileDuplicate || isSystemDuplicate;
+
+      const newErrors = [...customer.errors];
+      if (isSystemDuplicate) {
+        newErrors.push(
+          "Customer with this email or phone number already exists in the system",
+        );
+      } else if (isFileDuplicate) {
+        newErrors.push("Duplicate entry found within the file");
+      }
+
       return {
         ...customer,
         isDuplicate,
+        isValid: customer.isValid && !isSystemDuplicate, // System duplicates are strictly invalid
+        errors: newErrors,
         status_upload: isDuplicate ? "duplicate" : undefined,
       };
     });
@@ -155,10 +232,10 @@ const BulkUploadCustomers: React.FC<BulkUploadCustomersProps> = ({
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        complete: (results: any) => {
+        complete: async (results: any) => {
           try {
             const parsed = processRawRows(results.data);
-            resolve(detectDuplicates(parsed));
+            resolve(await detectDuplicates(parsed));
           } catch (error) {
             reject(error);
           }
@@ -171,7 +248,7 @@ const BulkUploadCustomers: React.FC<BulkUploadCustomersProps> = ({
   const parseExcelFile = async (file: File): Promise<ParsedCustomer[]> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: "array" });
@@ -179,7 +256,7 @@ const BulkUploadCustomers: React.FC<BulkUploadCustomersProps> = ({
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
           const parsed = processRawRows(jsonData);
-          resolve(detectDuplicates(parsed));
+          resolve(await detectDuplicates(parsed));
         } catch (error) {
           reject(error);
         }
@@ -280,7 +357,7 @@ const BulkUploadCustomers: React.FC<BulkUploadCustomersProps> = ({
       showToast(
         "success",
         "Bulk Upload Complete",
-        `Successfully uploaded \${validCustomers.length} customers.`,
+        `Successfully uploaded ${validCustomers.length} customers.`,
       );
     } catch (error) {
       showToast(

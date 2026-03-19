@@ -263,18 +263,18 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
     }
   };
 
-  const handleReset = () => {
-    if (
-      confirm(
-        "Are you sure you want to reset the application? This will clear all data and cannot be undone.",
-      )
-    ) {
-      localStorage.clear();
-      sessionStorage.clear();
-      const api = getElectronAPI();
-      api?.factoryReset();
-    }
-  };
+  // const handleReset = () => {
+  //   if (
+  //     confirm(
+  //       "Are you sure you want to reset the application? This will clear all data and cannot be undone.",
+  //     )
+  //   ) {
+  //     localStorage.clear();
+  //     sessionStorage.clear();
+  //     const api = getElectronAPI();
+  //     api?.factoryReset();
+  //   }
+  // };
 
   // Show loading state
   if (isBusinessLoading) {
@@ -384,13 +384,13 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
           </button>
 
           <div className="flex justify-center pt-4">
-            <button
+            {/* <button
               type="button"
               onClick={handleReset}
               className="text-xs text-red-500 hover:text-red-600 hover:underline transition-colors"
             >
               Factory Reset (Clear all data)
-            </button>
+            </button> */}
           </div>
         </div>
       </form>

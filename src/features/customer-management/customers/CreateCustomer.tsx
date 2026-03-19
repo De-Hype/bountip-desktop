@@ -1,9 +1,18 @@
-import React, { useState, useMemo } from "react";
-import { X, User, Building2, Plus, Trash2, ChevronDown } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  X,
+  User,
+  Building2,
+  Plus,
+  Trash2,
+  ChevronDown,
+  Loader2,
+} from "lucide-react";
 import { Button } from "../../settings/ui/Button";
 import { PhoneInput } from "../../settings/ui/PhoneInput";
 import { getPhoneCountries, PhoneCountry } from "@/utils/getPhoneCountries";
 import useBusinessStore from "@/stores/useBusinessStore";
+import useToastStore from "@/stores/toastStore";
 import {
   Select,
   SelectContent,
@@ -48,10 +57,182 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
   const [organizationAddresses, setOrganizationAddresses] = useState<string[]>([
     "",
   ]);
+  const { showToast } = useToastStore();
   const [pricingTier, setPricingTier] = useState<string>("");
   const [paymentTerm, setPaymentTerm] = useState<string>("");
+  const [actualPaymentTerms, setActualPaymentTerms] = useState<any[]>([]);
   const [isPricingTierOpen, setIsPricingTierOpen] = useState(false);
   const [isPaymentTermOpen, setIsPaymentTermOpen] = useState(false);
+
+  // Fetch payment terms from the database
+  useEffect(() => {
+    const fetchPaymentTerms = async () => {
+      try {
+        const api = (window as any).electronAPI;
+        if (api && api.dbQuery && selectedOutlet?.id) {
+          const result = await api.dbQuery(
+            "SELECT id, name FROM payment_terms WHERE outletId = ? ORDER BY name ASC",
+            [selectedOutlet.id],
+          );
+          if (result && Array.isArray(result)) {
+            setActualPaymentTerms(result);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch payment terms:", error);
+      }
+    };
+
+    if (isOpen) {
+      fetchPaymentTerms();
+    }
+  }, [isOpen, selectedOutlet?.id]);
+
+  const [customerName, setCustomerName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const resetForm = () => {
+    setCustomerType("Individual");
+    setPhoneNumbers([{ number: "", country: phoneCountries[0] }]);
+    setEmails([""]);
+    setRepresentativeNames([""]);
+    setOrganizationAddresses([""]);
+    setPricingTier("");
+    setPaymentTerm("");
+    setCustomerName("");
+    setIsPricingTierOpen(false);
+    setIsPaymentTermOpen(false);
+  };
+
+  // Reset form when modal opens or closes
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
+
+  const isFormValid = useMemo(() => {
+    const isNameValid = customerName.trim() !== "";
+    const arePhoneNumbersValid = phoneNumbers.every(
+      (p) => p.number.trim() !== "",
+    );
+    const areEmailsValid = emails.every((e) => e.trim() !== "");
+    const areAddressesValid = organizationAddresses.every(
+      (a) => a.trim() !== "",
+    );
+    const areRepresentativeNamesValid =
+      customerType === "Individual" ||
+      representativeNames.every((n) => n.trim() !== "");
+    const isPricingTierValid = pricingTier !== "";
+    const isPaymentTermValid = paymentTerm !== "";
+
+    return (
+      isNameValid &&
+      arePhoneNumbersValid &&
+      areEmailsValid &&
+      areAddressesValid &&
+      areRepresentativeNamesValid &&
+      isPricingTierValid &&
+      isPaymentTermValid
+    );
+  }, [
+    customerName,
+    phoneNumbers,
+    emails,
+    organizationAddresses,
+    representativeNames,
+    customerType,
+    pricingTier,
+    paymentTerm,
+  ]);
+
+  const handleCreateCustomer = async () => {
+    if (!isFormValid) {
+      showToast("error", "Validation Error", "Please fill in all fields.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const api = (window as any).electronAPI;
+      if (!api) return;
+
+      // Check for existing email or phone number
+      const emailList = emails.map((e) => e.trim()).filter(Boolean);
+      const phoneList = phoneNumbers
+        .map((p) => p.number.trim())
+        .filter(Boolean);
+
+      if (emailList.length > 0 || phoneList.length > 0) {
+        const emailPlaceholders = emailList.map(() => "?").join(",");
+        const phonePlaceholders = phoneList.map(() => "?").join(",");
+
+        let checkQuery = `SELECT email, phoneNumber FROM customers WHERE outletId = ? AND (`;
+        const queryParts = [];
+        const params = [selectedOutlet?.id];
+
+        if (emailList.length > 0) {
+          queryParts.push(`email IN (${emailPlaceholders})`);
+          params.push(...emailList);
+        }
+
+        if (phoneList.length > 0) {
+          queryParts.push(`phoneNumber IN (${phonePlaceholders})`);
+          params.push(...phoneList);
+        }
+
+        checkQuery += queryParts.join(" OR ") + ")";
+
+        const existingRecords = await api.dbQuery(checkQuery, params);
+
+        if (existingRecords && existingRecords.length > 0) {
+          showToast(
+            "error",
+            "Duplicate Customer",
+            "A customer with this email or phone number already exists.",
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Proceed with creation
+      const payload = {
+        id: crypto.randomUUID(),
+        name: customerName,
+        email: emails[0],
+        otherEmails: emails.slice(1).join(","),
+        phoneNumber: phoneNumbers[0].number,
+        otherPhoneNumbers: phoneNumbers
+          .slice(1)
+          .map((p) => p.number)
+          .join(","),
+        customerType: customerType.toLowerCase(),
+        organizationName: customerType === "Organization" ? customerName : null,
+        representativeNames:
+          customerType === "Organization"
+            ? representativeNames.join(",")
+            : null,
+        address: organizationAddresses.join(","),
+        pricingTier,
+        paymentTermId: paymentTerm,
+        outletId: selectedOutlet?.id,
+        status: "active",
+        createdAt: new Date().toISOString(),
+      };
+
+      await api.upsertCustomer(payload);
+
+      showToast("success", "Success", "Customer created successfully.");
+      onClose();
+    } catch (error) {
+      console.error("Failed to create customer:", error);
+      showToast("error", "Error", "Failed to create customer.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const addPhoneNumber = () => {
     setPhoneNumbers((prev) => [
@@ -174,6 +355,8 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
             </label>
             <input
               type="text"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Enter name"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#15BA5C0D] focus:border-[#15BA5C] transition-all text-sm"
             />
@@ -371,12 +554,8 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
                   <span
                     className={paymentTerm ? "text-gray-900" : "text-gray-500"}
                   >
-                    {paymentTerm
-                      ? paymentTerm
-                          .split("-")
-                          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                          .join(" ")
-                      : "Select a Payment Term"}
+                    {actualPaymentTerms.find((t) => t.id === paymentTerm)
+                      ?.name || "Select a Payment Term"}
                   </span>
                   <ChevronDown
                     className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${isPaymentTermOpen ? "rotate-180" : ""}`}
@@ -386,25 +565,30 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
                 {isPaymentTermOpen && (
                   <div className="absolute z-[110] w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="py-1 max-h-60 overflow-y-auto custom-scrollbar">
-                      {["Net 30", "Net 60", "Due on Receipt"].map((term) => (
-                        <button
-                          key={term}
-                          type="button"
-                          onClick={() => {
-                            setPaymentTerm(
-                              term.toLowerCase().replace(/ /g, "-"),
-                            );
-                            setIsPaymentTermOpen(false);
-                          }}
-                          className="w-full px-4 py-3 text-left hover:bg-[#15BA5C0D] hover:text-[#15BA5C] flex items-center justify-between group transition-colors"
-                        >
-                          <span className="text-sm font-medium">{term}</span>
-                          {paymentTerm ===
-                            term.toLowerCase().replace(/ /g, "-") && (
-                            <div className="size-2 rounded-full bg-[#15BA5C]" />
-                          )}
-                        </button>
-                      ))}
+                      {actualPaymentTerms.length > 0 ? (
+                        actualPaymentTerms.map((term) => (
+                          <button
+                            key={term.id}
+                            type="button"
+                            onClick={() => {
+                              setPaymentTerm(term.id);
+                              setIsPaymentTermOpen(false);
+                            }}
+                            className="w-full px-4 py-3 text-left hover:bg-[#15BA5C0D] hover:text-[#15BA5C] flex items-center justify-between group transition-colors"
+                          >
+                            <span className="text-sm font-medium">
+                              {term.name}
+                            </span>
+                            {paymentTerm === term.id && (
+                              <div className="size-2 rounded-full bg-[#15BA5C]" />
+                            )}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-sm text-gray-500 italic">
+                          No payment terms found
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -487,10 +671,22 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
         {/* Footer Actions */}
         <div className="px-8 py-6 border-t border-gray-100 bg-white grid grid-cols-2 gap-4 sticky bottom-0">
           <Button
-            onClick={() => {}}
-            className="rounded-xl py-4 bg-[#15BA5C] hover:bg-[#119E4D] text-white font-bold text-base shadow-lg shadow-[#15BA5C33] transition-all active:scale-[0.98]"
+            onClick={handleCreateCustomer}
+            disabled={!isFormValid || isSubmitting}
+            className={`rounded-xl py-4 font-bold text-base transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
+              !isFormValid || isSubmitting
+                ? "bg-gray-400 text-white shadow-none"
+                : "bg-[#15BA5C] hover:bg-[#119E4D] text-white shadow-lg shadow-[#15BA5C33]"
+            }`}
           >
-            Create Customer
+            {isSubmitting ? (
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="size-5 animate-spin" />
+                <span>Creating...</span>
+              </div>
+            ) : (
+              "Create Customer"
+            )}
           </Button>
           <Button
             onClick={onClose}

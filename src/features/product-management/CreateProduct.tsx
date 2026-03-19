@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Check } from "lucide-react";
+import { X, Check, Loader2 } from "lucide-react";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
 import useBusinessStore from "@/stores/useBusinessStore";
 import useToastStore from "@/stores/toastStore";
@@ -223,12 +223,23 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoHash, setLogoHash] = useState<string | null>(null);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isAddAllergenModalOpen, setIsAddAllergenModalOpen] = useState(false);
   const [isAddWeightUnitModalOpen, setIsAddWeightUnitModalOpen] =
     useState(false);
   const [isAddPreparationAreaModalOpen, setIsAddPreparationAreaModalOpen] =
     useState(false);
+
+  const isFormValid = !!(
+    productName.trim() &&
+    selectedCategoryId &&
+    defaultPrice.trim() &&
+    weight.trim() &&
+    selectedWeightUnitId &&
+    Object.values(selectedPackagingMethods).some((v) => v)
+  );
 
   const currencySymbol = selectedOutlet?.currency
     ? getCurrencySymbol(selectedOutlet.currency)
@@ -441,8 +452,28 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
   };
 
   const handleSaveProduct = async () => {
+    if (!isFormValid) {
+      showToast(
+        "error",
+        "Missing Information",
+        "Please fill in all required fields.",
+      );
+      return;
+    }
+
     const api = getElectronAPI();
-    if (!api || !selectedOutletId) return;
+    if (!api) return;
+
+    if (!selectedOutletId) {
+      showToast(
+        "error",
+        "Error",
+        "No outlet selected. Please select an outlet.",
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
 
     const selectedCategory = categories.find(
       (category) => category.id === selectedCategoryId,
@@ -496,7 +527,12 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
     };
 
     try {
-      await api.createProduct(payload);
+      const response = await api.createProduct(payload);
+
+      if (!response || !response.id) {
+        throw new Error("Invalid response from API");
+      }
+
       showToast(
         "success",
         "Product Created",
@@ -511,6 +547,8 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
         "Creation Failed",
         "Failed to create product. Please try again.",
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1112,9 +1150,21 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
                   <button
                     type="button"
                     onClick={handleSaveProduct}
-                    className="rounded-[10px] bg-[#15BA5C] w-full px-8 py-2.5 text-sm font-medium text-white cursor-pointer hover:bg-[#13A652]"
+                    disabled={!isFormValid || isSubmitting}
+                    className={`rounded-[10px] w-full px-8 py-2.5 text-sm font-medium text-white transition-all ${
+                      !isFormValid || isSubmitting
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-[#15BA5C] cursor-pointer hover:bg-[#13A652] active:scale-[0.98]"
+                    }`}
                   >
-                    Save Product
+                    {isSubmitting ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creating Product...
+                      </span>
+                    ) : (
+                      "Save Product"
+                    )}
                   </button>
                 </div>
               </div>

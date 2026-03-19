@@ -109,6 +109,7 @@ const ProductManagementPage = () => {
 
       // Export file
       XLSX.writeFile(workbook, filename);
+      console.log(products)
       showToast(
         "success",
         "Export Successful",

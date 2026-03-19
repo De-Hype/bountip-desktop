@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import useCustomerStore from "@/stores/useCustomerStore";
+import useBusinessStore from "@/stores/useBusinessStore";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dropdown } from "@/shared/AppDropdowns/CreateDropdown";
 
@@ -11,9 +12,44 @@ interface CustomerFiltersProps {
 
 const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
   const { filters, applyFilters, resetFilters } = useCustomerStore();
+  const selectedOutlet = useBusinessStore((state) => state.selectedOutlet);
 
   // Local state to store pending filters
   const [localFilters, setLocalFilters] = useState(filters);
+  const [paymentTerms, setPaymentTerms] = useState<
+    { value: string; label: string }[]
+  >([]);
+
+  // Fetch payment terms from the database
+  useEffect(() => {
+    const fetchPaymentTerms = async () => {
+      try {
+        const api = (window as any).electronAPI;
+        if (api && api.dbQuery && selectedOutlet?.id) {
+          const result = await api.dbQuery(
+            "SELECT id, name FROM payment_terms WHERE outletId = ? ORDER BY name ASC",
+            [selectedOutlet.id],
+          );
+          if (result && Array.isArray(result)) {
+            const options = result.map((term: any) => ({
+              value: term.name, // Use name for filtering as per useCustomerStore logic
+              label: term.name,
+            }));
+            setPaymentTerms([
+              { value: "All", label: "Select Payment Terms" },
+              ...options,
+            ]);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch payment terms:", error);
+      }
+    };
+
+    if (isOpen) {
+      fetchPaymentTerms();
+    }
+  }, [isOpen, selectedOutlet?.id]);
 
   // Sync local filters with store filters when modal opens
   useEffect(() => {
@@ -119,12 +155,11 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
             </div>
             <Dropdown
               mode="select"
-              options={[
-                { value: "All", label: "Select Payment Terms" },
-                { value: "Net 30", label: "Net 30" },
-                { value: "Net 60", label: "Net 60" },
-                { value: "Due on Receipt", label: "Due on Receipt" },
-              ]}
+              options={
+                paymentTerms.length > 0
+                  ? paymentTerms
+                  : [{ value: "All", label: "Select Payment Terms" }]
+              }
               selectedValue={localFilters.paymentTerm}
               onChange={(value) => handleFilterChange("paymentTerm", value)}
               className="w-full"
