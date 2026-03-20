@@ -64,7 +64,6 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
   const [isPricingTierOpen, setIsPricingTierOpen] = useState(false);
   const [isPaymentTermOpen, setIsPaymentTermOpen] = useState(false);
 
-  // Fetch payment terms from the database
   useEffect(() => {
     const fetchPaymentTerms = async () => {
       try {
@@ -90,6 +89,23 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
 
   const [customerName, setCustomerName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const api = (window as any).electronAPI;
+        if (api && api.getUser) {
+          const user = await api.getUser();
+          setCurrentUser(user);
+        }
+      } catch (error) {
+        console.error("Failed to fetch current user:", error);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const resetForm = () => {
     setCustomerType("Individual");
@@ -104,7 +120,6 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
     setIsPaymentTermOpen(false);
   };
 
-  // Reset form when modal opens or closes
   useEffect(() => {
     if (!isOpen) {
       resetForm();
@@ -220,6 +235,8 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
         outletId: selectedOutlet?.id,
         status: "active",
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser?.name || "System",
       };
 
       await api.upsertCustomer(payload);

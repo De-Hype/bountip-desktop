@@ -14,7 +14,7 @@ const DeleteConfirmModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-120 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div className="relative w-full max-w-md rounded-[24px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="flex flex-col items-center text-center">
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#FEE2E2]">

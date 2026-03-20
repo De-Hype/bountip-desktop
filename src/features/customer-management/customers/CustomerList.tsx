@@ -15,6 +15,7 @@ import { useBusinessStore } from "@/stores/useBusinessStore";
 import CustomerFilters from "./CustomerFilters";
 import CreateCustomer from "./CreateCustomer";
 import BulkUploadCustomers from "./BulkUploadCustomers";
+import EditCustomerModal from "./EditCustomerModal";
 import { Pagination } from "@/shared/Pagination/pagination";
 import NotFound from "./NotFound";
 import { format } from "date-fns";
@@ -43,6 +44,9 @@ const CustomerList = () => {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [isCustomerCreationOpen, setIsCustomerCreationOpen] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [selectedCustomerForEdit, setSelectedCustomerForEdit] =
+    useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const { selectedOutlet } = useBusinessStore();
 
@@ -149,6 +153,11 @@ const CustomerList = () => {
 
   const handleSort = (key: keyof Customer) => {
     setSort(key);
+  };
+
+  const handleRowClick = (customer: Customer) => {
+    setSelectedCustomerForEdit(customer);
+    setIsEditModalOpen(true);
   };
 
   const stats = [
@@ -318,7 +327,8 @@ const CustomerList = () => {
               paginatedCustomers.map((customer, i) => (
                 <tr
                   key={customer.id || i}
-                  className="border-b border-b-gray-200 last:border-b-0"
+                  onClick={() => handleRowClick(customer)}
+                  className="border-b border-b-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   {columns.map((col) => (
                     <td key={col.key} className="py-4 text-gray-700 px-4">
@@ -361,7 +371,18 @@ const CustomerList = () => {
       <BulkUploadCustomers
         isOpen={isBulkUploadOpen}
         onClose={() => setIsBulkUploadOpen(false)}
-        onUploadSuccess={fetchCustomers}
+        onUploadSuccess={() => fetchCustomers(selectedOutlet?.id)}
+      />
+
+      {/* Edit Customer Modal */}
+      <EditCustomerModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedCustomerForEdit(null);
+        }}
+        customer={selectedCustomerForEdit}
+        onSuccess={() => fetchCustomers(selectedOutlet?.id)}
       />
     </div>
   );

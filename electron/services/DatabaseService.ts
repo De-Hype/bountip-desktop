@@ -1160,6 +1160,23 @@ export class DatabaseService {
     return { ids: createdIds, status: "success", count: createdIds.length };
   }
 
+  upsertCustomer(payload: any) {
+    const id = payload.id || uuidv4();
+    const now = new Date().toISOString();
+    const params = this.sanitize(buildCustomerUpsertParams(payload));
+
+    this.prepare(customerUpsertSql).run(params);
+
+    this.addToQueue({
+      table: "customers",
+      action: payload.createdAt === payload.updatedAt ? SYNC_ACTIONS.CREATE : SYNC_ACTIONS.UPDATE,
+      data: payload,
+      id,
+    });
+
+    return { id };
+  }
+
   /**
    * Wipes all user-specific data from the local database.
    * This is used when a new user logs in to prevent cross-user data leakage.

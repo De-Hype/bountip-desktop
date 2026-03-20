@@ -279,6 +279,10 @@ app.whenReady().then(() => {
     dbService.bulkCreateCustomers(payload),
   );
 
+  ipcMain.handle("db:upsertCustomer", (_event, payload) =>
+    dbService.upsertCustomer(payload),
+  );
+
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>
     dbService.query(sql, params),
   );

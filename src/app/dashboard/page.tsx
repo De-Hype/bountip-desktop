@@ -168,8 +168,8 @@ const Dashboard = () => {
       icon: AssetsFiles.cardpos,
       title: "Point of Sale (POS)",
       path: "/dashboard/pos",
-      // badge: "Coming Soon",
-      // available: false,
+      badge: "Coming Soon",
+      available: false,
     },
     {
       icon: AssetsFiles.productionbelt,

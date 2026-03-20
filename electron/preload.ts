@@ -89,6 +89,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:bulkCreateProducts", payload),
   bulkCreateCustomers: async (payload: any) =>
     ipcRenderer.invoke("db:bulkCreateCustomers", payload),
+  upsertCustomer: async (payload: any) =>
+    ipcRenderer.invoke("db:upsertCustomer", payload),
   dbQuery: async (sql: string, params: any[]) =>
     ipcRenderer.invoke("db:query", sql, params),
   importAsset: async (filePath: string) =>

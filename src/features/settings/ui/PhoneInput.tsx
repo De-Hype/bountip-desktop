@@ -121,7 +121,13 @@ export const PhoneInput = ({
       <input
         type="text"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const val = e.target.value;
+          // Only allow numbers, spaces, and common phone symbols
+          if (/^[\d\s+\-()]*$/.test(val)) {
+            onChange(val);
+          }
+        }}
         placeholder={placeholder}
         className="flex-1 px-4 py-3 border border-gray-200 rounded-r-xl outline-none focus:ring-1 focus:ring-[#15BA5C] focus:border-transparent transition-all text-sm"
       />

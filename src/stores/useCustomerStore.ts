@@ -10,7 +10,15 @@ export interface Customer {
   balance: number;
   lastOrderDate?: string;
   paymentTermId?: string;
+  pricingTier?: string;
+  address?: string;
+  otherEmails?: string;
+  otherPhoneNumbers?: string;
+  representativeNames?: string;
+  customerType: string;
   createdAt: string;
+  updatedAt?: string;
+  updatedBy?: string;
   customerCode?: string;
 }
 
@@ -150,7 +158,15 @@ const useCustomerStore = create<CustomerState>((set) => ({
           status: c.status === "active" ? "Active" : "Inactive",
           balance: 0,
           paymentTermId: c.paymentTermName || c.paymentTermId || "---",
+          pricingTier: c.pricingTier,
+          address: c.address,
+          otherEmails: c.otherEmails,
+          otherPhoneNumbers: c.otherPhoneNumbers,
+          representativeNames: c.representativeNames,
+          customerType: c.customerType,
           createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+          updatedBy: c.updatedBy,
           customerCode: c.customerCode,
         }));
 
@@ -177,7 +193,15 @@ const useCustomerStore = create<CustomerState>((set) => ({
           status: c.status === "active" ? "Active" : "Inactive",
           balance: 0,
           paymentTermId: c.paymentTermName || c.paymentTermId || "---",
+          pricingTier: c.pricingTier,
+          address: c.address,
+          otherEmails: c.otherEmails,
+          otherPhoneNumbers: c.otherPhoneNumbers,
+          representativeNames: c.representativeNames,
+          customerType: c.customerType,
           createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+          updatedBy: c.updatedBy,
           customerCode: c.customerCode,
         }));
 
