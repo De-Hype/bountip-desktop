@@ -7,6 +7,7 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
   itemsPerPage: number;
   onItemsPerPageChange: (items: number) => void;
+  totalItems?: number;
   className?: string;
 }
 
@@ -16,6 +17,7 @@ export const Pagination = ({
   onPageChange,
   itemsPerPage,
   onItemsPerPageChange,
+  totalItems,
   className = "",
 }: PaginationProps) => {
   return (
@@ -43,23 +45,30 @@ export const Pagination = ({
         </button>
       </div>
 
-      <div className="flex items-center gap-2 text-sm text-[#4B5563]">
-        <span>Showing</span>
-        <div className="relative">
-          <select
-            value={itemsPerPage}
-            onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-            className="appearance-none rounded-[6px] border border-[#E5E7EB] bg-white pl-3 pr-8 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#15BA5C]"
-          >
-            <option value={10}>10</option>
-            <option value={15}>15</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <ChevronDown className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
+      <div className="flex items-center gap-4 text-sm text-[#4B5563]">
+        {totalItems !== undefined && (
+          <span className="text-[#9CA3AF]">
+            Total: <span className="text-[#1C1B20] font-medium">{totalItems}</span>
+          </span>
+        )}
+        <div className="flex items-center gap-2">
+          <span>Showing</span>
+          <div className="relative">
+            <select
+              value={itemsPerPage}
+              onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+              className="appearance-none rounded-[6px] border border-[#E5E7EB] bg-white pl-3 pr-8 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#15BA5C]"
+            >
+              <option value={10}>10</option>
+              <option value={15}>15</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
+          </div>
+          <span>Entries</span>
         </div>
-        <span>Entries</span>
       </div>
     </div>
   );

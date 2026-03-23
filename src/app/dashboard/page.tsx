@@ -168,15 +168,15 @@ const Dashboard = () => {
       icon: AssetsFiles.cardpos,
       title: "Point of Sale (POS)",
       path: "/dashboard/pos",
-      badge: "Coming Soon",
-      available: false,
+      // badge: "Coming Soon",
+      // available: false,
     },
     {
       icon: AssetsFiles.productionbelt,
       title: "Production Management",
-      path: "/production",
-      badge: "Coming Soon",
-      available: false,
+      path: "/dashboard/production",
+      // badge: "Coming Soon",
+      // available: false,
     },
     {
       icon: AssetsFiles.phusers,
@@ -197,8 +197,8 @@ const Dashboard = () => {
       icon: AssetsFiles.inventory,
       title: "Inventory",
       path: "/dashboard/inventory",
-      badge: "Coming Soon",
-      available: false,
+      // badge: "Coming Soon",
+      // available: false,
     },
 
     {

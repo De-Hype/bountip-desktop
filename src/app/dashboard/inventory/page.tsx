@@ -162,13 +162,7 @@ const InventoryPage = () => {
           <p className="text-[14px] font-normal pt-2.5"> Out of Stock Items</p>
         </div>
       </div>
-
-      {/* Main Content Area (Placeholder for list/table) */}
-      <div className="flex-1 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex h-full items-center justify-center text-gray-400">
-          <p>Inventory list will appear here</p>
-        </div>
-      </div>
+      <InventoryNavigation />
     </div>
   );
 };

@@ -9,7 +9,7 @@ import ProcurementList from "./tabs/Procurement/ProcurementList";
 import ComponentList from "./tabs/InventoryComponent/ComponentList";
 import TransferList from "./tabs/Transfer/TransferList";
 import StockList from "./tabs/Stock/StockList";
-import SupplierList from "./tabs/Reconciliation/SupplierList";
+import ReconciliationTab from "./tabs/Reconciliation/ReconciliationTab";
 
 enum InventoryTab {
   InventoryItems = "inventory_items",
@@ -50,7 +50,7 @@ export default function InventoryNavigation() {
             <div key={tab} className="flex flex-col items-center">
               <button
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 px-1 font-normal text-sm transition-colors duration-200 ${
+                className={`py-4 px-1 cursor-pointer font-normal text-sm transition-colors duration-200 ${
                   activeTab === tab
                     ? "text-[#1C1B20]"
                     : "text-[#A6A6A6] hover:text-gray-700"
@@ -84,7 +84,7 @@ export default function InventoryNavigation() {
         ) : activeTab === InventoryTab.StockCount ? (
           <StockList />
         ) : activeTab === InventoryTab.Reconciliation ? (
-          <SupplierList />
+          <ReconciliationTab />
         ) : activeTab === InventoryTab.Waste ? (
           <WasteList />
         ) : activeTab === InventoryTab.Procurement ? (
