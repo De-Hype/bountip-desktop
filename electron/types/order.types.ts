@@ -8,6 +8,16 @@ export enum OrderStatus {
   CANCELLED = "Cancelled",
 }
 
+export enum OnlineOrderStatus {
+  PENDING = "Pending",
+  CONFIRMED = "Confirmed",
+  IN_PRODUCTION = "In Production",
+  TO_BE_PRODUCED = "To Be Produced",
+  READY = "Ready",
+  DELIVERED = "Delivered",
+  COMPLETED = "Completed",
+  CANCELLED = "Cancelled",
+}
 export enum OrderChannel {
   WHATSAPP = "Whatsapp",
   EMAIL = "Email",

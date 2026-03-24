@@ -202,7 +202,7 @@ const CustomerList = () => {
           <div className="flex items-center border h-10 border-[#15BA5C] bg-white rounded-md transition min-w-[300px]">
             <input
               type="text"
-              placeholder="Search"
+              placeholder="Search by name, email, phone, or ID"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="outline-none w-full pl-4 bg-transparent placeholder-[#A6A6A6] text-sm"

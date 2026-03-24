@@ -24,6 +24,7 @@ import OnboardingPage from "./app/onboarding/page";
 import PrivacyPolicyPage from "./app/privacy-policy/page";
 import TermsPage from "./app/terms-and-conditions/page";
 import ProductManagementPage from "./app/dashboard/product-management/page";
+import ProductionManagementPage from "./app/dashboard/production-management/page";
 import RecipeManagementPage from "./app/dashboard/recipe-management/page";
 import InventoryPage from "./app/dashboard/inventory/page";
 import CustomerManagementPage from "./app/dashboard/customer-management/page";
@@ -100,6 +101,10 @@ export default function App() {
               <Route
                 path="product-management"
                 element={<ProductManagementPage />}
+              />
+              <Route
+                path="production-management"
+                element={<ProductionManagementPage />}
               />
               <Route path="pos" element={<POSPage />} />
               <Route path="debug/database" element={<DatabaseViewerPage />} />

@@ -174,7 +174,7 @@ const Dashboard = () => {
     {
       icon: AssetsFiles.productionbelt,
       title: "Production Management",
-      path: "/dashboard/production",
+      path: "/dashboard/production-management",
       // badge: "Coming Soon",
       // available: false,
     },
@@ -182,7 +182,7 @@ const Dashboard = () => {
       icon: AssetsFiles.phusers,
       title: "Customer Management",
       path: "/dashboard/customer-management",
-     // badge: "Coming Soon",
+      // badge: "Coming Soon",
       available: true,
     },
 

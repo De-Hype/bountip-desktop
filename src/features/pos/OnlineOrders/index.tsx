@@ -11,6 +11,7 @@ import OrderCard from "./OrderCard";
 import NotFound from "./NotFound";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { Pagination } from "@/shared/Pagination/pagination";
+import ViewPendingOrder from "./modals/ViewPendingOrder";
 
 const OnlineOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -19,7 +20,14 @@ const OnlineOrders = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { selectedOutletId } = useBusinessStore();
+
+  const handleViewDetails = (order: any) => {
+    setSelectedOrder(order);
+    setIsModalOpen(true);
+  };
 
   const fetchOrders = useCallback(async () => {
     if (!selectedOutletId) {
@@ -197,7 +205,11 @@ const OnlineOrders = () => {
           ) : orders.length > 0 ? (
             <div className="flex flex-col">
               {orders.map((order) => (
-                <OrderCard key={order.id} order={order} />
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  onViewDetails={handleViewDetails}
+                />
               ))}
             </div>
           ) : (
@@ -222,6 +234,28 @@ const OnlineOrders = () => {
           />
         )}
       </div>
+
+      {/* View Pending Order Modal (Right Drawer) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-[640px] h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+            <ViewPendingOrder
+              order={selectedOrder}
+              onClose={() => setIsModalOpen(false)}
+              onConfirm={(id) => {
+                console.log("Confirming order:", id);
+                setIsModalOpen(false);
+                fetchOrders(); // Refresh list
+              }}
+              onDecline={(id) => {
+                console.log("Declining order:", id);
+                setIsModalOpen(false);
+                fetchOrders(); // Refresh list
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

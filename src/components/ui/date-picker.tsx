@@ -17,6 +17,7 @@ interface DatePickerProps {
   onDateChange?: (date: Date | undefined) => void;
   placeholder?: string;
   className?: string;
+  popoverClassName?: string;
   disabled?: boolean;
 }
 
@@ -25,6 +26,7 @@ export function DatePicker({
   onDateChange,
   placeholder = "Select Date",
   className,
+  popoverClassName,
   disabled = false,
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -48,7 +50,10 @@ export function DatePicker({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-auto p-0 shadow-lg border border-[#E8E8E8] rounded-[12px] overflow-hidden bg-white"
+        className={cn(
+          "w-auto p-0 shadow-lg border border-[#E8E8E8] rounded-[12px] overflow-hidden bg-white",
+          popoverClassName
+        )}
         align="start"
       >
         <Calendar

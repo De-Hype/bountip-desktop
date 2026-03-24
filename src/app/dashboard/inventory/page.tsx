@@ -4,6 +4,7 @@ import { PiTrashFill } from "react-icons/pi";
 import useInventoryStore from "@/stores/useInventoryStore";
 import useBusinessStore from "@/stores/useBusinessStore";
 import InventoryNavigation from "@/features/inventory/InventoryNavigation";
+import CreateInventoryItems from "@/features/inventory/tabs/InventoryList/CreateInventoryItems";
 
 const InventoryPage = () => {
   const { inventoryItems, refreshInventory } = useInventoryStore();
@@ -31,6 +32,7 @@ const InventoryPage = () => {
     useState(false);
   const [showTotalOutOfStocksTable, setShowTotalOutOfStocksTable] =
     useState(false);
+  const [isCreateInventoryOpen, setIsCreateInventoryOpen] = useState(false);
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
@@ -53,7 +55,10 @@ const InventoryPage = () => {
             <Share2 className="h-4 w-4" />
             Export
           </button>
-          <button className="flex items-center gap-2 rounded-lg bg-[#15BA5C] px-4 py-2 text-sm font-medium text-white hover:bg-[#119E4D]">
+          <button
+            onClick={() => setIsCreateInventoryOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-[#15BA5C] px-4 py-2 text-sm font-medium text-white hover:bg-[#119E4D] cursor-pointer"
+          >
             <Plus className="h-4 w-4" />
             Create Inventory Item
           </button>
@@ -163,6 +168,21 @@ const InventoryPage = () => {
         </div>
       </div>
       <InventoryNavigation />
+
+      {/* Create Inventory Drawer */}
+      {isCreateInventoryOpen && (
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-[840px] h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+            <CreateInventoryItems
+              onClose={() => setIsCreateInventoryOpen(false)}
+              onSuccess={() => {
+                setIsCreateInventoryOpen(false);
+                refreshInventory();
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

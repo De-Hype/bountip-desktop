@@ -1238,6 +1238,61 @@ const cartItemModifierSchema = {
     );
   `
 };
+const inventoryUpsertSql = `
+  INSERT INTO inventory (
+    id,
+    type,
+    allowProcurement,
+    location,
+    reference,
+    externalReference,
+    createdAt,
+    updatedAt,
+    recordId,
+    version,
+    outletId,
+    businessId
+  ) VALUES (
+    @id,
+    @type,
+    @allowProcurement,
+    @location,
+    @reference,
+    @externalReference,
+    @createdAt,
+    @updatedAt,
+    @recordId,
+    @version,
+    @outletId,
+    @businessId
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    type = excluded.type,
+    allowProcurement = excluded.allowProcurement,
+    location = excluded.location,
+    reference = excluded.reference,
+    externalReference = excluded.externalReference,
+    updatedAt = excluded.updatedAt,
+    recordId = excluded.recordId,
+    version = excluded.version,
+    outletId = excluded.outletId,
+    businessId = excluded.businessId
+  WHERE excluded.version >= inventory.version OR excluded.updatedAt >= inventory.updatedAt OR inventory.updatedAt IS NULL
+`;
+const buildInventoryUpsertParams = (i) => ({
+  id: i.id,
+  type: i.type,
+  allowProcurement: i.allowProcurement ? 1 : 0,
+  location: i.location,
+  reference: i.reference,
+  externalReference: i.externalReference,
+  createdAt: i.createdAt,
+  updatedAt: i.updatedAt,
+  recordId: i.recordId,
+  version: i.version,
+  outletId: i.outletId,
+  businessId: i.businessId
+});
 const inventorySchema = {
   name: "inventory",
   create: `
@@ -1250,11 +1305,84 @@ const inventorySchema = {
       externalReference TEXT,
       createdAt TEXT,
       updatedAt TEXT,
+      recordId TEXT,
+      version INTEGER,
       businessId TEXT,
       outletId TEXT
     );
-  `
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_inventory_outletId ON inventory(outletId)",
+    "CREATE INDEX IF NOT EXISTS idx_inventory_businessId ON inventory(businessId)"
+  ]
 };
+const inventoryItemUpsertSql = `
+  INSERT INTO inventory_item (
+    id,
+    costMethod,
+    costPrice,
+    currentStockLevel,
+    minimumStockLevel,
+    reOrderLevel,
+    isDeleted,
+    addedBy,
+    modifiedBy,
+    createdAt,
+    updatedAt,
+    itemMasterId,
+    inventoryId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @costMethod,
+    @costPrice,
+    @currentStockLevel,
+    @minimumStockLevel,
+    @reOrderLevel,
+    @isDeleted,
+    @addedBy,
+    @modifiedBy,
+    @createdAt,
+    @updatedAt,
+    @itemMasterId,
+    @inventoryId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    costMethod = excluded.costMethod,
+    costPrice = excluded.costPrice,
+    currentStockLevel = excluded.currentStockLevel,
+    minimumStockLevel = excluded.minimumStockLevel,
+    reOrderLevel = excluded.reOrderLevel,
+    isDeleted = excluded.isDeleted,
+    addedBy = excluded.addedBy,
+    modifiedBy = excluded.modifiedBy,
+    updatedAt = excluded.updatedAt,
+    itemMasterId = excluded.itemMasterId,
+    inventoryId = excluded.inventoryId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= inventory_item.version OR excluded.updatedAt >= inventory_item.updatedAt OR inventory_item.updatedAt IS NULL
+`;
+const buildInventoryItemUpsertParams = (i) => ({
+  id: i.id,
+  costMethod: i.costMethod,
+  costPrice: parseFloat(i.costPrice || 0),
+  currentStockLevel: parseFloat(i.currentStockLevel || 0),
+  minimumStockLevel: parseFloat(i.minimumStockLevel || 0),
+  reOrderLevel: parseFloat(i.reOrderLevel || 0),
+  isDeleted: i.isDeleted ? 1 : 0,
+  addedBy: i.addedBy,
+  modifiedBy: i.modifiedBy,
+  createdAt: i.createdAt,
+  updatedAt: i.updatedAt,
+  itemMasterId: i.itemMasterId,
+  inventoryId: i.inventoryId,
+  recordId: i.recordId,
+  version: i.version
+});
 const inventoryItemSchema = {
   name: "inventory_item",
   create: `
@@ -1271,10 +1399,95 @@ const inventoryItemSchema = {
       createdAt TEXT,
       updatedAt TEXT,
       itemMasterId TEXT NOT NULL,
-      inventoryId TEXT
+      inventoryId TEXT,
+      recordId TEXT,
+      version INTEGER
     );
-  `
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_inventory_item_inventoryId ON inventory_item(inventoryId)",
+    "CREATE INDEX IF NOT EXISTS idx_inventory_item_itemMasterId ON inventory_item(itemMasterId)"
+  ]
 };
+const itemMasterUpsertSql = `
+  INSERT INTO item_master (
+    id,
+    name,
+    itemCode,
+    businessId,
+    category,
+    itemType,
+    unitOfPurchase,
+    unitOfTransfer,
+    unitOfConsumption,
+    displayedUnitOfMeasure,
+    transferPerPurchase,
+    consumptionPerTransfer,
+    isTraceable,
+    isTrackable,
+    createdAt,
+    updatedAt,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @name,
+    @itemCode,
+    @businessId,
+    @category,
+    @itemType,
+    @unitOfPurchase,
+    @unitOfTransfer,
+    @unitOfConsumption,
+    @displayedUnitOfMeasure,
+    @transferPerPurchase,
+    @consumptionPerTransfer,
+    @isTraceable,
+    @isTrackable,
+    @createdAt,
+    @updatedAt,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    itemCode = excluded.itemCode,
+    businessId = excluded.businessId,
+    category = excluded.category,
+    itemType = excluded.itemType,
+    unitOfPurchase = excluded.unitOfPurchase,
+    unitOfTransfer = excluded.unitOfTransfer,
+    unitOfConsumption = excluded.unitOfConsumption,
+    displayedUnitOfMeasure = excluded.displayedUnitOfMeasure,
+    transferPerPurchase = excluded.transferPerPurchase,
+    consumptionPerTransfer = excluded.consumptionPerTransfer,
+    isTraceable = excluded.isTraceable,
+    isTrackable = excluded.isTrackable,
+    updatedAt = excluded.updatedAt,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= item_master.version OR excluded.updatedAt >= item_master.updatedAt OR item_master.updatedAt IS NULL
+`;
+const buildItemMasterUpsertParams = (im) => ({
+  id: im.id,
+  name: im.name,
+  itemCode: im.itemCode,
+  businessId: im.businessId,
+  category: im.category,
+  itemType: im.itemType,
+  unitOfPurchase: im.unitOfPurchase,
+  unitOfTransfer: im.unitOfTransfer,
+  unitOfConsumption: im.unitOfConsumption,
+  displayedUnitOfMeasure: im.displayedUnitOfMeasure,
+  transferPerPurchase: parseFloat(im.transferPerPurchase || 0),
+  consumptionPerTransfer: parseFloat(im.consumptionPerTransfer || 0),
+  isTraceable: im.isTraceable ? 1 : 0,
+  isTrackable: im.isTrackable ? 1 : 0,
+  createdAt: im.createdAt,
+  updatedAt: im.updatedAt,
+  recordId: im.recordId,
+  version: im.version
+});
 const itemMasterSchema = {
   name: "item_master",
   create: `
@@ -1294,10 +1507,83 @@ const itemMasterSchema = {
       isTraceable INTEGER DEFAULT 0 NOT NULL,
       isTrackable INTEGER DEFAULT 0 NOT NULL,
       createdAt TEXT,
-      updatedAt TEXT
+      updatedAt TEXT,
+      recordId TEXT,
+      version INTEGER
     );
-  `
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_item_master_businessId ON item_master(businessId)",
+    "CREATE INDEX IF NOT EXISTS idx_item_master_category ON item_master(category)"
+  ]
 };
+const itemLotUpsertSql = `
+  INSERT INTO item_lot (
+    id,
+    lotNumber,
+    quantityPurchased,
+    supplierName,
+    supplierSesrialNumber,
+    supplierAddress,
+    currentStockLevel,
+    initialStockLevel,
+    expiryDate,
+    costPrice,
+    createdAt,
+    updatedAt,
+    itemId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @lotNumber,
+    @quantityPurchased,
+    @supplierName,
+    @supplierSesrialNumber,
+    @supplierAddress,
+    @currentStockLevel,
+    @initialStockLevel,
+    @expiryDate,
+    @costPrice,
+    @createdAt,
+    @updatedAt,
+    @itemId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    lotNumber = excluded.lotNumber,
+    quantityPurchased = excluded.quantityPurchased,
+    supplierName = excluded.supplierName,
+    supplierSesrialNumber = excluded.supplierSesrialNumber,
+    supplierAddress = excluded.supplierAddress,
+    currentStockLevel = excluded.currentStockLevel,
+    initialStockLevel = excluded.initialStockLevel,
+    expiryDate = excluded.expiryDate,
+    costPrice = excluded.costPrice,
+    updatedAt = excluded.updatedAt,
+    itemId = excluded.itemId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= item_lot.version OR excluded.updatedAt >= item_lot.updatedAt OR item_lot.updatedAt IS NULL
+`;
+const buildItemLotUpsertParams = (il) => ({
+  id: il.id,
+  lotNumber: il.lotNumber,
+  quantityPurchased: parseFloat(il.quantityPurchased || 0),
+  supplierName: il.supplierName,
+  supplierSesrialNumber: il.supplierSesrialNumber,
+  supplierAddress: il.supplierAddress,
+  currentStockLevel: parseFloat(il.currentStockLevel || 0),
+  initialStockLevel: parseFloat(il.initialStockLevel || 0),
+  expiryDate: il.expiryDate,
+  costPrice: parseFloat(il.costPrice || 0),
+  createdAt: il.createdAt,
+  updatedAt: il.updatedAt,
+  itemId: il.itemId,
+  recordId: il.recordId,
+  version: il.version
+});
 const itemLotSchema = {
   name: "item_lot",
   create: `
@@ -1314,9 +1600,14 @@ const itemLotSchema = {
       costPrice REAL NOT NULL,
       createdAt TEXT,
       updatedAt TEXT,
-      itemId TEXT
+      itemId TEXT,
+      recordId TEXT,
+      version INTEGER
     );
-  `
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_item_lot_itemId ON item_lot(itemId)"
+  ]
 };
 const recipesSchema = {
   name: "recipes",
@@ -1709,6 +2000,174 @@ const orderSchema = {
     "CREATE INDEX IF NOT EXISTS idx_orders_orderMode ON orders(orderMode)"
   ]
 };
+const productionUpsertSql = `
+  INSERT INTO productions (
+    id,
+    status,
+    previousStatus,
+    productionDate,
+    additionalInformation,
+    productionTime,
+    initiator,
+    cancelReason,
+    batchId,
+    scheduleId,
+    createdAt,
+    updatedAt,
+    metadata,
+    outletId,
+    recordId,
+    version,
+    productionDueDate,
+    productionManager
+  ) VALUES (
+    @id,
+    @status,
+    @previousStatus,
+    @productionDate,
+    @additionalInformation,
+    @productionTime,
+    @initiator,
+    @cancelReason,
+    @batchId,
+    @scheduleId,
+    @createdAt,
+    @updatedAt,
+    @metadata,
+    @outletId,
+    @recordId,
+    @version,
+    @productionDueDate,
+    @productionManager
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    status = excluded.status,
+    previousStatus = excluded.previousStatus,
+    productionDate = excluded.productionDate,
+    additionalInformation = excluded.additionalInformation,
+    productionTime = excluded.productionTime,
+    initiator = excluded.initiator,
+    cancelReason = excluded.cancelReason,
+    batchId = excluded.batchId,
+    scheduleId = excluded.scheduleId,
+    updatedAt = excluded.updatedAt,
+    metadata = excluded.metadata,
+    outletId = excluded.outletId,
+    recordId = excluded.recordId,
+    version = excluded.version,
+    productionDueDate = excluded.productionDueDate,
+    productionManager = excluded.productionManager
+  WHERE excluded.version >= productions.version OR excluded.updatedAt >= productions.updatedAt OR productions.updatedAt IS NULL
+`;
+const buildProductionUpsertParams = (p) => ({
+  id: p.id,
+  status: p.status,
+  previousStatus: p.previousStatus,
+  productionDate: p.productionDate,
+  additionalInformation: p.additionalInformation,
+  productionTime: p.productionTime,
+  initiator: p.initiator,
+  cancelReason: p.cancelReason,
+  batchId: p.batchId,
+  scheduleId: p.scheduleId,
+  createdAt: p.createdAt,
+  updatedAt: p.updatedAt,
+  metadata: typeof p.metadata === "object" ? JSON.stringify(p.metadata) : p.metadata,
+  outletId: p.outletId,
+  recordId: p.recordId,
+  version: p.version,
+  productionDueDate: p.productionDueDate,
+  productionManager: p.productionManager
+});
+const productionSchema = {
+  name: "productions",
+  create: `
+    CREATE TABLE IF NOT EXISTS productions (
+      id TEXT PRIMARY KEY,
+      status TEXT,
+      previousStatus TEXT,
+      productionDate TEXT,
+      additionalInformation TEXT,
+      productionTime TEXT,
+      initiator TEXT,
+      cancelReason TEXT,
+      batchId TEXT,
+      scheduleId TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      metadata TEXT,
+      outletId TEXT,
+      recordId TEXT,
+      version INTEGER,
+      productionDueDate TEXT,
+      productionManager TEXT
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_productions_outletId ON productions(outletId)",
+    "CREATE INDEX IF NOT EXISTS idx_productions_status ON productions(status)",
+    "CREATE INDEX IF NOT EXISTS idx_productions_batchId ON productions(batchId)",
+    "CREATE INDEX IF NOT EXISTS idx_productions_scheduleId ON productions(scheduleId)"
+  ]
+};
+const productionItemUpsertSql = `
+  INSERT INTO production_items (
+    id,
+    createdAt,
+    updatedAt,
+    outletId,
+    productionId,
+    orderId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @createdAt,
+    @updatedAt,
+    @outletId,
+    @productionId,
+    @orderId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    updatedAt = excluded.updatedAt,
+    outletId = excluded.outletId,
+    productionId = excluded.productionId,
+    orderId = excluded.orderId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= production_items.version OR excluded.updatedAt >= production_items.updatedAt OR production_items.updatedAt IS NULL
+`;
+const buildProductionItemUpsertParams = (pi) => ({
+  id: pi.id,
+  createdAt: pi.createdAt,
+  updatedAt: pi.updatedAt,
+  outletId: pi.outletId,
+  productionId: pi.productionId,
+  orderId: pi.orderId,
+  recordId: pi.recordId,
+  version: pi.version
+});
+const productionItemSchema = {
+  name: "production_items",
+  create: `
+    CREATE TABLE IF NOT EXISTS production_items (
+      id TEXT PRIMARY KEY,
+      createdAt TEXT,
+      updatedAt TEXT,
+      outletId TEXT,
+      productionId TEXT,
+      orderId TEXT,
+      recordId TEXT,
+      version INTEGER
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_production_items_productionId ON production_items(productionId)",
+    "CREATE INDEX IF NOT EXISTS idx_production_items_orderId ON production_items(orderId)"
+  ]
+};
 const schemas = [
   userSchema,
   productSchema,
@@ -1733,7 +2192,9 @@ const schemas = [
   syncTableLogSchema,
   notificationsSchema,
   paymentTermSchema,
-  orderSchema
+  orderSchema,
+  productionSchema,
+  productionItemSchema
 ];
 function createProductRecord(db, payload, id, now) {
   const stmt = db.prepare(`
@@ -2158,7 +2619,15 @@ class DatabaseService {
         }
       }
     }
-    const customerColumns = ["reason", "recordId", "version"];
+    const customerColumns = [
+      "reason",
+      "recordId",
+      "version",
+      "representativeName",
+      "address",
+      "taxNumber",
+      "notes"
+    ];
     for (const col of customerColumns) {
       try {
         const type2 = col === "version" ? "INTEGER DEFAULT 0" : "TEXT";
@@ -2219,6 +2688,54 @@ class DatabaseService {
       } catch (e) {
         if (!e.message.includes("duplicate column name")) {
           console.error(`Migration error (cart_item.${col}):`, e);
+        }
+      }
+    }
+    const inventoryColumns = ["recordId", "version", "businessId", "outletId"];
+    for (const col of inventoryColumns) {
+      try {
+        let type2 = "TEXT";
+        if (col === "version") type2 = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE inventory ADD COLUMN ${col} ${type2}`);
+      } catch (e) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (inventory.${col}):`, e);
+        }
+      }
+    }
+    const inventoryItemColumns = ["recordId", "version"];
+    for (const col of inventoryItemColumns) {
+      try {
+        let type2 = "TEXT";
+        if (col === "version") type2 = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE inventory_item ADD COLUMN ${col} ${type2}`);
+      } catch (e) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (inventory_item.${col}):`, e);
+        }
+      }
+    }
+    const itemMasterColumns = ["recordId", "version"];
+    for (const col of itemMasterColumns) {
+      try {
+        let type2 = "TEXT";
+        if (col === "version") type2 = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE item_master ADD COLUMN ${col} ${type2}`);
+      } catch (e) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (item_master.${col}):`, e);
+        }
+      }
+    }
+    const itemLotColumns = ["recordId", "version"];
+    for (const col of itemLotColumns) {
+      try {
+        let type2 = "TEXT";
+        if (col === "version") type2 = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE item_lot ADD COLUMN ${col} ${type2}`);
+      } catch (e) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (item_lot.${col}):`, e);
         }
       }
     }
@@ -2737,10 +3254,46 @@ class DatabaseService {
           stmt.run(this.sanitize(buildCustomerUpsertParams(c)));
         }
       }
+      if (Array.isArray(data.inventories) && data.inventories.length > 0) {
+        const stmt = this.prepare(inventoryUpsertSql);
+        for (const i of data.inventories) {
+          stmt.run(this.sanitize(buildInventoryUpsertParams(i)));
+        }
+      }
+      if (Array.isArray(data.inventoryItems) && data.inventoryItems.length > 0) {
+        const stmt = this.prepare(inventoryItemUpsertSql);
+        for (const ii of data.inventoryItems) {
+          stmt.run(this.sanitize(buildInventoryItemUpsertParams(ii)));
+        }
+      }
+      if (Array.isArray(data.itemMasters) && data.itemMasters.length > 0) {
+        const stmt = this.prepare(itemMasterUpsertSql);
+        for (const im of data.itemMasters) {
+          stmt.run(this.sanitize(buildItemMasterUpsertParams(im)));
+        }
+      }
+      if (Array.isArray(data.itemLots) && data.itemLots.length > 0) {
+        const stmt = this.prepare(itemLotUpsertSql);
+        for (const il of data.itemLots) {
+          stmt.run(this.sanitize(buildItemLotUpsertParams(il)));
+        }
+      }
       if (Array.isArray(data.orders) && data.orders.length > 0) {
         const stmt = this.prepare(orderUpsertSql);
         for (const o of data.orders) {
           stmt.run(this.sanitize(buildOrderUpsertParams(o)));
+        }
+      }
+      if (Array.isArray(data.productions) && data.productions.length > 0) {
+        const stmt = this.prepare(productionUpsertSql);
+        for (const p of data.productions) {
+          stmt.run(this.sanitize(buildProductionUpsertParams(p)));
+        }
+      }
+      if (Array.isArray(data.productionItems) && data.productionItems.length > 0) {
+        const stmt = this.prepare(productionItemUpsertSql);
+        for (const pi of data.productionItems) {
+          stmt.run(this.sanitize(buildProductionItemUpsertParams(pi)));
         }
       }
       if (Array.isArray(data.paymentTerms) && data.paymentTerms.length > 0) {

@@ -107,7 +107,7 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
                 <Search className="w-5 h-5 text-[#9CA3AF]" />
                 <input
                   type="text"
-                  placeholder="Search by name, phone, or email"
+                  placeholder="Search by name, phone, email, or ID"
                   value={customerSearch}
                   onChange={handleCustomerSearch}
                   className="px-3 py-3 flex-1 outline-none text-[15px] text-[#1C1B20] placeholder-[#9CA3AF]"

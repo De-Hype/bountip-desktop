@@ -37,8 +37,13 @@ const CustomerManagement = () => {
   const [termsSearchQuery, setTermsSearchQuery] = useState("");
 
   const fetchPaymentTerms = async () => {
-    if (!selectedOutlet) return;
+    if (!selectedOutlet) {
+      setPaymentTerms([]);
+      setSelectedTerm(null);
+      return;
+    }
     setIsTermsLoading(true);
+    setSelectedTerm(null); // Clear selected term when outlet changes
     try {
       const api = (window as any).electronAPI;
       if (api) {
@@ -50,7 +55,7 @@ const CustomerManagement = () => {
             : null,
         }));
         setPaymentTerms(mapped);
-        if (mapped.length > 0 && !selectedTerm) {
+        if (mapped.length > 0) {
           setSelectedTerm(mapped[0]);
         }
       }

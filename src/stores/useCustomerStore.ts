@@ -43,6 +43,7 @@ interface CustomerState {
     key: keyof Customer | null;
     direction: "asc" | "desc";
   };
+  selectedOutletId: string | null;
 
   // Actions
   setCustomers: (customers: Customer[]) => void;
@@ -80,28 +81,32 @@ const useCustomerStore = create<CustomerState>((set) => ({
     key: null,
     direction: "asc",
   },
+  selectedOutletId: null,
 
   setCustomers: (customers) => set({ customers }),
   fetchCustomers: async (outletId) => {
     const state = useCustomerStore.getState();
+    const currentOutletId = outletId || state.selectedOutletId;
+
+    if (outletId && outletId !== state.selectedOutletId) {
+      set({ selectedOutletId: outletId });
+    }
+
+    if (!currentOutletId) return;
+
     set({ isLoading: true, error: null });
     try {
       const api = (window as any).electronAPI;
       if (api) {
-        let sqlWhere = " WHERE 1=1";
-        const params: any[] = [];
-
-        if (outletId) {
-          sqlWhere += " AND c.outletId = ?";
-          params.push(outletId);
-        }
+        let sqlWhere = " WHERE c.outletId = ?";
+        const params: any[] = [currentOutletId];
 
         // Search
         if (state.searchQuery) {
           sqlWhere +=
-            " AND (c.name LIKE ? OR c.email LIKE ? OR c.phoneNumber LIKE ? OR c.customerCode LIKE ?)";
+            " AND (c.name LIKE ? OR c.email LIKE ? OR c.phoneNumber LIKE ? OR c.customerCode LIKE ? OR c.id LIKE ?)";
           const q = `%${state.searchQuery}%`;
-          params.push(q, q, q, q);
+          params.push(q, q, q, q, q);
         }
 
         // Filters
@@ -112,6 +117,10 @@ const useCustomerStore = create<CustomerState>((set) => ({
         if (state.filters.type !== "All") {
           sqlWhere += " AND c.customerType = ?";
           params.push(state.filters.type.toLowerCase());
+        }
+        if (state.filters.paymentTerm !== "All") {
+          sqlWhere += " AND pt.name = ?";
+          params.push(state.filters.paymentTerm);
         }
         if (state.filters.date) {
           const startOfDay = new Date(state.filters.date);
@@ -170,17 +179,14 @@ const useCustomerStore = create<CustomerState>((set) => ({
           customerCode: c.customerCode,
         }));
 
-        // Fetch all customers for stats - filtered by outletId if provided
-        let allSql = `
+        // Fetch all customers for stats - filtered by currentOutletId
+        const allSql = `
           SELECT c.*, pt.name as paymentTermName 
           FROM customers c
           LEFT JOIN payment_terms pt ON c.paymentTermId = pt.id
+          WHERE c.outletId = ?
         `;
-        const allParams: any[] = [];
-        if (outletId) {
-          allSql += " WHERE c.outletId = ?";
-          allParams.push(outletId);
-        }
+        const allParams: any[] = [currentOutletId];
 
         const allResult = await api.dbQuery(allSql, allParams);
         const allMapped: Customer[] = allResult.map((c: any) => ({

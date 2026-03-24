@@ -74,6 +74,14 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
     setLocalFilters((prev) => ({ ...prev, [field]: defaultValue }));
   };
 
+  const isFieldModified = (
+    field: keyof typeof localFilters,
+    defaultValue: any,
+  ) => {
+    if (field === "date") return localFilters[field] !== undefined;
+    return localFilters[field] !== defaultValue;
+  };
+
   const handleFilterChange = (field: string, value: any) => {
     setLocalFilters((prev) => ({ ...prev, [field]: value }));
   };
@@ -102,7 +110,7 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
               </label>
               <button
                 onClick={() => handleResetField("date", undefined)}
-                className="text-sm font-medium text-[#15BA5C] hover:underline"
+                className={`text-sm font-medium transition-colors ${isFieldModified("date", undefined) ? "text-[#15BA5C]" : "text-[#D1D5DB] cursor-pointer hover:text-[#15BA5C]"}`}
               >
                 Reset
               </button>
@@ -122,7 +130,7 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
               </label>
               <button
                 onClick={() => handleResetField("type", "All")}
-                className="text-sm font-medium text-[#15BA5C] hover:underline"
+                className={`text-sm font-medium transition-colors ${isFieldModified("type", "All") ? "text-[#15BA5C]" : "text-[#D1D5DB] cursor-pointer hover:text-[#15BA5C]"}`}
               >
                 Reset
               </button>
@@ -148,7 +156,7 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
               </label>
               <button
                 onClick={() => handleResetField("paymentTerm", "All")}
-                className="text-sm font-medium text-[#15BA5C] hover:underline"
+                className={`text-sm font-medium transition-colors ${isFieldModified("paymentTerm", "All") ? "text-[#15BA5C]" : "text-[#D1D5DB] cursor-pointer hover:text-[#15BA5C]"}`}
               >
                 Reset
               </button>
@@ -174,7 +182,7 @@ const CustomerFilters = ({ isOpen, onClose }: CustomerFiltersProps) => {
               </label>
               <button
                 onClick={() => handleResetField("status", "All")}
-                className="text-sm font-medium text-[#15BA5C] hover:underline"
+                className={`text-sm font-medium transition-colors ${isFieldModified("status", "All") ? "text-[#15BA5C]" : "text-[#D1D5DB] cursor-pointer hover:text-[#15BA5C]"}`}
               >
                 Reset
               </button>

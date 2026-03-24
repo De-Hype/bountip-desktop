@@ -28,9 +28,33 @@ import {
   buildCustomerUpsertParams,
 } from "../features/schemas/customers.schema";
 import {
+  inventoryUpsertSql,
+  buildInventoryUpsertParams,
+} from "../features/schemas/inventory.schema";
+import {
+  inventoryItemUpsertSql,
+  buildInventoryItemUpsertParams,
+} from "../features/schemas/inventory_item.schema";
+import {
+  itemLotUpsertSql,
+  buildItemLotUpsertParams,
+} from "../features/schemas/item_lot.schema";
+import {
+  itemMasterUpsertSql,
+  buildItemMasterUpsertParams,
+} from "../features/schemas/item_master.schema";
+import {
   orderUpsertSql,
   buildOrderUpsertParams,
 } from "../features/schemas/order.schema";
+import {
+  productionUpsertSql,
+  buildProductionUpsertParams,
+} from "../features/schemas/production.schema";
+import {
+  productionItemUpsertSql,
+  buildProductionItemUpsertParams,
+} from "../features/schemas/production_item.schema";
 import {
   cartUpsertSql,
   buildCartUpsertParams,
@@ -261,7 +285,15 @@ export class DatabaseService {
     }
 
     // Migration: Add missing columns to customers
-    const customerColumns = ["reason", "recordId", "version"];
+    const customerColumns = [
+      "reason",
+      "recordId",
+      "version",
+      "representativeName",
+      "address",
+      "taxNumber",
+      "notes",
+    ];
     for (const col of customerColumns) {
       try {
         const type = col === "version" ? "INTEGER DEFAULT 0" : "TEXT";
@@ -330,6 +362,62 @@ export class DatabaseService {
       } catch (e: any) {
         if (!e.message.includes("duplicate column name")) {
           console.error(`Migration error (cart_item.${col}):`, e);
+        }
+      }
+    }
+
+    // Migration: Add missing columns to inventory
+    const inventoryColumns = ["recordId", "version", "businessId", "outletId"];
+    for (const col of inventoryColumns) {
+      try {
+        let type = "TEXT";
+        if (col === "version") type = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE inventory ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (inventory.${col}):`, e);
+        }
+      }
+    }
+
+    // Migration: Add missing columns to inventory_item
+    const inventoryItemColumns = ["recordId", "version"];
+    for (const col of inventoryItemColumns) {
+      try {
+        let type = "TEXT";
+        if (col === "version") type = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE inventory_item ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (inventory_item.${col}):`, e);
+        }
+      }
+    }
+
+    // Migration: Add missing columns to item_master
+    const itemMasterColumns = ["recordId", "version"];
+    for (const col of itemMasterColumns) {
+      try {
+        let type = "TEXT";
+        if (col === "version") type = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE item_master ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (item_master.${col}):`, e);
+        }
+      }
+    }
+
+    // Migration: Add missing columns to item_lot
+    const itemLotColumns = ["recordId", "version"];
+    for (const col of itemLotColumns) {
+      try {
+        let type = "TEXT";
+        if (col === "version") type = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE item_lot ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (item_lot.${col}):`, e);
         }
       }
     }
@@ -1029,11 +1117,63 @@ export class DatabaseService {
         }
       }
 
+      if (Array.isArray(data.inventories) && data.inventories.length > 0) {
+        const stmt = this.prepare(inventoryUpsertSql);
+
+        for (const i of data.inventories) {
+          stmt.run(this.sanitize(buildInventoryUpsertParams(i)));
+        }
+      }
+
+      if (
+        Array.isArray(data.inventoryItems) &&
+        data.inventoryItems.length > 0
+      ) {
+        const stmt = this.prepare(inventoryItemUpsertSql);
+
+        for (const ii of data.inventoryItems) {
+          stmt.run(this.sanitize(buildInventoryItemUpsertParams(ii)));
+        }
+      }
+
+      if (Array.isArray(data.itemMasters) && data.itemMasters.length > 0) {
+        const stmt = this.prepare(itemMasterUpsertSql);
+
+        for (const im of data.itemMasters) {
+          stmt.run(this.sanitize(buildItemMasterUpsertParams(im)));
+        }
+      }
+
+      if (Array.isArray(data.itemLots) && data.itemLots.length > 0) {
+        const stmt = this.prepare(itemLotUpsertSql);
+
+        for (const il of data.itemLots) {
+          stmt.run(this.sanitize(buildItemLotUpsertParams(il)));
+        }
+      }
+
       if (Array.isArray(data.orders) && data.orders.length > 0) {
         const stmt = this.prepare(orderUpsertSql);
 
         for (const o of data.orders) {
           stmt.run(this.sanitize(buildOrderUpsertParams(o)));
+        }
+      }
+
+      if (Array.isArray(data.productions) && data.productions.length > 0) {
+        const stmt = this.prepare(productionUpsertSql);
+        for (const p of data.productions) {
+          stmt.run(this.sanitize(buildProductionUpsertParams(p)));
+        }
+      }
+
+      if (
+        Array.isArray(data.productionItems) &&
+        data.productionItems.length > 0
+      ) {
+        const stmt = this.prepare(productionItemUpsertSql);
+        for (const pi of data.productionItems) {
+          stmt.run(this.sanitize(buildProductionItemUpsertParams(pi)));
         }
       }
 
@@ -1169,7 +1309,10 @@ export class DatabaseService {
 
     this.addToQueue({
       table: "customers",
-      action: payload.createdAt === payload.updatedAt ? SYNC_ACTIONS.CREATE : SYNC_ACTIONS.UPDATE,
+      action:
+        payload.createdAt === payload.updatedAt
+          ? SYNC_ACTIONS.CREATE
+          : SYNC_ACTIONS.UPDATE,
       data: payload,
       id,
     });

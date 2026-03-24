@@ -15,9 +15,10 @@ import {
 
 interface OrderCardProps {
   order: Order;
+  onViewDetails?: (order: Order) => void;
 }
 
-const OrderCard = ({ order }: OrderCardProps) => {
+const OrderCard = ({ order, onViewDetails }: OrderCardProps) => {
   const { selectedOutlet } = useBusinessStore();
   const currencySymbol = selectedOutlet?.currency
     ? getCurrencySymbol(selectedOutlet.currency)
@@ -116,7 +117,10 @@ const OrderCard = ({ order }: OrderCardProps) => {
   };
 
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-[16px] p-6 mb-4 hover:shadow-sm transition-all duration-200">
+    <div
+      onClick={() => onViewDetails?.(order)}
+      className="bg-white border border-[#E5E7EB] rounded-[16px] p-6 mb-4 hover:shadow-sm transition-all duration-200 cursor-pointer"
+    >
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl border border-[#F3F4F6] flex items-center justify-center bg-white">
@@ -151,7 +155,13 @@ const OrderCard = ({ order }: OrderCardProps) => {
           </div>
         </div>
 
-        <button className="flex items-center gap-2 border border-[#15BA5C] text-[#15BA5C] px-5 py-2.5 rounded-[12px] hover:bg-[#15BA5C]/5 transition-colors cursor-pointer font-medium text-[15px]">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewDetails?.(order);
+          }}
+          className="flex items-center gap-2 border border-[#15BA5C] text-[#15BA5C] px-5 py-2.5 rounded-[12px] hover:bg-[#15BA5C]/5 transition-colors cursor-pointer font-medium text-[15px]"
+        >
           View Details
           <MoveRight className="w-4 h-4" />
         </button>

@@ -23,6 +23,8 @@ import { syncTableLogSchema } from "./sync_table_log.schema";
 import { notificationsSchema } from "./notifications.schema";
 import { paymentTermSchema } from "./payment_term.schema";
 import { orderSchema } from "./order.schema";
+import { productionSchema } from "./production.schema";
+import { productionItemSchema } from "./production_item.schema";
 
 export const schemas: TableSchema[] = [
   userSchema,
@@ -49,4 +51,6 @@ export const schemas: TableSchema[] = [
   notificationsSchema,
   paymentTermSchema,
   orderSchema,
+  productionSchema,
+  productionItemSchema,
 ];
