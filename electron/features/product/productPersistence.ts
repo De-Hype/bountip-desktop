@@ -1,4 +1,5 @@
-import type Database from "better-sqlite3";
+import { DatabaseService } from "../../services/DatabaseService";
+import { v4 as uuidv4 } from "uuid";
 
 export type SqliteBoolean = 0 | 1;
 
@@ -67,12 +68,12 @@ export type ProductSyncOp = {
 };
 
 export function createProductRecord(
-  db: Database.Database,
+  db: DatabaseService,
   payload: ProductCreatePayload,
   id: string,
   now: string,
 ): ProductRow {
-  const stmt = db.prepare(`
+  const sql = `
       INSERT OR REPLACE INTO product (
         id,
         name,
@@ -124,7 +125,7 @@ export function createProductRecord(
         @lastSyncedAt,
         @outletId
       )
-    `);
+    `;
 
   const effectiveAllergenList =
     payload.allergenList && payload.allergenList.length > 0
@@ -158,7 +159,8 @@ export function createProductRecord(
     logoUrl: payload.logoUrl ?? null,
     logoHash: payload.logoHash ?? null,
     leadTime: payload.leadTime ?? null,
-    availableAtStorefront: (payload.availableAtStorefront ?? 1) as SqliteBoolean,
+    availableAtStorefront: (payload.availableAtStorefront ??
+      1) as SqliteBoolean,
     createdAtStorefront: (payload.createdAtStorefront ?? 1) as SqliteBoolean,
     isDeleted: (payload.isDeleted ?? 0) as SqliteBoolean,
     createdAt: payload.createdAt ?? now,
@@ -167,7 +169,7 @@ export function createProductRecord(
     outletId: payload.outletId ?? null,
   };
 
-  stmt.run(row);
+  db.run(sql, row);
 
   return row;
 }
@@ -187,3 +189,42 @@ export function buildProductSyncOp(
   };
 }
 
+export function createProduct(
+  db: DatabaseService,
+  payload: ProductCreatePayload,
+) {
+  const id = payload.id || uuidv4();
+  const now = new Date().toISOString();
+  const row = createProductRecord(db, payload, id, now);
+  const syncOp = buildProductSyncOp(row, id, now);
+  db.addToQueue(syncOp);
+  return { id };
+}
+
+export function bulkCreateProducts(
+  db: DatabaseService,
+  payload: {
+    outletId: string;
+    data: ProductCreatePayload[];
+  },
+) {
+  const { outletId, data } = payload;
+  const now = new Date().toISOString();
+  const createdIds: string[] = [];
+
+  const tx = db.transaction(() => {
+    for (const p of data) {
+      const id = p.id || uuidv4();
+      // Ensure outletId is set
+      const productPayload = { ...p, outletId };
+      const row = createProductRecord(db, productPayload, id, now);
+      const syncOp = buildProductSyncOp(row, id, now);
+      db.addToQueue(syncOp);
+      createdIds.push(id);
+    }
+  });
+
+  tx();
+
+  return { ids: createdIds, status: "success", count: createdIds.length };
+}

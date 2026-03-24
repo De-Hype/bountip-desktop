@@ -1,10 +1,11 @@
 import { DatabaseService } from "../../services/DatabaseService";
 import { v4 as uuidv4 } from "uuid";
 import { SYNC_ACTIONS } from "../../types/action.types";
+import { getOutlet } from "../outlets";
 
 // Helper to get current tiers
-const getTiers = (db: DatabaseService, outletId: string): any[] => {
-  const outlet = db.getOutlet(outletId);
+const getTiers = async (db: DatabaseService, outletId: string): Promise<any[]> => {
+  const outlet = await getOutlet(db, outletId);
   if (!outlet || !outlet.priceTier) return [];
   try {
     return typeof outlet.priceTier === "string"
@@ -16,7 +17,7 @@ const getTiers = (db: DatabaseService, outletId: string): any[] => {
 };
 
 // Helper to save tiers and queue sync
-const saveTiers = (db: DatabaseService, outletId: string, priceTier: any[]) => {
+const saveTiers = async (db: DatabaseService, outletId: string, priceTier: any[]) => {
   const now = new Date().toISOString();
   const priceTierString = JSON.stringify(priceTier);
 
@@ -35,7 +36,7 @@ const saveTiers = (db: DatabaseService, outletId: string, priceTier: any[]) => {
     },
   );
 
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -54,7 +55,7 @@ export const updatePaymentTier = async (
   },
 ) => {
   const { outletId, priceTier } = payload;
-  saveTiers(db, outletId, priceTier);
+  await saveTiers(db, outletId, priceTier);
   return { success: true };
 };
 
@@ -66,7 +67,7 @@ export const bulkAddPaymentTiers = async (
   },
 ) => {
   const { outletId, tiers } = payload;
-  const currentTiers = getTiers(db, outletId);
+  const currentTiers = await getTiers(db, outletId);
 
   const newTiers = tiers.map((tier) => ({
     ...tier,
@@ -78,7 +79,7 @@ export const bulkAddPaymentTiers = async (
   }));
 
   currentTiers.push(...newTiers);
-  saveTiers(db, outletId, currentTiers);
+  await saveTiers(db, outletId, currentTiers);
 
   return { success: true, tiers: currentTiers };
 };
@@ -91,7 +92,7 @@ export const addPaymentTier = async (
   },
 ) => {
   const { outletId, tier } = payload;
-  const currentTiers = getTiers(db, outletId);
+  const currentTiers = await getTiers(db, outletId);
 
   // Assign a new ID if not present or if it's a temp ID (negative number)
   const newTier = {
@@ -104,7 +105,7 @@ export const addPaymentTier = async (
   };
 
   currentTiers.push(newTier);
-  saveTiers(db, outletId, currentTiers);
+  await saveTiers(db, outletId, currentTiers);
 
   return { success: true, tier: newTier, tiers: currentTiers };
 };
@@ -117,10 +118,10 @@ export const deletePaymentTier = async (
   },
 ) => {
   const { outletId, tierId } = payload;
-  let currentTiers = getTiers(db, outletId);
+  let currentTiers = await getTiers(db, outletId);
 
   currentTiers = currentTiers.filter((t: any) => t.id !== tierId);
-  saveTiers(db, outletId, currentTiers);
+  await saveTiers(db, outletId, currentTiers);
 
   return { success: true, tiers: currentTiers };
 };
@@ -133,12 +134,12 @@ export const editPaymentTier = async (
   },
 ) => {
   const { outletId, tier } = payload;
-  const currentTiers = getTiers(db, outletId);
+  const currentTiers = await getTiers(db, outletId);
 
   const index = currentTiers.findIndex((t: any) => t.id === tier.id);
   if (index !== -1) {
     currentTiers[index] = { ...currentTiers[index], ...tier, isNew: false };
-    saveTiers(db, outletId, currentTiers);
+    await saveTiers(db, outletId, currentTiers);
     return { success: true, tier: currentTiers[index], tiers: currentTiers };
   }
 

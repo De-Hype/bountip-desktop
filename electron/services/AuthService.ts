@@ -2,6 +2,12 @@ import keytar from "keytar";
 import crypto from "crypto";
 import { DatabaseService } from "./DatabaseService";
 import { LocalUserProfile } from "../types/user.types";
+import {
+  saveLoginHash,
+  getLoginHash,
+  savePinHash,
+  getPinHash,
+} from "../features/auth";
 
 const SERVICE_NAME = "bountip-desktop";
 const ACCOUNT_NAME = "auth-tokens";
@@ -49,31 +55,43 @@ export class AuthService {
     this.db.saveIdentity(user);
   }
 
-  saveLoginHash(email: string, password: string) {
-    const normalizedEmail = (email || "").trim().toLowerCase();
-    const raw = `${normalizedEmail}::${password}`;
-    const hash = crypto.createHash("sha256").update(raw).digest("hex");
-    this.db.saveLoginHash(hash);
+  async saveLoginHash(email: string, password: string) {
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = crypto
+      .pbkdf2Sync(password, salt, 1000, 64, "sha512")
+      .toString("hex");
+    await saveLoginHash(this.db, `${salt}:${hash}`);
   }
 
-  verifyLoginHash(email: string, password: string): boolean {
-    const stored = this.db.getLoginHash();
+  async verifyLoginHash(email: string, password: string): Promise<boolean> {
+    const stored = await getLoginHash(this.db);
     if (!stored) return false;
-    const normalizedEmail = (email || "").trim().toLowerCase();
-    const raw = `${normalizedEmail}::${password}`;
-    const hash = crypto.createHash("sha256").update(raw).digest("hex");
-    return stored === hash;
+
+    const [salt, hash] = stored.split(":");
+    const currentHash = crypto
+      .pbkdf2Sync(password, salt, 1000, 64, "sha512")
+      .toString("hex");
+
+    return hash === currentHash;
   }
 
-  savePinHash(pin: string) {
-    const hash = crypto.createHash("sha256").update(pin).digest("hex");
-    this.db.savePinHash(hash);
+  async savePinHash(pin: string) {
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = crypto
+      .pbkdf2Sync(pin, salt, 1000, 64, "sha512")
+      .toString("hex");
+    await savePinHash(this.db, `${salt}:${hash}`);
   }
 
-  verifyPinHash(pin: string): boolean {
-    const stored = this.db.getPinHash();
+  async verifyPinHash(pin: string): Promise<boolean> {
+    const stored = await getPinHash(this.db);
     if (!stored) return false;
-    const hash = crypto.createHash("sha256").update(pin).digest("hex");
-    return stored === hash;
+
+    const [salt, hash] = stored.split(":");
+    const currentHash = crypto
+      .pbkdf2Sync(pin, salt, 1000, 64, "sha512")
+      .toString("hex");
+
+    return hash === currentHash;
   }
 }

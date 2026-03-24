@@ -38,6 +38,27 @@ import {
   updateOutlet,
   deleteOutlet,
 } from "./features/settings/locationSettings";
+import {
+  getOutlet,
+  getOutlets,
+  saveOutletOnboarding,
+} from "./features/outlets";
+import { createInventoryItem } from "./features/inventory/createInventory";
+import {
+  createProduct,
+  bulkCreateProducts,
+} from "./features/product/productPersistence";
+import {
+  bulkCreateCustomers,
+  upsertCustomer,
+  getCustomers,
+} from "./features/customer-management/customers";
+import {
+  getPaymentTerms,
+  savePaymentTerm,
+  deletePaymentTerm,
+} from "./features/customer-management/payment";
+import { getBusinesses } from "./features/business";
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -187,21 +208,21 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("db:saveOutletOnboarding", (_event, payload) =>
-    dbService.saveOutletOnboarding(payload),
+    saveOutletOnboarding(dbService, payload),
   );
 
-  ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
-  ipcMain.handle("db:getCustomers", () => dbService.getCustomers());
+  ipcMain.handle("db:getOutlets", () => getOutlets(dbService));
+  ipcMain.handle("db:getCustomers", () => getCustomers(dbService));
   ipcMain.handle("db:getPaymentTerms", (_event, outletId: string) =>
-    dbService.getPaymentTerms(outletId),
+    getPaymentTerms(dbService, outletId),
   );
   ipcMain.handle("db:savePaymentTerm", (_event, payload) =>
-    dbService.savePaymentTerm(payload),
+    savePaymentTerm(dbService, payload),
   );
   ipcMain.handle("db:deletePaymentTerm", (_event, id: string) =>
-    dbService.deletePaymentTerm(id),
+    deletePaymentTerm(dbService, id),
   );
-  ipcMain.handle("db:getBusinesses", () => dbService.getBusinesses());
+  ipcMain.handle("db:getBusinesses", () => getBusinesses(dbService));
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>
     updateBusinessDetails(dbService, payload),
@@ -268,19 +289,23 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("db:createProduct", (_event, payload) =>
-    dbService.createProduct(payload),
+    createProduct(dbService, payload),
+  );
+
+  ipcMain.handle("db:createInventoryItem", (_event, payload) =>
+    createInventoryItem(dbService, payload),
   );
 
   ipcMain.handle("db:bulkCreateProducts", (_event, payload) =>
-    dbService.bulkCreateProducts(payload),
+    bulkCreateProducts(dbService, payload),
   );
 
   ipcMain.handle("db:bulkCreateCustomers", (_event, payload) =>
-    dbService.bulkCreateCustomers(payload),
+    bulkCreateCustomers(dbService, payload),
   );
 
   ipcMain.handle("db:upsertCustomer", (_event, payload) =>
-    dbService.upsertCustomer(payload),
+    upsertCustomer(dbService, payload),
   );
 
   ipcMain.handle("db:query", (_event, sql: string, params: any[]) =>

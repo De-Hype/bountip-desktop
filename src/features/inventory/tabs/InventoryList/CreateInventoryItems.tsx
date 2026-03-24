@@ -8,11 +8,16 @@ import { useBusinessStore } from "@/stores/useBusinessStore";
 import { SystemDefaultType } from "../../../../../electron/types/system-default";
 import SystemDefaultModal from "@/shared/SystemDefaultModal";
 import AddSupplierModal from "./AddSupplierModal";
+import useToastStore from "@/stores/toastStore";
 
 interface CreateInventoryItemsProps {
   onClose: () => void;
   onSuccess?: () => void;
 }
+
+const generateItemCode = () => {
+  return "ITM" + Math.random().toString(36).substring(2, 8).toUpperCase();
+};
 
 const CreateInventoryItems = ({
   onClose,
@@ -20,11 +25,12 @@ const CreateInventoryItems = ({
 }: CreateInventoryItemsProps) => {
   const [activeTab, setActiveTab] = useState<"basic" | "lot">("basic");
   const { selectedOutlet } = useBusinessStore();
+  const { showToast } = useToastStore();
 
   // Form State
   const [formData, setFormData] = useState({
     itemName: "",
-    itemCode: "ITM83YD9", // Placeholder/Generated
+    itemCode: generateItemCode(),
     itemCategory: "",
     itemType: "",
     suppliers: [] as string[],
@@ -37,7 +43,7 @@ const CreateInventoryItems = ({
     minimumStockLevel: "0",
     reOrderLevel: "0",
     // Lot Information
-    lotNumber: "ITM83YD9",
+    lotNumber: generateItemCode(),
     supplierBarcode: "",
     quantityPurchased: "0",
     expiryDate: undefined as Date | undefined,
@@ -68,6 +74,8 @@ const CreateInventoryItems = ({
     key: "" as SystemDefaultType | "",
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const openDefaultModal = (
     key: SystemDefaultType,
     title: string,
@@ -84,7 +92,7 @@ const CreateInventoryItems = ({
       const api = (window as any).electronAPI;
       if (!api?.dbQuery || !selectedOutlet?.id) return;
       const supplierSql =
-        "SELECT id, name FROM customers WHERE outletId = ? AND customerType = 'organization'";
+        "SELECT id, name FROM suppliers WHERE outletId = ? AND deletedAt IS NULL ORDER BY name ASC";
       const supplierRes = await api.dbQuery(supplierSql, [selectedOutlet.id]);
       setSuppliers(
         supplierRes.map((s: any) => ({ value: s.id, label: s.name })),
@@ -97,22 +105,28 @@ const CreateInventoryItems = ({
   const fetchCategories = async () => {
     try {
       const api = (window as any).electronAPI;
-      if (!api?.dbQuery || !selectedOutlet?.id) return;
-      const catSql =
-        "SELECT data FROM system_default WHERE key = ? AND (outletId = ? OR outletId IS NULL)";
-      const catRes = await api.dbQuery(catSql, [
+      if (!api?.getSystemDefaults || !selectedOutlet?.id) return;
+
+      const results = await api.getSystemDefaults(
         SystemDefaultType.ITEM_CATEGORY,
         selectedOutlet.id,
-      ]);
-      if (catRes?.[0]?.data) {
-        const catData = JSON.parse(catRes[0].data);
-        setCategories(
-          catData.map((c: any) => ({
-            value: c.name || c,
-            label: c.name || c,
-          })),
-        );
-      }
+      );
+
+      const allCategories = results.flatMap((row: any) => {
+        try {
+          const data = JSON.parse(row.data);
+          return Array.isArray(data) ? data : [data];
+        } catch (e) {
+          return [];
+        }
+      });
+
+      setCategories(
+        allCategories.map((c: any) => ({
+          value: c.name || c,
+          label: c.name || c,
+        })),
+      );
     } catch (err) {
       console.error("Failed to fetch categories:", err);
     }
@@ -121,22 +135,28 @@ const CreateInventoryItems = ({
   const fetchUnits = async () => {
     try {
       const api = (window as any).electronAPI;
-      if (!api?.dbQuery || !selectedOutlet?.id) return;
-      const unitSql =
-        "SELECT data FROM system_default WHERE key = ? AND (outletId = ? OR outletId IS NULL)";
-      const unitRes = await api.dbQuery(unitSql, [
+      if (!api?.getSystemDefaults || !selectedOutlet?.id) return;
+
+      const results = await api.getSystemDefaults(
         SystemDefaultType.INVENTORY_UNIT,
         selectedOutlet.id,
-      ]);
-      if (unitRes?.[0]?.data) {
-        const unitData = JSON.parse(unitRes[0].data);
-        setUnits(
-          unitData.map((u: any) => ({
-            value: u.name || u,
-            label: u.name || u,
-          })),
-        );
-      }
+      );
+
+      const allUnits = results.flatMap((row: any) => {
+        try {
+          const data = JSON.parse(row.data);
+          return Array.isArray(data) ? data : [data];
+        } catch (e) {
+          return [];
+        }
+      });
+
+      setUnits(
+        allUnits.map((u: any) => ({
+          value: u.name || u,
+          label: u.name || u,
+        })),
+      );
     } catch (err) {
       console.error("Failed to fetch units:", err);
     }
@@ -145,20 +165,26 @@ const CreateInventoryItems = ({
   const handleAddNewDefault = async (newValue: string) => {
     try {
       const api = (window as any).electronAPI;
-      if (!api?.updateSystemDefault || !selectedOutlet?.id || !modalConfig.key)
+      if (!api?.addSystemDefault || !selectedOutlet?.id || !modalConfig.key)
         return;
 
-      await api.updateSystemDefault({
-        key: modalConfig.key,
-        outletId: selectedOutlet.id,
-        newValue: { name: newValue },
-      });
+      await api.addSystemDefault(
+        modalConfig.key,
+        { name: newValue },
+        selectedOutlet.id,
+      );
+
+      showToast(
+        "success",
+        "Success",
+        `${modalConfig.inputLabel} added successfully`,
+      );
 
       // Refetch the appropriate list
       if (modalConfig.key === SystemDefaultType.INVENTORY_UNIT) {
-        fetchUnits();
+        await fetchUnits();
       } else if (modalConfig.key === SystemDefaultType.ITEM_CATEGORY) {
-        fetchCategories();
+        await fetchCategories();
       }
 
       setIsDefaultModalOpen(false);
@@ -173,33 +199,42 @@ const CreateInventoryItems = ({
       if (!api?.dbQuery || !selectedOutlet?.id) return;
 
       const sql = `
-        INSERT INTO customers (
-          id, name, representativeName, phoneNumber, email, address, taxNumber, notes, 
-          customerType, outletId, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO suppliers (
+          id, isActive, name, representativeName, phoneNumbers, emailAddress, address,
+          supplierCode, notes, taxNumber, createdAt, updatedAt, deletedAt, outletId, recordId, version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
 
       await api.dbQuery(sql, [
         id,
+        1,
         supplierData.supplierName,
-        supplierData.representatives
-          .filter((r: string) => r.trim() !== "")
-          .join(", "),
-        supplierData.phoneNumbers
-          .filter((p: any) => p.number.trim() !== "")
-          .map((p: any) => `${p.country.dialCode}${p.number}`)
-          .join(", "),
-        supplierData.emails.filter((e: string) => e.trim() !== "").join(", "),
+        JSON.stringify(
+          supplierData.representatives.filter((r: string) => r.trim() !== ""),
+        ),
+        JSON.stringify(
+          supplierData.phoneNumbers
+            .filter((p: any) => p.number.trim() !== "")
+            .map((p: any) => `${p.country.dialCode}${p.number}`),
+        ),
+        JSON.stringify(
+          supplierData.emails.filter((e: string) => e.trim() !== ""),
+        ),
         supplierData.address,
-        supplierData.taxNumber,
         supplierData.notes,
-        "organization",
+        null,
+        supplierData.taxNumber,
+        now,
+        now,
+        null,
         selectedOutlet.id,
-        now,
-        now,
+        null,
+        1,
       ]);
+
+      showToast("success", "Success", "Supplier added successfully");
 
       await fetchSuppliers();
       setIsSupplierModalOpen(false);
@@ -217,8 +252,99 @@ const CreateInventoryItems = ({
     fetchDefaults();
   }, [selectedOutlet?.id]);
 
+  useEffect(() => {
+    const costPrice = parseFloat(formData.costPrice) || 0;
+    const qtyPurchased = parseFloat(formData.quantityPurchased) || 0;
+    const transferFactor =
+      parseFloat(formData.noOfTransferBasedOnPurchase) || 0;
+    const consumptionFactor =
+      parseFloat(formData.noOfConsumptionUnitBasedOnPurchase) || 0;
+
+    const costPerPurchase = qtyPurchased > 0 ? costPrice / qtyPurchased : 0;
+    const costPerTransfer =
+      transferFactor > 0 ? costPerPurchase / transferFactor : 0;
+    const costPerConsumption =
+      consumptionFactor > 0 ? costPerPurchase / consumptionFactor : 0;
+
+    setFormData((prev) => ({
+      ...prev,
+      costPerUnitOfPurchase: costPerPurchase.toFixed(2),
+      costPerUnitOfTransfer: costPerTransfer.toFixed(2),
+      costPerUnitOfConsumption: costPerConsumption.toFixed(2),
+    }));
+  }, [
+    formData.costPrice,
+    formData.quantityPurchased,
+    formData.noOfTransferBasedOnPurchase,
+    formData.noOfConsumptionUnitBasedOnPurchase,
+  ]);
+
+  const handleNumericInputChange = (
+    field: string,
+    value: string,
+    isFloat = false,
+  ) => {
+    let sanitizedValue = isFloat
+      ? value.replace(/[^0-9.]/g, "")
+      : value.replace(/[^0-9]/g, "");
+
+    if (isFloat && (sanitizedValue.match(/\./g) || []).length > 1) {
+      const parts = sanitizedValue.split(".");
+      sanitizedValue = parts[0] + "." + parts.slice(1).join("");
+    }
+
+    setFormData((prev) => ({ ...prev, [field]: sanitizedValue }));
+  };
+
   const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const isBasicInfoValid =
+    formData.itemName.trim() !== "" &&
+    formData.itemCategory !== "" &&
+    formData.itemType !== "" &&
+    formData.suppliers.length > 0 &&
+    formData.unitOfPurchase !== "" &&
+    formData.unitOfTransfer !== "" &&
+    formData.unitOfConsumption !== "" &&
+    parseFloat(formData.noOfTransferBasedOnPurchase) > 0 &&
+    parseFloat(formData.noOfConsumptionUnitBasedOnPurchase) > 0 &&
+    formData.displayedUnitOfMeasure !== "";
+
+  const isFormValid =
+    isBasicInfoValid &&
+    parseFloat(formData.minimumStockLevel) >= 0 &&
+    parseFloat(formData.reOrderLevel) >= 0 &&
+    formData.supplierBarcode.trim() !== "" &&
+    parseFloat(formData.quantityPurchased) > 0 &&
+    formData.expiryDate !== undefined &&
+    parseFloat(formData.costPrice) > 0;
+
+  const handleCreateItem = async () => {
+    if (!isFormValid || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const api = (window as any).electronAPI;
+      if (!api?.createInventoryItem) return;
+
+      const payload = {
+        ...formData,
+        outletId: selectedOutlet?.id,
+        expiryDate: formData.expiryDate?.toISOString(),
+      };
+
+      await api.createInventoryItem(payload);
+      showToast("success", "Success", "Inventory item created successfully");
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      console.error("Failed to create inventory item:", err);
+      showToast("error", "Error", "Failed to create inventory item");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const itemTypes = [
@@ -336,7 +462,7 @@ const CreateInventoryItems = ({
                           "Add Category",
                         )
                       }
-                      className="h-12 w-12 flex items-center justify-center bg-[#F3F4F6] rounded-xl text-[#737373] hover:bg-gray-200 transition-colors"
+                      className="h-12 w-12 cursor-pointer flex items-center justify-center bg-[#F3F4F6] rounded-xl text-[#737373] hover:bg-gray-200 transition-colors"
                     >
                       <Plus className="size-5" />
                     </button>
@@ -396,7 +522,7 @@ const CreateInventoryItems = ({
                   <button
                     type="button"
                     onClick={() => setIsSupplierModalOpen(true)}
-                    className="h-12 w-12 flex items-center justify-center bg-[#D1D5DB] rounded-xl text-white hover:bg-gray-400 transition-colors"
+                    className="h-12 w-12 cursor-pointer flex items-center justify-center bg-[#D1D5DB] rounded-xl text-white hover:bg-gray-400 transition-colors"
                   >
                     <Plus className="size-5" />
                   </button>
@@ -431,14 +557,18 @@ const CreateInventoryItems = ({
                           "Add Unit",
                         )
                       }
-                      className="h-12 w-12 flex items-center justify-center bg-[#F3F4F6] rounded-xl text-[#737373] hover:bg-gray-200 transition-colors"
+                      className="h-12 w-12 cursor-pointer flex items-center justify-center bg-[#F3F4F6] rounded-xl text-[#737373] hover:bg-gray-200 transition-colors"
                     >
                       <Plus className="size-5" />
                     </button>
                     <Dropdown
                       mode="select"
                       placeholder="Click to select unit of Purchase"
-                      options={units}
+                      options={units.filter(
+                        (u) =>
+                          u.value !== formData.unitOfTransfer &&
+                          u.value !== formData.unitOfConsumption,
+                      )}
                       selectedValue={formData.unitOfPurchase}
                       onChange={(val) =>
                         handleInputChange("unitOfPurchase", val)
@@ -469,14 +599,18 @@ const CreateInventoryItems = ({
                           "Add Unit",
                         )
                       }
-                      className="h-12 w-12 flex items-center justify-center bg-[#F3F4F6] rounded-xl text-[#737373] hover:bg-gray-200 transition-colors"
+                      className="h-12 w-12 cursor-pointer flex items-center justify-center bg-[#F3F4F6] rounded-xl text-[#737373] hover:bg-gray-200 transition-colors"
                     >
                       <Plus className="size-5" />
                     </button>
                     <Dropdown
                       mode="select"
                       placeholder="Click to select unit of Transfer"
-                      options={units}
+                      options={units.filter(
+                        (u) =>
+                          u.value !== formData.unitOfPurchase &&
+                          u.value !== formData.unitOfConsumption,
+                      )}
                       selectedValue={formData.unitOfTransfer}
                       onChange={(val) =>
                         handleInputChange("unitOfTransfer", val)
@@ -511,14 +645,18 @@ const CreateInventoryItems = ({
                           "Add Unit",
                         )
                       }
-                      className="h-12 w-12 flex items-center justify-center bg-[#F3F4F6] rounded-xl text-[#737373] hover:bg-gray-200 transition-colors"
+                      className="h-12 w-12 cursor-pointer flex items-center justify-center bg-[#F3F4F6] rounded-xl text-[#737373] hover:bg-gray-200 transition-colors"
                     >
                       <Plus className="size-5" />
                     </button>
                     <Dropdown
                       mode="select"
                       placeholder="Click to select unit of consumption"
-                      options={units}
+                      options={units.filter(
+                        (u) =>
+                          u.value !== formData.unitOfPurchase &&
+                          u.value !== formData.unitOfTransfer,
+                      )}
                       selectedValue={formData.unitOfConsumption}
                       onChange={(val) =>
                         handleInputChange("unitOfConsumption", val)
@@ -541,15 +679,15 @@ const CreateInventoryItems = ({
                   </label>
                   <div className="relative">
                     <input
-                      type="number"
+                      type="text"
                       value={formData.noOfTransferBasedOnPurchase}
                       onChange={(e) =>
-                        handleInputChange(
+                        handleNumericInputChange(
                           "noOfTransferBasedOnPurchase",
                           e.target.value,
                         )
                       }
-                      className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none"
+                      className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#15BA5C] font-medium text-sm">
                       Units
@@ -557,7 +695,11 @@ const CreateInventoryItems = ({
                   </div>
                   <div className="flex items-center gap-1.5 text-[12px] text-[#15BA5C]">
                     <Info className="size-3.5" />
-                    <span>0 Unit = 1 Unit</span>
+                    <span>
+                      {formData.noOfTransferBasedOnPurchase || 0}{" "}
+                      {formData.unitOfTransfer || "Unit"} = 1{" "}
+                      {formData.unitOfPurchase || "Unit of Purchase"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -570,15 +712,15 @@ const CreateInventoryItems = ({
                   </label>
                   <div className="relative">
                     <input
-                      type="number"
+                      type="text"
                       value={formData.noOfConsumptionUnitBasedOnPurchase}
                       onChange={(e) =>
-                        handleInputChange(
+                        handleNumericInputChange(
                           "noOfConsumptionUnitBasedOnPurchase",
                           e.target.value,
                         )
                       }
-                      className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none"
+                      className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#15BA5C] font-medium text-sm">
                       Units
@@ -586,7 +728,11 @@ const CreateInventoryItems = ({
                   </div>
                   <div className="flex items-center gap-1.5 text-[12px] text-[#15BA5C]">
                     <Info className="size-3.5" />
-                    <span>0 Unit = 1 Unit</span>
+                    <span>
+                      {formData.noOfConsumptionUnitBasedOnPurchase || 0}{" "}
+                      {formData.unitOfConsumption || "Unit"} = 1{" "}
+                      {formData.unitOfPurchase || "Unit of Purchase"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -605,7 +751,20 @@ const CreateInventoryItems = ({
                 <Dropdown
                   mode="select"
                   placeholder="Select your preferred unit of measurement"
-                  options={units}
+                  options={[
+                    {
+                      label: "Unit of Purchase",
+                      value: formData.unitOfPurchase,
+                    },
+                    {
+                      label: "Unit of Transfer",
+                      value: formData.unitOfTransfer,
+                    },
+                    {
+                      label: "Unit of consumption",
+                      value: formData.unitOfConsumption,
+                    },
+                  ].filter((opt) => opt.value)}
                   selectedValue={formData.displayedUnitOfMeasure}
                   onChange={(val) =>
                     handleInputChange("displayedUnitOfMeasure", val)
@@ -626,12 +785,15 @@ const CreateInventoryItems = ({
                     Minimum Stock Level <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={formData.minimumStockLevel}
                     onChange={(e) =>
-                      handleInputChange("minimumStockLevel", e.target.value)
+                      handleNumericInputChange(
+                        "minimumStockLevel",
+                        e.target.value,
+                      )
                     }
-                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none"
+                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
                   />
                 </div>
                 <div className="space-y-2">
@@ -639,12 +801,12 @@ const CreateInventoryItems = ({
                     Re-Order Level <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={formData.reOrderLevel}
                     onChange={(e) =>
-                      handleInputChange("reOrderLevel", e.target.value)
+                      handleNumericInputChange("reOrderLevel", e.target.value)
                     }
-                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none"
+                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
                   />
                 </div>
               </div>
@@ -652,8 +814,13 @@ const CreateInventoryItems = ({
 
             <button
               type="button"
+              disabled={!isBasicInfoValid}
               onClick={() => setActiveTab("lot")}
-              className="w-full h-14 bg-[#15BA5C] text-white rounded-[12px] font-bold text-[16px] hover:bg-[#13A652] transition-colors mt-4"
+              className={`w-full h-11 rounded-[12px] font-bold text-[16px] transition-colors mt-4 ${
+                isBasicInfoValid
+                  ? "bg-[#15BA5C] text-white hover:bg-[#13A652] cursor-pointer"
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
+              }`}
             >
               Next
             </button>
@@ -713,12 +880,15 @@ const CreateInventoryItems = ({
                     Quantity Purchased <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={formData.quantityPurchased}
                     onChange={(e) =>
-                      handleInputChange("quantityPurchased", e.target.value)
+                      handleNumericInputChange(
+                        "quantityPurchased",
+                        e.target.value,
+                      )
                     }
-                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none"
+                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
                   />
                 </div>
               </div>
@@ -753,12 +923,16 @@ const CreateInventoryItems = ({
                       Cost Price <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="number"
+                      type="text"
                       value={formData.costPrice}
                       onChange={(e) =>
-                        handleInputChange("costPrice", e.target.value)
+                        handleNumericInputChange(
+                          "costPrice",
+                          e.target.value,
+                          true,
+                        )
                       }
-                      className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none"
+                      className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
                     />
                   </div>
                   <div className="space-y-2">
@@ -849,14 +1023,22 @@ const CreateInventoryItems = ({
 
             <button
               type="button"
-              onClick={() => {
-                console.log("Creating item:", formData);
-                onSuccess?.();
-                onClose();
-              }}
-              className="w-full h-14 bg-[#15BA5C] text-white rounded-[12px] font-bold text-[16px] hover:bg-[#13A652] transition-colors mt-4"
+              disabled={!isFormValid || isSubmitting}
+              onClick={handleCreateItem}
+              className={`w-full h-12 rounded-[12px] font-bold text-[16px] transition-colors mt-4 flex items-center justify-center gap-2 ${
+                isFormValid && !isSubmitting
+                  ? "bg-[#15BA5C] text-white hover:bg-[#13A652] cursor-pointer"
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
+              }`}
             >
-              Create Item
+              {isSubmitting ? (
+                <>
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Item"
+              )}
             </button>
           </>
         )}

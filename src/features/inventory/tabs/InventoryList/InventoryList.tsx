@@ -8,8 +8,10 @@ import {
 } from "lucide-react";
 import NotFound from "../../NotFound";
 import CreateInventoryItems from "./CreateInventoryItems";
+import ViewAndEditInventoryList from "./ViewAndEditInventoryList";
 import { Pagination } from "@/shared/Pagination/pagination";
 import { useBusinessStore } from "@/stores/useBusinessStore";
+import { useAuthStore } from "@/stores/authStore";
 import { format } from "date-fns";
 import InventoryListFilter, {
   InventoryFilterState,
@@ -20,10 +22,15 @@ const InventoryList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isViewEditOpen, setIsViewEditOpen] = useState(false);
+  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<
+    string | null
+  >(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "ASC" | "DESC";
@@ -33,6 +40,7 @@ const InventoryList = () => {
   });
 
   const { selectedOutlet } = useBusinessStore();
+  const authUser = useAuthStore((s) => s.user);
 
   const [filters, setFilters] = useState<InventoryFilterState>({
     category: "All",
@@ -164,31 +172,89 @@ const InventoryList = () => {
       const result = await api.dbQuery(sql, dataParams);
       setItems(result || []);
 
-      // 3. Fetch unique categories and users for filter dropdowns if not already loaded
-      if (categories.length === 0) {
-        const catSql =
-          "SELECT DISTINCT category FROM item_master WHERE businessId = ? ORDER BY category ASC";
-        const catResult = await api.dbQuery(catSql, [
-          selectedOutlet.businessId,
-        ]);
-        setCategories(
-          catResult.map((c: any) => ({ value: c.category, label: c.category })),
-        );
+      // 3. Fetch unique categories and users for filter dropdowns
+      const catSql = `
+        SELECT DISTINCT im.category as category
+        FROM inventory_item ii
+        JOIN inventory i ON ii.inventoryId = i.id
+        JOIN item_master im ON ii.itemMasterId = im.id
+        WHERE i.outletId = ? AND ii.isDeleted = 0 AND im.category IS NOT NULL AND im.category != ''
+        ORDER BY im.category ASC
+      `;
+      const [catResult, systemDefaultRows] = await Promise.all([
+        api.dbQuery(catSql, [selectedOutlet.id]),
+        api.dbQuery(
+          "SELECT data FROM system_default WHERE key = ? AND outletId = ?",
+          ["item-category", selectedOutlet.id],
+        ),
+      ]);
+
+      const categorySet = new Set<string>();
+      (catResult || []).forEach((c: any) => {
+        if (c?.category) categorySet.add(String(c.category));
+      });
+      (systemDefaultRows || []).forEach((r: any) => {
+        try {
+          const parsed = JSON.parse(r.data);
+          const arr = Array.isArray(parsed) ? parsed : [parsed];
+          arr.forEach((x: any) => {
+            const name = x?.name ?? x;
+            if (name) categorySet.add(String(name));
+          });
+        } catch {}
+      });
+
+      const categoryOptions = Array.from(categorySet)
+        .sort((a, b) => a.localeCompare(b))
+        .map((c) => ({ value: c, label: c }));
+      setCategories(categoryOptions);
+
+      const userSql = `
+        SELECT DISTINCT ii.addedBy as addedBy
+        FROM inventory_item ii
+        JOIN inventory i ON ii.inventoryId = i.id
+        WHERE i.outletId = ? AND ii.addedBy IS NOT NULL AND ii.addedBy != ''
+        ORDER BY ii.addedBy ASC
+      `;
+      const userResult = await api.dbQuery(userSql, [selectedOutlet.id]);
+      const userIds = (userResult || [])
+        .map((u: any) => u.addedBy)
+        .filter(Boolean);
+
+      let nameRows: any[] = [];
+      if (userIds.length > 0) {
+        const placeholders = userIds.map(() => "?").join(",");
+        const nameSql = `SELECT id, fullName FROM user WHERE id IN (${placeholders})`;
+        nameRows = await api.dbQuery(nameSql, userIds);
       }
-      if (users.length === 0) {
-        const userSql =
-          "SELECT DISTINCT addedBy FROM inventory_item WHERE addedBy IS NOT NULL ORDER BY addedBy ASC";
-        const userResult = await api.dbQuery(userSql);
-        setUsers(
-          userResult.map((u: any) => ({ value: u.addedBy, label: u.addedBy })),
-        );
-      }
+
+      setUsers(
+        userIds.map((id: string) => {
+          const found = nameRows.find((r: any) => r.id === id);
+          const authId = authUser?.id != null ? String(authUser.id) : null;
+          const fallbackName =
+            authId && id === authId && authUser?.name
+              ? authUser.name
+              : undefined;
+          return { value: id, label: found?.fullName || fallbackName || id };
+        }),
+      );
     } catch (err) {
       console.error("Failed to fetch inventory:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedOutlet, searchTerm, filters, currentPage, itemsPerPage]);
+  }, [
+    selectedOutlet,
+    searchTerm,
+    filters,
+    currentPage,
+    itemsPerPage,
+    refreshNonce,
+    sortConfig,
+    authUser?.id,
+    authUser?.name,
+  ]);
 
   useEffect(() => {
     fetchInventory();
@@ -341,9 +407,18 @@ const InventoryList = () => {
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-3 py-5 text-sm font-medium text-[#15BA5C]">
-                        {item.itemCode ||
-                          item.id?.slice(0, 8).toUpperCase() ||
-                          "N/A"}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedInventoryItemId(item.id);
+                            setIsViewEditOpen(true);
+                          }}
+                          className="hover:underline"
+                        >
+                          {item.itemCode ||
+                            item.id?.slice(0, 8).toUpperCase() ||
+                            "N/A"}
+                        </button>
                       </td>
                       <td className="px-3 py-5 text-sm font-bold text-[#1C1B20]">
                         {item.itemName}
@@ -408,7 +483,19 @@ const InventoryList = () => {
               onClose={() => setIsCreateModalOpen(false)}
               onSuccess={() => {
                 setIsCreateModalOpen(false);
-                fetchInventory();
+                setSearchTerm("");
+                setFilters({
+                  category: "All",
+                  minStockLevel: "",
+                  maxStockLevel: "",
+                  reOrderLevel: "",
+                  actionBy: "All",
+                  lastUpdate: undefined,
+                  itemCode: "",
+                });
+                setSortConfig({ key: "updatedAt", direction: "DESC" });
+                setCurrentPage(1);
+                setRefreshNonce((n) => n + 1);
               }}
             />
           </div>
@@ -424,6 +511,21 @@ const InventoryList = () => {
         initialFilters={filters}
         categories={categories}
         users={users}
+      />
+
+      <ViewAndEditInventoryList
+        isOpen={isViewEditOpen}
+        inventoryItemId={selectedInventoryItemId}
+        onClose={() => {
+          setIsViewEditOpen(false);
+          setSelectedInventoryItemId(null);
+        }}
+        onUpdated={() => {
+          setRefreshNonce((n) => n + 1);
+        }}
+        onDeleted={() => {
+          setRefreshNonce((n) => n + 1);
+        }}
       />
     </div>
   );

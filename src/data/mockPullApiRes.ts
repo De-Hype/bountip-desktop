@@ -2,7 +2,7 @@
   "status": "success",
   "message": "Pulled full data for user",
   "syncType": "full",
-  "currentTimestamp": "2026-03-23T11:14:10.458Z",
+  "currentTimestamp": "2026-03-24T17:10:29.748Z",
   "data": {
     "user": {
       "id": "147b4cc7-3fef-47af-9b2e-103ba5abd161",
@@ -18,14 +18,14 @@
       "isEmailVerified": true,
       "isPin": true,
       "isDeleted": false,
-      "lastLoginAt": "2026-03-23T09:34:54.852Z",
+      "lastLoginAt": "2026-03-24T13:41:04.028Z",
       "status": "active",
       "authProvider": null,
       "providerId": null,
       "publicId": null,
       "providerData": null,
       "createdAt": "2026-01-23T15:28:18.668Z",
-      "updatedAt": "2026-03-23T08:34:55.110Z",
+      "updatedAt": "2026-03-24T12:41:04.452Z",
       "lastSyncedAt": null,
       "recordId": null,
       "version": 5
@@ -165,12 +165,12 @@
           {
             "id": "0fe8eacf-5a0e-460f-8508-70c6daf0944f",
             "name": "Special Ones",
-            "description": "Test",
+            "description": "Tests",
             "pricingRules": {
               "markupPercentage": 0,
               "discountPercentage": 0,
               "fixedMarkup": 0,
-              "fixedDiscount": 300
+              "fixedDiscount": 100
             },
             "isActive": true,
             "isNew": false,
@@ -265,13 +265,13 @@
           "showLogo": true
         },
         "generalSettings": null,
-        "createdAt": "2026-03-19T02:08:41.000Z",
-        "updatedAt": "2026-03-19T02:08:41.000Z",
+        "createdAt": "2026-03-24T13:17:05.000Z",
+        "updatedAt": "2026-03-24T13:17:05.000Z",
         "lastSyncedAt": null,
         "businessId": "d2098444-28c9-44ff-b73d-4d4583eab575",
         "bankDetails": null,
         "recordId": null,
-        "version": 20
+        "version": 34
       },
       {
         "id": "34d1829c-596d-4eba-93cb-cf4447adf1be",
@@ -906,34 +906,6 @@
     ],
     "products": [
       {
-        "id": "3abe98cf-341c-4dda-958f-cdfa6631a98c",
-        "name": "aa cakes",
-        "isActive": true,
-        "description": "",
-        "category": "cake",
-        "price": "100.00",
-        "preparationArea": null,
-        "weight": "100.00",
-        "productCode": null,
-        "weightScale": "gram",
-        "productAvailableStock": null,
-        "packagingMethod": [],
-        "priceTierId": null,
-        "allergenList": null,
-        "logoUrl": "https://res.cloudinary.com/drddkbcc5/image/upload/v1773324521/uploads/m6mosv1cjqx2mhrv9st1.png",
-        "logoHash": null,
-        "leadTime": 300,
-        "availableAtStorefront": false,
-        "createdAtStorefront": true,
-        "isDeleted": false,
-        "createdAt": "2026-03-20T01:03:57.000Z",
-        "updatedAt": "2026-03-20T01:03:57.000Z",
-        "lastSyncedAt": null,
-        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
-        "recordId": null,
-        "version": 31
-      },
-      {
         "id": "958da755-f5e9-4e73-ad95-7f9ceffda683",
         "name": "bento cake",
         "isActive": true,
@@ -962,11 +934,71 @@
         "createdAtStorefront": true,
         "isDeleted": false,
         "createdAt": "2026-02-20T16:54:00.349Z",
-        "updatedAt": "2026-03-18T12:36:05.484Z",
-        "lastSyncedAt": "2026-03-18T13:36:04.668Z",
+        "updatedAt": "2026-03-23T18:48:34.759Z",
+        "lastSyncedAt": "2026-03-23T19:48:34.236Z",
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "recordId": null,
+        "version": 4
+      },
+      {
+        "id": "38ede393-33fa-41b6-ae1e-2153353ef941",
+        "name": "cup cake",
+        "isActive": true,
+        "description": "",
+        "category": "cake",
+        "price": "100.00",
+        "preparationArea": "bakery",
+        "weight": "10.00",
+        "productCode": "P-B4638E42993D8E",
+        "weightScale": "gram",
+        "productAvailableStock": "1.00",
+        "packagingMethod": [
+          "nylon"
+        ],
+        "priceTierId": [],
+        "allergenList": {
+          "allergies": []
+        },
+        "logoUrl": "https://res.cloudinary.com/drddkbcc5/image/upload/v1772639349/uploads/ekppms4y4w5om8qtr2bm.jpg",
+        "logoHash": "https://res.cloudinary.com/drddkbcc5/image/upload/v1772639349/uploads/ekppms4y4w5om8qtr2bm.jpg",
+        "leadTime": 300,
+        "availableAtStorefront": true,
+        "createdAtStorefront": true,
+        "isDeleted": false,
+        "createdAt": "2026-03-04T15:49:15.989Z",
+        "updatedAt": "2026-03-23T18:48:32.997Z",
+        "lastSyncedAt": "2026-03-23T19:48:32.078Z",
         "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
         "recordId": null,
         "version": 2
+      },
+      {
+        "id": "3abe98cf-341c-4dda-958f-cdfa6631a98c",
+        "name": "aa cakes",
+        "isActive": true,
+        "description": "",
+        "category": "cake",
+        "price": "100.00",
+        "preparationArea": null,
+        "weight": "100.00",
+        "productCode": null,
+        "weightScale": "gram",
+        "productAvailableStock": null,
+        "packagingMethod": [],
+        "priceTierId": null,
+        "allergenList": null,
+        "logoUrl": "https://res.cloudinary.com/drddkbcc5/image/upload/v1773324521/uploads/m6mosv1cjqx2mhrv9st1.png",
+        "logoHash": null,
+        "leadTime": 300,
+        "availableAtStorefront": false,
+        "createdAtStorefront": true,
+        "isDeleted": false,
+        "createdAt": "2026-03-20T01:03:57.000Z",
+        "updatedAt": "2026-03-20T01:03:57.000Z",
+        "lastSyncedAt": null,
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "recordId": null,
+        "version": 31
       },
       {
         "id": "ad2db76a-51f2-4386-bbfd-241ccba5345a",
@@ -1159,38 +1191,6 @@
         "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
         "recordId": null,
         "version": 0
-      },
-      {
-        "id": "8ce22967-777c-48a2-a380-52552f8f7b70",
-        "name": "sausage roll",
-        "isActive": true,
-        "description": "",
-        "category": "pastries-&-savoury-items",
-        "price": "1000.00",
-        "preparationArea": "Kitchen",
-        "weight": "100.00",
-        "productCode": "ANPR-437DE266A8266A",
-        "weightScale": "g",
-        "productAvailableStock": null,
-        "packagingMethod": [
-          "paper bag"
-        ],
-        "priceTierId": [],
-        "allergenList": {
-          "allergies": []
-        },
-        "logoUrl": "",
-        "logoHash": "",
-        "leadTime": 15,
-        "availableAtStorefront": false,
-        "createdAtStorefront": true,
-        "isDeleted": false,
-        "createdAt": "2026-03-13T13:52:16.794Z",
-        "updatedAt": "2026-03-13T13:52:16.794Z",
-        "lastSyncedAt": "2026-03-13T14:54:02.599Z",
-        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
-        "recordId": null,
-        "version": 1
       },
       {
         "id": "a4d4f2b0-26c2-414d-9252-667e62e8f3c6",
@@ -1449,6 +1449,38 @@
         "version": 1
       },
       {
+        "id": "8ce22967-777c-48a2-a380-52552f8f7b70",
+        "name": "sausage roll",
+        "isActive": true,
+        "description": "",
+        "category": "pastries-&-savoury-items",
+        "price": "1000.00",
+        "preparationArea": "Kitchen",
+        "weight": "100.00",
+        "productCode": "ANPR-437DE266A8266A",
+        "weightScale": "g",
+        "productAvailableStock": null,
+        "packagingMethod": [
+          "paper bag"
+        ],
+        "priceTierId": [],
+        "allergenList": {
+          "allergies": []
+        },
+        "logoUrl": "",
+        "logoHash": "",
+        "leadTime": 15,
+        "availableAtStorefront": false,
+        "createdAtStorefront": true,
+        "isDeleted": false,
+        "createdAt": "2026-03-13T13:52:16.794Z",
+        "updatedAt": "2026-03-13T13:52:16.794Z",
+        "lastSyncedAt": "2026-03-13T14:54:02.599Z",
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "recordId": null,
+        "version": 1
+      },
+      {
         "id": "7fb523d5-277d-4240-9f99-a06c44bedc8d",
         "name": "egg roll",
         "isActive": true,
@@ -1584,40 +1616,6 @@
         "createdAt": "2026-02-05T08:14:41.072Z",
         "updatedAt": "2026-03-05T12:01:39.777Z",
         "lastSyncedAt": "2026-03-05T12:38:02.862Z",
-        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
-        "recordId": null,
-        "version": 0
-      },
-      {
-        "id": "8ff84cff-96d0-414d-bc78-2b8f8ae7bf0f",
-        "name": "milky loaf",
-        "isActive": true,
-        "description": "Fresh mixed vegetables",
-        "category": "salad",
-        "price": "4.50",
-        "preparationArea": "kitchen",
-        "weight": "200.00",
-        "productCode": "ANPR-796EBB96783E93",
-        "weightScale": "g",
-        "productAvailableStock": null,
-        "packagingMethod": [
-          "container"
-        ],
-        "priceTierId": [],
-        "allergenList": {
-          "allergies": [
-            "milk"
-          ]
-        },
-        "logoUrl": "",
-        "logoHash": "",
-        "leadTime": 15,
-        "availableAtStorefront": true,
-        "createdAtStorefront": true,
-        "isDeleted": false,
-        "createdAt": "2026-01-26T11:57:06.685Z",
-        "updatedAt": "2026-03-05T12:01:39.777Z",
-        "lastSyncedAt": "2026-03-05T13:02:12.409Z",
         "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
         "recordId": null,
         "version": 0
@@ -2011,33 +2009,35 @@
         "version": 0
       },
       {
-        "id": "38ede393-33fa-41b6-ae1e-2153353ef941",
-        "name": "cup cake",
+        "id": "8ff84cff-96d0-414d-bc78-2b8f8ae7bf0f",
+        "name": "milky loaf",
         "isActive": true,
-        "description": "",
-        "category": "cake",
-        "price": "100.00",
-        "preparationArea": "bakery",
-        "weight": "10.00",
-        "productCode": "P-B4638E42993D8E",
-        "weightScale": "gram",
+        "description": "Fresh mixed vegetables",
+        "category": "salad",
+        "price": "4.50",
+        "preparationArea": "kitchen",
+        "weight": "200.00",
+        "productCode": "ANPR-796EBB96783E93",
+        "weightScale": "g",
         "productAvailableStock": null,
         "packagingMethod": [
-          "nylon"
+          "container"
         ],
         "priceTierId": [],
         "allergenList": {
-          "allergies": []
+          "allergies": [
+            "milk"
+          ]
         },
-        "logoUrl": "https://res.cloudinary.com/drddkbcc5/image/upload/v1772639349/uploads/ekppms4y4w5om8qtr2bm.jpg",
-        "logoHash": "https://res.cloudinary.com/drddkbcc5/image/upload/v1772639349/uploads/ekppms4y4w5om8qtr2bm.jpg",
-        "leadTime": 300,
+        "logoUrl": "",
+        "logoHash": "",
+        "leadTime": 15,
         "availableAtStorefront": true,
         "createdAtStorefront": true,
         "isDeleted": false,
-        "createdAt": "2026-03-04T15:49:15.989Z",
+        "createdAt": "2026-01-26T11:57:06.685Z",
         "updatedAt": "2026-03-05T12:01:39.777Z",
-        "lastSyncedAt": "2026-03-05T13:02:09.658Z",
+        "lastSyncedAt": "2026-03-05T13:02:12.409Z",
         "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
         "recordId": null,
         "version": 0
@@ -2684,11 +2684,63 @@
           {
             "key": "inventory-unit",
             "name": "Cup"
+          },
+          {
+            "key": "inventory-unit",
+            "name": "Truck"
+          },
+          {
+            "key": "inventory-unit",
+            "name": "Crate"
+          },
+          {
+            "key": "inventory-unit",
+            "name": "Piece"
           }
         ],
         "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
         "recordId": null,
         "version": 0
+      },
+      {
+        "id": "68ec6da3-97ec-4c6f-a379-3e3ae435c79c",
+        "key": "item-category",
+        "data": {
+          "name": "Test Category"
+        },
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "recordId": null,
+        "version": 32
+      },
+      {
+        "id": "e1006477-b494-41fb-92f2-9c4c4c86315d",
+        "key": "inventory-unit",
+        "data": {
+          "name": "Litre"
+        },
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "recordId": null,
+        "version": 33
+      },
+      {
+        "id": "002c2474-bdf5-4128-95fa-a650722c182b",
+        "key": "inventory-unit",
+        "data": {
+          "name": "Gram"
+        },
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "recordId": null,
+        "version": 38
+      },
+      {
+        "id": "7d1ef9f3-3ee8-4af5-8bda-8180cffeb2f2",
+        "key": "item-category",
+        "data": {
+          "name": "Processed Goods"
+        },
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "recordId": null,
+        "version": 39
       }
     ],
     "modifiers": [
@@ -11721,6 +11773,23 @@
         "inventoryId": "43c8a636-af2b-4814-b33d-2577e49e8301",
         "recordId": null,
         "version": 0
+      },
+      {
+        "id": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "costMethod": "weighted_average",
+        "costPrice": "0.0000",
+        "currentStockLevel": "5000.0000",
+        "minimumStockLevel": "300.0000",
+        "reOrderLevel": "400.0000",
+        "isDeleted": false,
+        "addedBy": "Anthony Nwanze",
+        "modifiedBy": null,
+        "createdAt": "2026-03-23T11:30:40.864Z",
+        "updatedAt": "2026-03-23T11:30:40.864Z",
+        "itemMasterId": "8f492162-a291-46a8-b0aa-d518e56856e3",
+        "inventoryId": "43c8a636-af2b-4814-b33d-2577e49e8301",
+        "recordId": null,
+        "version": 0
       }
     ],
     "inventoryTraces": [],
@@ -11765,9 +11834,80 @@
         "recordId": null,
         "version": 0,
         "businessId": "d2098444-28c9-44ff-b73d-4d4583eab575"
+      },
+      {
+        "id": "8f492162-a291-46a8-b0aa-d518e56856e3",
+        "name": "Egg",
+        "itemCode": "58IT192944",
+        "category": "Raw materials",
+        "itemType": "raw_material",
+        "unitOfPurchase": "Truck",
+        "unitOfTransfer": "Crate",
+        "unitOfConsumption": "Piece",
+        "displayedUnitOfMeasure": "unitOfPurchase",
+        "transferPerPurchase": "30000.0000",
+        "consumptionPerTransfer": "30.0000",
+        "isTraceable": true,
+        "isTrackable": false,
+        "createdAt": "2026-03-23T11:30:40.864Z",
+        "updatedAt": "2026-03-23T11:30:40.864Z",
+        "recordId": null,
+        "version": 0,
+        "businessId": "d2098444-28c9-44ff-b73d-4d4583eab575"
       }
     ],
     "itemLots": [
+      {
+        "id": "41454bf1-b0a2-4170-9009-2b0eed5ad9c3",
+        "lotNumber": "58LO889594",
+        "quantityPurchased": "5000.0000",
+        "supplierName": "KFX Suppliers",
+        "supplierSesrialNumber": "58SC618316",
+        "supplierAddress": "1206 BEAR CREEK RD APT 110",
+        "currentStockLevel": "5100.0000",
+        "initialStockLevel": "5000.0000",
+        "expiryDate": "2026-11-26T00:00:00.000Z",
+        "costPrice": "250000000.0000",
+        "createdAt": "2026-03-23T11:30:40.864Z",
+        "updatedAt": "2026-03-23T11:30:40.864Z",
+        "itemId": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "da3ba709-e972-4577-aedf-926d445b6df9",
+        "lotNumber": "58LO872912",
+        "quantityPurchased": "10.0000",
+        "supplierName": "KFX Suppliers",
+        "supplierSesrialNumber": "58SC618316",
+        "supplierAddress": "1206 BEAR CREEK RD APT 110",
+        "currentStockLevel": "0.0000",
+        "initialStockLevel": "10.0000",
+        "expiryDate": "2026-03-23T00:00:00.000Z",
+        "costPrice": "100.0000",
+        "createdAt": "2026-03-23T11:44:34.273Z",
+        "updatedAt": "2026-03-23T11:44:34.273Z",
+        "itemId": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "6031ebaa-140f-49bf-885c-dbe11092dbff",
+        "lotNumber": "58LO411015",
+        "quantityPurchased": "10.0000",
+        "supplierName": "KFX Suppliers",
+        "supplierSesrialNumber": "58SC618316",
+        "supplierAddress": "1206 BEAR CREEK RD APT 110",
+        "currentStockLevel": "10.0000",
+        "initialStockLevel": "10.0000",
+        "expiryDate": "2026-03-23T00:00:00.000Z",
+        "costPrice": "30.0000",
+        "createdAt": "2026-03-23T11:52:59.823Z",
+        "updatedAt": "2026-03-23T11:52:59.823Z",
+        "itemId": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "recordId": null,
+        "version": 0
+      },
       {
         "id": "8b2f5fb6-9473-4c2a-a4c7-48a6d77a4680",
         "lotNumber": "58LO030872",
@@ -11775,7 +11915,7 @@
         "supplierName": "",
         "supplierSesrialNumber": "",
         "supplierAddress": "",
-        "currentStockLevel": "30.0000",
+        "currentStockLevel": "10.0000",
         "initialStockLevel": "30.0000",
         "expiryDate": "2027-02-25T00:00:00.000Z",
         "costPrice": "100.0000",
@@ -11817,6 +11957,90 @@
         "version": 0
       },
       {
+        "id": "92a69289-45cd-4a55-bdae-133662f9c585",
+        "changeType": "Stock Received",
+        "previousLevel": "0.0000",
+        "currentLevel": "5000.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "5000.0000",
+        "createdAt": "2026-03-23T11:30:40.864Z",
+        "lotId": "41454bf1-b0a2-4170-9009-2b0eed5ad9c3",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "16beb0ff-70c4-446a-aad2-775f05248388",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "5000.0000",
+        "currentLevel": "5000.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "100.0000",
+        "createdAt": "2026-03-24T10:43:26.315Z",
+        "lotId": "41454bf1-b0a2-4170-9009-2b0eed5ad9c3",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "a230a014-8c22-4be6-b107-6a83fe722104",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "5000.0000",
+        "currentLevel": "5000.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "100.0000",
+        "createdAt": "2026-03-24T10:44:03.792Z",
+        "lotId": "41454bf1-b0a2-4170-9009-2b0eed5ad9c3",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "47f5fa11-0c8f-4d39-82e2-1351884f1811",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "5000.0000",
+        "currentLevel": "5100.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "100.0000",
+        "createdAt": "2026-03-24T10:44:34.139Z",
+        "lotId": "41454bf1-b0a2-4170-9009-2b0eed5ad9c3",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "2e683c1e-3e80-4566-bca6-56101e647c49",
+        "changeType": "Stock Received",
+        "previousLevel": "0.0000",
+        "currentLevel": "10.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.0000",
+        "createdAt": "2026-03-23T11:53:00.990Z",
+        "lotId": "6031ebaa-140f-49bf-885c-dbe11092dbff",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "b77fae40-6bb5-49b1-a74c-641b5e973a15",
+        "changeType": "Stock Deduction",
+        "previousLevel": "10.0000",
+        "currentLevel": "0.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.0000",
+        "createdAt": "2026-03-23T13:48:31.480Z",
+        "lotId": "6031ebaa-140f-49bf-885c-dbe11092dbff",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "a51306a3-e5b3-47a3-b1f5-59d1959df6dd",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "0.0000",
+        "currentLevel": "10.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.0000",
+        "createdAt": "2026-03-24T11:08:49.969Z",
+        "lotId": "6031ebaa-140f-49bf-885c-dbe11092dbff",
+        "recordId": null,
+        "version": 0
+      },
+      {
         "id": "8f3d07d3-601e-4677-9dae-d5fa8296b35a",
         "changeType": "Stock Received",
         "previousLevel": "0.0000",
@@ -11825,6 +12049,42 @@
         "changeAmount": "30.0000",
         "createdAt": "2026-03-23T09:59:08.366Z",
         "lotId": "8b2f5fb6-9473-4c2a-a4c7-48a6d77a4680",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "fe5b59fd-51e5-405e-9429-c1729e534a79",
+        "changeType": "Stock Deduction",
+        "previousLevel": "30.0000",
+        "currentLevel": "10.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "20.0000",
+        "createdAt": "2026-03-23T13:48:31.480Z",
+        "lotId": "8b2f5fb6-9473-4c2a-a4c7-48a6d77a4680",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "65020da3-6de4-422d-bb31-34db828293da",
+        "changeType": "Stock Received",
+        "previousLevel": "0.0000",
+        "currentLevel": "10.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.0000",
+        "createdAt": "2026-03-23T11:44:35.356Z",
+        "lotId": "da3ba709-e972-4577-aedf-926d445b6df9",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "8fb81b56-528d-49da-bc76-d2b34f7cc4d7",
+        "changeType": "Stock Deduction",
+        "previousLevel": "10.0000",
+        "currentLevel": "0.0000",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.0000",
+        "createdAt": "2026-03-23T13:48:31.480Z",
+        "lotId": "da3ba709-e972-4577-aedf-926d445b6df9",
         "recordId": null,
         "version": 0
       }
@@ -11900,6 +12160,16 @@
         "version": 0
       },
       {
+        "id": "11d8965d-4c46-40d5-b8a4-eb917b706044",
+        "totalSupplied": "0.0000",
+        "createdAt": "2026-03-23T11:30:40.864Z",
+        "updatedAt": "2026-03-23T11:30:40.864Z",
+        "supplierId": "ccd8ec76-d8fe-4a2c-8760-e827d386ba42",
+        "itemId": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "recordId": null,
+        "version": 0
+      },
+      {
         "id": "04ff545d-67b6-4afe-81b6-e5383023c9b1",
         "totalSupplied": "0.0000",
         "createdAt": "2026-03-23T10:25:16.933Z",
@@ -11908,10 +12178,136 @@
         "itemId": "b3520c6a-97ff-4a6a-8f49-e4581e0226eb",
         "recordId": null,
         "version": 0
+      },
+      {
+        "id": "829a2477-bc7d-49de-a065-53423b21793d",
+        "totalSupplied": "0.0000",
+        "createdAt": "2026-03-23T11:30:40.864Z",
+        "updatedAt": "2026-03-23T11:30:40.864Z",
+        "supplierId": "d09b3fc9-d162-4825-a3fa-8e924c89af71",
+        "itemId": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "recordId": null,
+        "version": 0
       }
     ],
-    "invoices": [],
-    "invoiceItems": [],
+    "invoices": [
+      {
+        "id": "24c24b38-db45-4081-ae15-48ad07a99a82",
+        "invoiceNumber": "erfgdghf656464656",
+        "subTotal": "0.0000",
+        "totalAmount": "0.0000",
+        "totalItemCount": 1,
+        "status": "Direct",
+        "submittedBy": "Anthony Nwanze",
+        "taxes": [
+          {
+            "name": "VAT",
+            "ratePercent": 10
+          }
+        ],
+        "charges": [
+          {
+            "name": "Delivery",
+            "ratePercent": 1000
+          }
+        ],
+        "createdAt": "2026-03-23T11:39:38.285Z",
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "supplierId": "d09b3fc9-d162-4825-a3fa-8e924c89af71",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "02e31f1b-03af-4d55-ad2e-0f0828ef37b5",
+        "invoiceNumber": "3499535309",
+        "subTotal": "0.0000",
+        "totalAmount": "0.0000",
+        "totalItemCount": 1,
+        "status": "Direct",
+        "submittedBy": "Anthony Nwanze",
+        "taxes": [
+          {
+            "name": "VAT",
+            "ratePercent": 3.4
+          }
+        ],
+        "charges": [
+          {
+            "name": "Delivery",
+            "ratePercent": 1000
+          }
+        ],
+        "createdAt": "2026-03-23T11:44:32.482Z",
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "supplierId": "d09b3fc9-d162-4825-a3fa-8e924c89af71",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "db312538-2fb4-4129-b0d5-106902f17373",
+        "invoiceNumber": "4345654646",
+        "subTotal": "300.0000",
+        "totalAmount": "1316.5000",
+        "totalItemCount": 1,
+        "status": "Direct",
+        "submittedBy": "Anthony Nwanze",
+        "taxes": [
+          {
+            "name": "VAT",
+            "ratePercent": 5.5
+          }
+        ],
+        "charges": [
+          {
+            "name": "Delivery",
+            "ratePercent": 1000
+          }
+        ],
+        "createdAt": "2026-03-23T11:52:58.047Z",
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "supplierId": "d09b3fc9-d162-4825-a3fa-8e924c89af71",
+        "recordId": null,
+        "version": 0
+      }
+    ],
+    "invoiceItems": [
+      {
+        "id": "c43a2f38-20a0-4731-b49e-54d03d5d247e",
+        "description": "N/A",
+        "barcode": null,
+        "quantity": "10.0000",
+        "unitPrice": "100.0000",
+        "inventoryItemId": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "lineTotal": "1000.0000",
+        "invoiceId": "02e31f1b-03af-4d55-ad2e-0f0828ef37b5",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "e84817cc-1719-400f-a1cd-e6d5a7974d9f",
+        "description": "N/A",
+        "barcode": null,
+        "quantity": "10.0000",
+        "unitPrice": "300.0000",
+        "inventoryItemId": "56413f37-bbae-407f-92e4-32ca7cf47fcd",
+        "lineTotal": "3000.0000",
+        "invoiceId": "24c24b38-db45-4081-ae15-48ad07a99a82",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "9bf08016-2514-4664-b1b7-b89cb752d670",
+        "description": "N/A",
+        "barcode": null,
+        "quantity": "10.0000",
+        "unitPrice": "30.0000",
+        "inventoryItemId": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "lineTotal": "300.0000",
+        "invoiceId": "db312538-2fb4-4129-b0d5-106902f17373",
+        "recordId": null,
+        "version": 0
+      }
+    ],
     "purchaseOrders": [],
     "purchaseOrderItems": [],
     "purchaseOrderTimelines": [],
@@ -12571,6 +12967,42 @@
         "version": 1,
         "productionDueDate": "2026-04-03T00:00:00.000Z",
         "productionManager": "Back Smith"
+      },
+      {
+        "id": "320aa81f-fd88-4002-b214-30e8af3eb04d",
+        "status": "Ready",
+        "previousStatus": "Ready",
+        "productionDate": "2026-03-24T00:00:00.000Z",
+        "additionalInformation": "",
+        "productionTime": "00:00:00",
+        "initiator": "Anthony Nwanze",
+        "cancelReason": null,
+        "batchId": "0BTN488755",
+        "scheduleId": "0SCH488863",
+        "createdAt": "2026-03-23T18:45:52.491Z",
+        "updatedAt": "2026-03-23T18:46:31.926Z",
+        "metadata": {
+          "totalItems": 2,
+          "totalOrders": 1,
+          "calculatedAt": "2026-03-23T18:45:52.248Z",
+          "productBreakdown": {
+            "cup cake": {
+              "confirmed": 1,
+              "productId": "38ede393-33fa-41b6-ae1e-2153353ef941",
+              "production": 1
+            },
+            "bento cake": {
+              "confirmed": 1,
+              "productId": "958da755-f5e9-4e73-ad95-7f9ceffda683",
+              "production": 1
+            }
+          }
+        },
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "recordId": null,
+        "version": 1,
+        "productionDueDate": "2026-03-23T00:00:00.000Z",
+        "productionManager": "dave"
       }
     ],
     "productionItems": [
@@ -13193,12 +13625,169 @@
         "orderId": "621fac7e-921f-4006-87c7-1c854687c281",
         "recordId": null,
         "version": 0
+      },
+      {
+        "id": "d4ab80e9-bfe3-455a-9a14-e8da337c067b",
+        "createdAt": "2026-03-23T18:45:52.514Z",
+        "updatedAt": "2026-03-23T18:45:52.514Z",
+        "outletId": "58356262-ee0d-4b07-acf6-a14886f5a18f",
+        "productionId": "320aa81f-fd88-4002-b214-30e8af3eb04d",
+        "orderId": "27930015-ee01-435a-9b72-3ee5f6e055cc",
+        "recordId": null,
+        "version": 0
       }
     ],
-    "components": [],
-    "componentItems": [],
-    "componentLots": [],
-    "componentLotLogs": [],
+    "components": [
+      {
+        "id": "c8da4748-2da4-4cab-9fc4-2c5d83ddaa9a",
+        "name": "Butter Mix",
+        "reference": "58CO809741",
+        "description": "Butter mixed with egg",
+        "howToCreate": "Butter mixed with egg",
+        "image": "",
+        "componentSize": "Small",
+        "componentWeight": "Cup",
+        "minimumStockLevel": 100,
+        "unitOfMeasure": "",
+        "status": "prepared",
+        "createdAt": "2026-03-23T12:23:21.280Z",
+        "updatedAt": "2026-03-23T13:48:31.480Z",
+        "createdBy": "Anthony Nwanze",
+        "updatedBy": null,
+        "deleted_at": null,
+        "inventoryId": "43c8a636-af2b-4814-b33d-2577e49e8301",
+        "recordId": null,
+        "version": 0
+      }
+    ],
+    "componentItems": [
+      {
+        "id": "35e812b7-8453-47ac-86c4-40563c7783ff",
+        "quantity": "2.00",
+        "adjustWaste": "0.01",
+        "isCritical": true,
+        "isRequired": true,
+        "costPrice": "0.00",
+        "createdAt": "2026-03-23T12:23:22.186Z",
+        "updatedAt": "2026-03-23T13:48:31.480Z",
+        "deleted_at": null,
+        "componentId": "c8da4748-2da4-4cab-9fc4-2c5d83ddaa9a",
+        "componentItemLotId": null,
+        "itemId": "43a02f9e-8d3e-42a8-9acb-06c57a1bb048",
+        "recordId": null,
+        "version": 0,
+        "totalCost": "130.0000"
+      },
+      {
+        "id": "8862d51b-c487-4ea7-94ee-d67db8060d76",
+        "quantity": "2.00",
+        "adjustWaste": "0.01",
+        "isCritical": true,
+        "isRequired": true,
+        "costPrice": "0.00",
+        "createdAt": "2026-03-23T12:23:22.186Z",
+        "updatedAt": "2026-03-23T13:48:31.480Z",
+        "deleted_at": null,
+        "componentId": "c8da4748-2da4-4cab-9fc4-2c5d83ddaa9a",
+        "componentItemLotId": null,
+        "itemId": "56413f37-bbae-407f-92e4-32ca7cf47fcd",
+        "recordId": null,
+        "version": 0,
+        "totalCost": "66.6667"
+      }
+    ],
+    "componentLots": [
+      {
+        "id": "6552dd86-ca65-4967-8595-5e3de67f3704",
+        "initialStockLevel": 10,
+        "quantity": "10.00",
+        "currentStockLevel": 55,
+        "ref": "58CL888687",
+        "unitCost": "19.67",
+        "expiry": "2026-06-25T01:00:00.000Z",
+        "createdAt": "2026-03-23T13:48:31.480Z",
+        "updatedAt": "2026-03-24T10:00:06.226Z",
+        "deleted_at": null,
+        "preparedBy": "Anthony Nwanze",
+        "updatedBy": null,
+        "componentId": "c8da4748-2da4-4cab-9fc4-2c5d83ddaa9a",
+        "recordId": null,
+        "version": 0,
+        "totalCost": "196.6667"
+      }
+    ],
+    "componentLotLogs": [
+      {
+        "id": "255ad429-e9c0-4fbd-9ea9-e83a00f3ae2e",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "0.00",
+        "currentLevel": "10.00",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.00",
+        "createdAt": "2026-03-23T13:48:31.480Z",
+        "updatedAt": "2026-03-23T13:48:31.480Z",
+        "deleted_at": null,
+        "lotId": "6552dd86-ca65-4967-8595-5e3de67f3704",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "6de5b999-d906-4184-a1f6-e0ae8b81f0f8",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "10.00",
+        "currentLevel": "20.00",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.00",
+        "createdAt": "2026-03-24T09:55:53.106Z",
+        "updatedAt": "2026-03-24T09:55:53.106Z",
+        "deleted_at": null,
+        "lotId": "6552dd86-ca65-4967-8595-5e3de67f3704",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "663a6a5e-de5d-4b51-98c7-cd219472e50e",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "20.00",
+        "currentLevel": "30.00",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.00",
+        "createdAt": "2026-03-24T09:56:54.724Z",
+        "updatedAt": "2026-03-24T09:56:54.724Z",
+        "deleted_at": null,
+        "lotId": "6552dd86-ca65-4967-8595-5e3de67f3704",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "a08f251f-67fe-4b36-bb6d-bb4f0fa56cb1",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "30.00",
+        "currentLevel": "40.00",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "10.00",
+        "createdAt": "2026-03-24T09:58:14.645Z",
+        "updatedAt": "2026-03-24T09:58:14.645Z",
+        "deleted_at": null,
+        "lotId": "6552dd86-ca65-4967-8595-5e3de67f3704",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "7644e31b-d52e-477a-8cd9-99c80c1a5738",
+        "changeType": "STOCK ADJUSTMENT",
+        "previousLevel": "40.00",
+        "currentLevel": "55.00",
+        "actionTakenBy": "Anthony Nwanze",
+        "changeAmount": "15.00",
+        "createdAt": "2026-03-24T10:00:06.226Z",
+        "updatedAt": "2026-03-24T10:00:06.226Z",
+        "deleted_at": null,
+        "lotId": "6552dd86-ca65-4967-8595-5e3de67f3704",
+        "recordId": null,
+        "version": 0
+      }
+    ],
     "paymentTerms": [
       {
         "id": "1ddb41f2-26c0-491d-ab49-a0fd5b60c233",
@@ -13453,6 +14042,18 @@
         "version": 0
       },
       {
+        "id": "334fd859-1c00-4921-90e3-c0c16dd36e93",
+        "previousAmount": "0.00",
+        "newAmount": "1.00",
+        "difference": "1.00",
+        "varianceType": "add",
+        "createdAt": "2026-03-23T18:46:31.881Z",
+        "updatedAt": "2026-03-23T18:46:31.881Z",
+        "productId": "38ede393-33fa-41b6-ae1e-2153353ef941",
+        "recordId": null,
+        "version": 0
+      },
+      {
         "id": "e0e7dd3f-1a96-4bfd-80e8-5e7b9d614cd0",
         "previousAmount": "0.00",
         "newAmount": "4.00",
@@ -13568,6 +14169,18 @@
         "varianceType": "add",
         "createdAt": "2026-03-18T12:35:04.936Z",
         "updatedAt": "2026-03-18T12:35:04.936Z",
+        "productId": "958da755-f5e9-4e73-ad95-7f9ceffda683",
+        "recordId": null,
+        "version": 0
+      },
+      {
+        "id": "52aac3c2-53bc-4865-8916-210334ae18d3",
+        "previousAmount": "1.00",
+        "newAmount": "1.00",
+        "difference": "1.00",
+        "varianceType": "add",
+        "createdAt": "2026-03-23T18:46:31.897Z",
+        "updatedAt": "2026-03-23T18:46:31.897Z",
         "productId": "958da755-f5e9-4e73-ad95-7f9ceffda683",
         "recordId": null,
         "version": 0

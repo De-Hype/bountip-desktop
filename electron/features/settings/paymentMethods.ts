@@ -1,14 +1,15 @@
 import { DatabaseService } from "../../services/DatabaseService";
 import { SYNC_ACTIONS } from "../../types/action.types";
+import { getOutlet } from "../outlets";
 
 export const updatePaymentMethods = async (
   db: DatabaseService,
   payload: {
     outletId: string;
-    paymentMethods: any;
+    methods: any;
   },
 ) => {
-  const { outletId, paymentMethods } = payload;
+  const { outletId, methods } = payload;
 
   // 1. Update local DB
   const now = new Date().toISOString();
@@ -22,13 +23,13 @@ export const updatePaymentMethods = async (
   `,
     {
       outletId,
-      paymentMethods: JSON.stringify(paymentMethods),
+      paymentMethods: JSON.stringify(methods),
       updatedAt: now,
     },
   );
 
   // 2. Queue Sync
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
 
   if (fullOutlet) {
     db.addToQueue({
@@ -39,5 +40,5 @@ export const updatePaymentMethods = async (
     });
   }
 
-  return { success: true, paymentMethods };
+  return { success: true, methods };
 };

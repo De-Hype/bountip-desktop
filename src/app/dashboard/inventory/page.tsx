@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { UploadCloud, Share2, Plus, MoveUpRight } from "lucide-react";
 import { PiTrashFill } from "react-icons/pi";
 import useInventoryStore from "@/stores/useInventoryStore";
@@ -12,26 +12,83 @@ const InventoryPage = () => {
 
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaries, setSummaries] = useState({
-    totalItems: 150,
-    expiringItems: 23,
-    expiredItems: 10,
-    lowStockItems: 100,
-    outOfStockItems: 23,
+    totalItems: 0,
+    expiringItems: 0,
+    expiredItems: 0,
+    lowStockItems: 0,
+    outOfStockItems: 0,
   });
 
+  useEffect(() => {
+    if (!selectedOutlet?.id) return;
+    const api = (window as any).electronAPI;
+    if (!api?.dbQuery) return;
+
+    const fetchSummary = async () => {
+      setIsSummaryLoading(true);
+      try {
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const expiringUntil = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const expiringUntilIso = expiringUntil.toISOString();
+
+        const sql = `
+          WITH lot_min AS (
+            SELECT itemId, MIN(expiryDate) AS minExpiry
+            FROM item_lot
+            WHERE expiryDate IS NOT NULL AND expiryDate != ''
+            GROUP BY itemId
+          ),
+          base AS (
+            SELECT
+              ii.id AS inventoryItemId,
+              COALESCE(ii.currentStockLevel, 0) AS currentStockLevel,
+              COALESCE(ii.minimumStockLevel, 0) AS minimumStockLevel,
+              lot_min.minExpiry AS minExpiry
+            FROM inventory_item ii
+            JOIN inventory i ON ii.inventoryId = i.id
+            LEFT JOIN lot_min ON lot_min.itemId = ii.id
+            WHERE i.outletId = ? AND ii.isDeleted = 0
+          )
+          SELECT
+            COUNT(*) AS totalItems,
+            SUM(CASE WHEN minExpiry IS NOT NULL AND minExpiry < ? THEN 1 ELSE 0 END) AS expiredItems,
+            SUM(CASE WHEN minExpiry IS NOT NULL AND minExpiry >= ? AND minExpiry <= ? THEN 1 ELSE 0 END) AS expiringItems,
+            SUM(CASE WHEN currentStockLevel = 0 THEN 1 ELSE 0 END) AS outOfStockItems,
+            SUM(CASE WHEN currentStockLevel > 0 AND currentStockLevel < minimumStockLevel THEN 1 ELSE 0 END) AS lowStockItems
+          FROM base
+        `;
+
+        const rows = await api.dbQuery(sql, [
+          selectedOutlet.id,
+          nowIso,
+          nowIso,
+          expiringUntilIso,
+        ]);
+        const row = rows?.[0] || {};
+        setSummaries({
+          totalItems: Number(row.totalItems || 0),
+          expiringItems: Number(row.expiringItems || 0),
+          expiredItems: Number(row.expiredItems || 0),
+          lowStockItems: Number(row.lowStockItems || 0),
+          outOfStockItems: Number(row.outOfStockItems || 0),
+        });
+      } catch (err) {
+        console.error("Failed to fetch inventory summary:", err);
+      } finally {
+        setIsSummaryLoading(false);
+      }
+    };
+
+    fetchSummary();
+  }, [selectedOutlet?.id, inventoryItems.length]);
+
   // State for modals/tables visibility
-  const [showTotalNumberOfItemsTable, setShowTotalNumberOfItemsTable] =
-    useState(false);
-  const [showTotalExpiringItemsTable, setShowTotalExpiringItemsTable] =
-    useState(false);
-  const [
-    showTotalNumberOfExpiredItemsTable,
-    setShowTotalNumberOfExpiredItemsTable,
-  ] = useState(false);
-  const [showTotalLowInStockItemsTable, setShowTotalLowInStockItemsTable] =
-    useState(false);
-  const [showTotalOutOfStocksTable, setShowTotalOutOfStocksTable] =
-    useState(false);
+  const [, setShowTotalNumberOfItemsTable] = useState(false);
+  const [, setShowTotalExpiringItemsTable] = useState(false);
+  const [, setShowTotalNumberOfExpiredItemsTable] = useState(false);
+  const [, setShowTotalLowInStockItemsTable] = useState(false);
+  const [, setShowTotalOutOfStocksTable] = useState(false);
   const [isCreateInventoryOpen, setIsCreateInventoryOpen] = useState(false);
 
   return (
@@ -47,15 +104,22 @@ const InventoryPage = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 rounded-lg border border-[#15BA5C] px-4 py-2 text-sm font-medium text-[#15BA5C] hover:bg-green-50">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-lg border border-[#15BA5C] px-4 py-2 text-sm font-medium text-[#15BA5C] hover:bg-green-50"
+          >
             <UploadCloud className="h-4 w-4" />
             Bulk Upload
           </button>
-          <button className="flex items-center gap-2 rounded-lg border border-[#15BA5C] px-4 py-2 text-sm font-medium text-[#15BA5C] hover:bg-green-50">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-lg border border-[#15BA5C] px-4 py-2 text-sm font-medium text-[#15BA5C] hover:bg-green-50"
+          >
             <Share2 className="h-4 w-4" />
             Export
           </button>
           <button
+            type="button"
             onClick={() => setIsCreateInventoryOpen(true)}
             className="flex items-center gap-2 rounded-lg bg-[#15BA5C] px-4 py-2 text-sm font-medium text-white hover:bg-[#119E4D] cursor-pointer"
           >
@@ -171,7 +235,7 @@ const InventoryPage = () => {
 
       {/* Create Inventory Drawer */}
       {isCreateInventoryOpen && (
-        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex justify-end">
+        <div className="fixed inset-0 z-150 bg-black/40 backdrop-blur-sm flex justify-end">
           <div className="w-full max-w-[840px] h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300">
             <CreateInventoryItems
               onClose={() => setIsCreateInventoryOpen(false)}

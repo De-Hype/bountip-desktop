@@ -25,6 +25,10 @@ import { paymentTermSchema } from "./payment_term.schema";
 import { orderSchema } from "./order.schema";
 import { productionSchema } from "./production.schema";
 import { productionItemSchema } from "./production_item.schema";
+import { invoiceSchema } from "./invoice.schema";
+import { invoiceItemSchema } from "./invoice_item.schema";
+import { supplierSchema } from "./supplier.schema";
+import { supplierItemSchema } from "./supplier_item.schema";
 
 export const schemas: TableSchema[] = [
   userSchema,
@@ -53,4 +57,8 @@ export const schemas: TableSchema[] = [
   orderSchema,
   productionSchema,
   productionItemSchema,
+  invoiceSchema,
+  invoiceItemSchema,
+  supplierSchema,
+  supplierItemSchema,
 ];

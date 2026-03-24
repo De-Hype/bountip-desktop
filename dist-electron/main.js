@@ -2168,6 +2168,362 @@ const productionItemSchema = {
     "CREATE INDEX IF NOT EXISTS idx_production_items_orderId ON production_items(orderId)"
   ]
 };
+const invoiceUpsertSql = `
+  INSERT INTO invoices (
+    id,
+    invoiceNumber,
+    subTotal,
+    totalAmount,
+    totalItemCount,
+    status,
+    submittedBy,
+    taxes,
+    charges,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    outletId,
+    supplierId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @invoiceNumber,
+    @subTotal,
+    @totalAmount,
+    @totalItemCount,
+    @status,
+    @submittedBy,
+    @taxes,
+    @charges,
+    @createdAt,
+    @updatedAt,
+    @deletedAt,
+    @outletId,
+    @supplierId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    invoiceNumber = excluded.invoiceNumber,
+    subTotal = excluded.subTotal,
+    totalAmount = excluded.totalAmount,
+    totalItemCount = excluded.totalItemCount,
+    status = excluded.status,
+    submittedBy = excluded.submittedBy,
+    taxes = excluded.taxes,
+    charges = excluded.charges,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt,
+    outletId = excluded.outletId,
+    supplierId = excluded.supplierId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= invoices.version
+     OR excluded.updatedAt >= invoices.updatedAt
+     OR invoices.updatedAt IS NULL
+`;
+const buildInvoiceUpsertParams = (inv) => ({
+  id: inv.id,
+  invoiceNumber: inv.invoiceNumber ?? null,
+  subTotal: parseFloat(inv.subTotal || 0),
+  totalAmount: parseFloat(inv.totalAmount || 0),
+  totalItemCount: Number(inv.totalItemCount || 0),
+  status: inv.status ?? null,
+  submittedBy: inv.submittedBy ?? null,
+  taxes: inv.taxes && typeof inv.taxes === "object" ? JSON.stringify(inv.taxes) : inv.taxes ?? null,
+  charges: inv.charges && typeof inv.charges === "object" ? JSON.stringify(inv.charges) : inv.charges ?? null,
+  createdAt: inv.createdAt ?? null,
+  updatedAt: inv.updatedAt ?? inv.createdAt ?? null,
+  deletedAt: inv.deletedAt ?? null,
+  outletId: inv.outletId ?? null,
+  supplierId: inv.supplierId ?? null,
+  recordId: inv.recordId ?? null,
+  version: Number(inv.version || 0)
+});
+const invoiceSchema = {
+  name: "invoices",
+  create: `
+    CREATE TABLE IF NOT EXISTS invoices (
+      id TEXT PRIMARY KEY,
+      invoiceNumber TEXT,
+      subTotal REAL,
+      totalAmount REAL,
+      totalItemCount INTEGER,
+      status TEXT,
+      submittedBy TEXT,
+      taxes TEXT,
+      charges TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      deletedAt TEXT,
+      outletId TEXT,
+      supplierId TEXT,
+      recordId TEXT,
+      version INTEGER
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_invoices_outletId ON invoices(outletId);",
+    "CREATE INDEX IF NOT EXISTS idx_invoices_supplierId ON invoices(supplierId);",
+    "CREATE INDEX IF NOT EXISTS idx_invoices_createdAt ON invoices(createdAt);"
+  ]
+};
+const invoiceItemUpsertSql = `
+  INSERT INTO invoice_items (
+    id,
+    description,
+    barcode,
+    quantity,
+    unitPrice,
+    inventoryItemId,
+    lineTotal,
+    invoiceId,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @description,
+    @barcode,
+    @quantity,
+    @unitPrice,
+    @inventoryItemId,
+    @lineTotal,
+    @invoiceId,
+    @createdAt,
+    @updatedAt,
+    @deletedAt,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    description = excluded.description,
+    barcode = excluded.barcode,
+    quantity = excluded.quantity,
+    unitPrice = excluded.unitPrice,
+    inventoryItemId = excluded.inventoryItemId,
+    lineTotal = excluded.lineTotal,
+    invoiceId = excluded.invoiceId,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= invoice_items.version
+     OR excluded.updatedAt >= invoice_items.updatedAt
+     OR invoice_items.updatedAt IS NULL
+`;
+const buildInvoiceItemUpsertParams = (ii) => ({
+  id: ii.id,
+  description: ii.description ?? null,
+  barcode: ii.barcode ?? null,
+  quantity: parseFloat(ii.quantity || 0),
+  unitPrice: parseFloat(ii.unitPrice || 0),
+  inventoryItemId: ii.inventoryItemId ?? null,
+  lineTotal: parseFloat(ii.lineTotal || 0),
+  invoiceId: ii.invoiceId ?? null,
+  createdAt: ii.createdAt ?? null,
+  updatedAt: ii.updatedAt ?? ii.createdAt ?? null,
+  deletedAt: ii.deletedAt ?? null,
+  recordId: ii.recordId ?? null,
+  version: Number(ii.version || 0)
+});
+const invoiceItemSchema = {
+  name: "invoice_items",
+  create: `
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id TEXT PRIMARY KEY,
+      description TEXT,
+      barcode TEXT,
+      quantity REAL,
+      unitPrice REAL,
+      inventoryItemId TEXT,
+      lineTotal REAL,
+      invoiceId TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      deletedAt TEXT,
+      recordId TEXT,
+      version INTEGER
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_invoice_items_invoiceId ON invoice_items(invoiceId);",
+    "CREATE INDEX IF NOT EXISTS idx_invoice_items_inventoryItemId ON invoice_items(inventoryItemId);"
+  ]
+};
+const supplierUpsertSql = `
+  INSERT INTO suppliers (
+    id,
+    isActive,
+    name,
+    representativeName,
+    phoneNumbers,
+    emailAddress,
+    address,
+    supplierCode,
+    notes,
+    taxNumber,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    outletId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @isActive,
+    @name,
+    @representativeName,
+    @phoneNumbers,
+    @emailAddress,
+    @address,
+    @supplierCode,
+    @notes,
+    @taxNumber,
+    @createdAt,
+    @updatedAt,
+    @deletedAt,
+    @outletId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    isActive = excluded.isActive,
+    name = excluded.name,
+    representativeName = excluded.representativeName,
+    phoneNumbers = excluded.phoneNumbers,
+    emailAddress = excluded.emailAddress,
+    address = excluded.address,
+    supplierCode = excluded.supplierCode,
+    notes = excluded.notes,
+    taxNumber = excluded.taxNumber,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt,
+    outletId = excluded.outletId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= suppliers.version
+     OR excluded.updatedAt >= suppliers.updatedAt
+     OR suppliers.updatedAt IS NULL
+`;
+const buildSupplierUpsertParams = (s) => ({
+  id: s.id,
+  isActive: s.isActive ? 1 : 0,
+  name: s.name ?? null,
+  representativeName: s.representativeName && typeof s.representativeName === "object" ? JSON.stringify(s.representativeName) : s.representativeName ?? null,
+  phoneNumbers: s.phoneNumbers && typeof s.phoneNumbers === "object" ? JSON.stringify(s.phoneNumbers) : s.phoneNumbers ?? null,
+  emailAddress: s.emailAddress && typeof s.emailAddress === "object" ? JSON.stringify(s.emailAddress) : s.emailAddress ?? null,
+  address: s.address ?? null,
+  supplierCode: s.supplierCode ?? null,
+  notes: s.notes ?? null,
+  taxNumber: s.taxNumber ?? null,
+  createdAt: s.createdAt ?? null,
+  updatedAt: s.updatedAt ?? s.createdAt ?? null,
+  deletedAt: s.deletedAt ?? null,
+  outletId: s.outletId ?? null,
+  recordId: s.recordId ?? null,
+  version: Number(s.version || 0)
+});
+const supplierSchema = {
+  name: "suppliers",
+  create: `
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id TEXT PRIMARY KEY,
+      isActive INTEGER DEFAULT 1 NOT NULL,
+      name TEXT,
+      representativeName TEXT,
+      phoneNumbers TEXT,
+      emailAddress TEXT,
+      address TEXT,
+      supplierCode TEXT,
+      notes TEXT,
+      taxNumber TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      deletedAt TEXT,
+      outletId TEXT,
+      recordId TEXT,
+      version INTEGER
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_suppliers_outletId ON suppliers(outletId);",
+    "CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name);",
+    "CREATE INDEX IF NOT EXISTS idx_suppliers_supplierCode ON suppliers(supplierCode);"
+  ]
+};
+const supplierItemUpsertSql = `
+  INSERT INTO supplier_items (
+    id,
+    totalSupplied,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    supplierId,
+    itemId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @totalSupplied,
+    @createdAt,
+    @updatedAt,
+    @deletedAt,
+    @supplierId,
+    @itemId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    totalSupplied = excluded.totalSupplied,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt,
+    supplierId = excluded.supplierId,
+    itemId = excluded.itemId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= supplier_items.version
+     OR excluded.updatedAt >= supplier_items.updatedAt
+     OR supplier_items.updatedAt IS NULL
+`;
+const buildSupplierItemUpsertParams = (si) => ({
+  id: si.id,
+  totalSupplied: parseFloat(si.totalSupplied || 0),
+  createdAt: si.createdAt ?? null,
+  updatedAt: si.updatedAt ?? si.createdAt ?? null,
+  deletedAt: si.deletedAt ?? null,
+  supplierId: si.supplierId ?? null,
+  itemId: si.itemId ?? null,
+  recordId: si.recordId ?? null,
+  version: Number(si.version || 0)
+});
+const supplierItemSchema = {
+  name: "supplier_items",
+  create: `
+    CREATE TABLE IF NOT EXISTS supplier_items (
+      id TEXT PRIMARY KEY,
+      totalSupplied REAL,
+      createdAt TEXT,
+      updatedAt TEXT,
+      deletedAt TEXT,
+      supplierId TEXT,
+      itemId TEXT,
+      recordId TEXT,
+      version INTEGER
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_supplier_items_supplierId ON supplier_items(supplierId);",
+    "CREATE INDEX IF NOT EXISTS idx_supplier_items_itemId ON supplier_items(itemId);"
+  ]
+};
 const schemas = [
   userSchema,
   productSchema,
@@ -2194,102 +2550,12 @@ const schemas = [
   paymentTermSchema,
   orderSchema,
   productionSchema,
-  productionItemSchema
+  productionItemSchema,
+  invoiceSchema,
+  invoiceItemSchema,
+  supplierSchema,
+  supplierItemSchema
 ];
-function createProductRecord(db, payload, id, now) {
-  const stmt = db.prepare(`
-      INSERT OR REPLACE INTO product (
-        id,
-        name,
-        isActive,
-        description,
-        category,
-        price,
-        preparationArea,
-        weight,
-        productCode,
-        weightScale,
-        productAvailableStock,
-        packagingMethod,
-        priceTierId,
-        allergenList,
-        logoUrl,
-        logoHash,
-        leadTime,
-        availableAtStorefront,
-        createdAtStorefront,
-        isDeleted,
-        createdAt,
-        updatedAt,
-        lastSyncedAt,
-        outletId
-      ) VALUES (
-        @id,
-        @name,
-        @isActive,
-        @description,
-        @category,
-        @price,
-        @preparationArea,
-        @weight,
-        @productCode,
-        @weightScale,
-        @productAvailableStock,
-        @packagingMethod,
-        @priceTierId,
-        @allergenList,
-        @logoUrl,
-        @logoHash,
-        @leadTime,
-        @availableAtStorefront,
-        @createdAtStorefront,
-        @isDeleted,
-        @createdAt,
-        @updatedAt,
-        @lastSyncedAt,
-        @outletId
-      )
-    `);
-  const effectiveAllergenList = payload.allergenList && payload.allergenList.length > 0 ? payload.allergenList : payload.allergens && payload.allergens.length > 0 ? payload.allergens : [];
-  const row = {
-    id,
-    name: payload.name,
-    isActive: payload.isActive ?? 1,
-    description: payload.description ?? null,
-    category: payload.category ?? null,
-    price: payload.price ?? null,
-    preparationArea: payload.preparationArea ?? null,
-    weight: payload.weight ?? null,
-    productCode: payload.productCode ?? null,
-    weightScale: payload.weightScale ?? null,
-    productAvailableStock: payload.productAvailableStock ?? null,
-    packagingMethod: payload.packagingMethod ? JSON.stringify(payload.packagingMethod) : null,
-    priceTierId: payload.priceTierId ? JSON.stringify(payload.priceTierId) : null,
-    allergenList: effectiveAllergenList.length > 0 ? JSON.stringify(effectiveAllergenList) : null,
-    logoUrl: payload.logoUrl ?? null,
-    logoHash: payload.logoHash ?? null,
-    leadTime: payload.leadTime ?? null,
-    availableAtStorefront: payload.availableAtStorefront ?? 1,
-    createdAtStorefront: payload.createdAtStorefront ?? 1,
-    isDeleted: payload.isDeleted ?? 0,
-    createdAt: payload.createdAt ?? now,
-    updatedAt: payload.updatedAt ?? now,
-    lastSyncedAt: payload.lastSyncedAt ?? null,
-    outletId: payload.outletId ?? null
-  };
-  stmt.run(row);
-  return row;
-}
-function buildProductSyncOp(row, id, ts) {
-  return {
-    type: "product",
-    op: "upsert",
-    id,
-    outletId: row.outletId,
-    data: row,
-    ts
-  };
-}
 var rng;
 var hasRequiredRng;
 function requireRng() {
@@ -2746,19 +3012,6 @@ class DatabaseService {
       console.log("[DatabaseService] Database closed.");
     }
   }
-  query(sql, params = []) {
-    try {
-      const stmt = this.prepare(sql);
-      if (stmt.reader) {
-        return stmt.all(params);
-      } else {
-        return stmt.run(params);
-      }
-    } catch (error2) {
-      console.error("DB Query Error:", error2);
-      throw error2;
-    }
-  }
   // Identity Methods
   getIdentity() {
     const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
@@ -2809,6 +3062,34 @@ class DatabaseService {
     }
     return result;
   }
+  query(sql, params = []) {
+    try {
+      const stmt = this.prepare(sql);
+      if (stmt.reader) {
+        return stmt.all(params);
+      }
+      return stmt.run(params);
+    } catch (error2) {
+      console.error("DB Query Error:", error2);
+      throw error2;
+    }
+  }
+  run(sql, params = []) {
+    try {
+      return this.prepare(sql).run(params);
+    } catch (error2) {
+      console.error("DB Run Error:", error2);
+      throw error2;
+    }
+  }
+  get(sql, params = []) {
+    try {
+      return this.prepare(sql).get(params);
+    } catch (error2) {
+      console.error("DB Get Error:", error2);
+      throw error2;
+    }
+  }
   getUserProfile() {
     const identity = this.getIdentity();
     const row = this.prepare("SELECT * FROM user LIMIT 1").get();
@@ -2850,40 +3131,6 @@ class DatabaseService {
     const row = this.prepare("SELECT id FROM user LIMIT 1").get();
     if (row && row.id) return String(row.id);
     return null;
-  }
-  saveLoginHash(hash) {
-    this.prepare(
-      "INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)"
-    ).run("login_hash", JSON.stringify({ hash }));
-  }
-  getLoginHash() {
-    const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
-      "login_hash"
-    );
-    if (!row) return null;
-    try {
-      const parsed = JSON.parse(row.value);
-      return parsed.hash ?? null;
-    } catch {
-      return null;
-    }
-  }
-  savePinHash(hash) {
-    this.prepare(
-      "INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)"
-    ).run("pin_hash", JSON.stringify({ hash }));
-  }
-  getPinHash() {
-    const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
-      "pin_hash"
-    );
-    if (!row) return null;
-    try {
-      const parsed = JSON.parse(row.value);
-      return parsed.hash ?? null;
-    } catch {
-      return null;
-    }
   }
   getDeviceId() {
     const row = this.prepare("SELECT value FROM identity WHERE key = ?").get(
@@ -2973,7 +3220,7 @@ class DatabaseService {
   getSystemDefaults(key, outletId) {
     if (outletId) {
       return this.prepare(
-        "SELECT * FROM system_default WHERE key = ? AND outletId = ?"
+        "SELECT * FROM system_default WHERE key = ? AND (outletId = ? OR outletId IS NULL)"
       ).all(key, outletId);
     }
     return this.prepare("SELECT * FROM system_default WHERE key = ?").all(
@@ -3062,145 +3309,11 @@ class DatabaseService {
     transaction(list);
     return true;
   }
-  saveOutletOnboarding(payload) {
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    this.prepare(
-      `
-        UPDATE business_outlet
-        SET
-          country = COALESCE(@country, country),
-          address = COALESCE(@address, address),
-          businessType = COALESCE(@businessType, businessType),
-          currency = COALESCE(@currency, currency),
-          revenueRange = COALESCE(@revenueRange, revenueRange),
-          logoUrl = COALESCE(@logoUrl, logoUrl),
-          isOfflineImage = COALESCE(@isOfflineImage, isOfflineImage),
-          localLogoPath = COALESCE(@localLogoPath, localLogoPath),
-          isOnboarded = 1,
-          updatedAt = @updatedAt
-        WHERE id = @outletId
-      `
-    ).run({
-      outletId: payload.outletId,
-      country: payload.data.country,
-      address: payload.data.address,
-      businessType: payload.data.businessType,
-      currency: payload.data.currency,
-      revenueRange: payload.data.revenueRange,
-      logoUrl: payload.data.logoUrl,
-      isOfflineImage: payload.data.isOfflineImage,
-      localLogoPath: payload.data.localLogoPath,
-      updatedAt: now
-    });
-    const fullOutlet = this.getOutlet(payload.outletId);
-    if (fullOutlet) {
-      console.log(
-        `[DatabaseService] Queuing sync for onboarded outlet: ${payload.outletId}`
-      );
-      this.addToQueue({
-        table: "business_outlet",
-        action: SYNC_ACTIONS.UPDATE,
-        data: fullOutlet,
-        id: payload.outletId
-      });
-    }
-  }
-  run(sql, params = []) {
-    return this.prepare(sql).run(params);
-  }
-  getOfflineImages() {
-    return this.prepare(
-      "SELECT * FROM business_outlet WHERE isOfflineImage = 1"
-    ).all();
-  }
-  updateOfflineImage(id, logoUrl) {
+  updateBusinessLogo(id, logoUrl) {
     const now = (/* @__PURE__ */ new Date()).toISOString();
     this.prepare(
       "UPDATE business_outlet SET logoUrl = ?, isOfflineImage = 0, localLogoPath = NULL, updatedAt = ? WHERE id = ?"
     ).run(logoUrl, now, id);
-  }
-  getOutlet(id) {
-    return this.prepare("SELECT * FROM business_outlet WHERE id = ?").get(
-      id
-    );
-  }
-  getOutlets() {
-    return this.prepare("SELECT * FROM business_outlet").all();
-  }
-  getCustomers() {
-    return this.prepare("SELECT * FROM customers").all();
-  }
-  getPaymentTerms(outletId) {
-    return this.prepare(
-      "SELECT * FROM payment_terms WHERE outletId = ? AND deletedAt IS NULL"
-    ).all(outletId);
-  }
-  savePaymentTerm(payload) {
-    const id = payload.id || uuidExports.v4();
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const data = {
-      id,
-      name: payload.name,
-      paymentType: payload.paymentType,
-      instantPayment: payload.instantPayment ? 1 : 0,
-      paymentOnDelivery: payload.paymentOnDelivery ? 1 : 0,
-      paymentInInstallment: payload.paymentInInstallment ? JSON.stringify(payload.paymentInInstallment) : null,
-      outletId: payload.outletId,
-      version: 1,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null
-    };
-    this.prepare(
-      `
-      INSERT INTO payment_terms (
-        id, name, paymentType, instantPayment, paymentOnDelivery, 
-        paymentInInstallment, outletId, version, createdAt, updatedAt, deletedAt
-      ) VALUES (
-        @id, @name, @paymentType, @instantPayment, @paymentOnDelivery, 
-        @paymentInInstallment, @outletId, @version, @createdAt, @updatedAt, @deletedAt
-      ) ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name,
-        paymentType = excluded.paymentType,
-        instantPayment = excluded.instantPayment,
-        paymentOnDelivery = excluded.paymentOnDelivery,
-        paymentInInstallment = excluded.paymentInInstallment,
-        version = version + 1,
-        updatedAt = excluded.updatedAt
-    `
-    ).run(data);
-    this.addToQueue({
-      table: "payment_terms",
-      action: payload.id ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
-      data: {
-        ...data,
-        paymentInInstallment: payload.paymentInInstallment
-        // Send original object to sync
-      },
-      id
-    });
-    return data;
-  }
-  deletePaymentTerm(id) {
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    this.prepare("UPDATE payment_terms SET deletedAt = ? WHERE id = ?").run(
-      now,
-      id
-    );
-    const record = this.prepare("SELECT * FROM payment_terms WHERE id = ?").get(
-      id
-    );
-    if (record) {
-      this.addToQueue({
-        table: "payment_terms",
-        action: SYNC_ACTIONS.DELETE,
-        data: record,
-        id
-      });
-    }
-  }
-  getBusinesses() {
-    return this.prepare("SELECT * FROM business").all();
   }
   applyPullData(payload) {
     const { data } = payload;
@@ -3296,6 +3409,30 @@ class DatabaseService {
           stmt.run(this.sanitize(buildProductionItemUpsertParams(pi)));
         }
       }
+      if (Array.isArray(data.invoices) && data.invoices.length > 0) {
+        const stmt = this.prepare(invoiceUpsertSql);
+        for (const inv of data.invoices) {
+          stmt.run(this.sanitize(buildInvoiceUpsertParams(inv)));
+        }
+      }
+      if (Array.isArray(data.invoiceItems) && data.invoiceItems.length > 0) {
+        const stmt = this.prepare(invoiceItemUpsertSql);
+        for (const ii of data.invoiceItems) {
+          stmt.run(this.sanitize(buildInvoiceItemUpsertParams(ii)));
+        }
+      }
+      if (Array.isArray(data.suppliers) && data.suppliers.length > 0) {
+        const stmt = this.prepare(supplierUpsertSql);
+        for (const s of data.suppliers) {
+          stmt.run(this.sanitize(buildSupplierUpsertParams(s)));
+        }
+      }
+      if (Array.isArray(data.supplierItems) && data.supplierItems.length > 0) {
+        const stmt = this.prepare(supplierItemUpsertSql);
+        for (const si of data.supplierItems) {
+          stmt.run(this.sanitize(buildSupplierItemUpsertParams(si)));
+        }
+      }
       if (Array.isArray(data.paymentTerms) && data.paymentTerms.length > 0) {
         const stmt = this.prepare(`
           INSERT INTO payment_terms (
@@ -3339,78 +3476,6 @@ class DatabaseService {
     });
     tx();
   }
-  createProduct(payload) {
-    const id = payload.id || uuidExports.v4();
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const row = createProductRecord(this.db, payload, id, now);
-    const syncOp = buildProductSyncOp(row, id, now);
-    this.addToQueue(syncOp);
-    return { id };
-  }
-  bulkCreateProducts(payload) {
-    const { outletId, data } = payload;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const createdIds = [];
-    const tx = this.transaction(() => {
-      for (const p of data) {
-        const id = p.id || uuidExports.v4();
-        const productPayload = { ...p, outletId };
-        const row = createProductRecord(this.db, productPayload, id, now);
-        const syncOp = buildProductSyncOp(row, id, now);
-        this.addToQueue(syncOp);
-        createdIds.push(id);
-      }
-    });
-    tx();
-    return { ids: createdIds, status: "success", count: createdIds.length };
-  }
-  bulkCreateCustomers(payload) {
-    const { outletId, data } = payload;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    const createdIds = [];
-    const tx = this.transaction(() => {
-      const stmt = this.prepare(customerUpsertSql);
-      for (const c of data) {
-        const id = c.id || uuidExports.v4();
-        const customerData = {
-          ...c,
-          id,
-          outletId,
-          createdAt: c.createdAt || now,
-          updatedAt: now,
-          status: c.status || "active",
-          customerType: c.customerType || "individual",
-          emailVerified: c.emailVerified ? 1 : 0,
-          phoneVerfied: c.phoneVerfied ? 1 : 0,
-          version: c.version || 1
-        };
-        const params = buildCustomerUpsertParams(customerData);
-        stmt.run(params);
-        this.addToQueue({
-          table: "customers",
-          action: SYNC_ACTIONS.CREATE,
-          data: customerData,
-          id
-        });
-        createdIds.push(id);
-      }
-    });
-    tx();
-    return { ids: createdIds, status: "success", count: createdIds.length };
-  }
-  upsertCustomer(payload) {
-    const id = payload.id || uuidExports.v4();
-    (/* @__PURE__ */ new Date()).toISOString();
-    const params = this.sanitize(buildCustomerUpsertParams(payload));
-    this.prepare(customerUpsertSql).run(params);
-    this.addToQueue({
-      table: "customers",
-      action: payload.createdAt === payload.updatedAt ? SYNC_ACTIONS.CREATE : SYNC_ACTIONS.UPDATE,
-      data: payload,
-      id
-    });
-    return { id };
-  }
   /**
    * Wipes all user-specific data from the local database.
    * This is used when a new user logs in to prevent cross-user data leakage.
@@ -3437,6 +3502,42 @@ class DatabaseService {
     }
   }
 }
+const saveLoginHash = async (db, hash) => {
+  db.run("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)", [
+    "login_hash",
+    JSON.stringify({ hash })
+  ]);
+};
+const getLoginHash = async (db) => {
+  const row = db.get("SELECT value FROM identity WHERE key = ?", [
+    "login_hash"
+  ]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    return parsed.hash ?? null;
+  } catch {
+    return null;
+  }
+};
+const savePinHash = async (db, hash) => {
+  db.run("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)", [
+    "pin_hash",
+    JSON.stringify({ hash })
+  ]);
+};
+const getPinHash = async (db) => {
+  const row = db.get("SELECT value FROM identity WHERE key = ?", [
+    "pin_hash"
+  ]);
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.value);
+    return parsed.hash ?? null;
+  } catch {
+    return null;
+  }
+};
 const SERVICE_NAME = "bountip-desktop";
 const ACCOUNT_NAME = "auth-tokens";
 class AuthService {
@@ -3474,29 +3575,29 @@ class AuthService {
   saveUser(user) {
     this.db.saveIdentity(user);
   }
-  saveLoginHash(email, password) {
-    const normalizedEmail = (email || "").trim().toLowerCase();
-    const raw = `${normalizedEmail}::${password}`;
-    const hash = crypto.createHash("sha256").update(raw).digest("hex");
-    this.db.saveLoginHash(hash);
+  async saveLoginHash(email, password) {
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = crypto.pbkdf2Sync(password, salt, 1e3, 64, "sha512").toString("hex");
+    await saveLoginHash(this.db, `${salt}:${hash}`);
   }
-  verifyLoginHash(email, password) {
-    const stored = this.db.getLoginHash();
+  async verifyLoginHash(email, password) {
+    const stored = await getLoginHash(this.db);
     if (!stored) return false;
-    const normalizedEmail = (email || "").trim().toLowerCase();
-    const raw = `${normalizedEmail}::${password}`;
-    const hash = crypto.createHash("sha256").update(raw).digest("hex");
-    return stored === hash;
+    const [salt, hash] = stored.split(":");
+    const currentHash = crypto.pbkdf2Sync(password, salt, 1e3, 64, "sha512").toString("hex");
+    return hash === currentHash;
   }
-  savePinHash(pin) {
-    const hash = crypto.createHash("sha256").update(pin).digest("hex");
-    this.db.savePinHash(hash);
+  async savePinHash(pin) {
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = crypto.pbkdf2Sync(pin, salt, 1e3, 64, "sha512").toString("hex");
+    await savePinHash(this.db, `${salt}:${hash}`);
   }
-  verifyPinHash(pin) {
-    const stored = this.db.getPinHash();
+  async verifyPinHash(pin) {
+    const stored = await getPinHash(this.db);
     if (!stored) return false;
-    const hash = crypto.createHash("sha256").update(pin).digest("hex");
-    return stored === hash;
+    const [salt, hash] = stored.split(":");
+    const currentHash = crypto.pbkdf2Sync(pin, salt, 1e3, 64, "sha512").toString("hex");
+    return hash === currentHash;
   }
 }
 const CHECK_URL = "https://seal-app-wzqhf.ondigitalocean.app/api/v1";
@@ -21683,72 +21784,126 @@ ${signature}\r
     }
   }
 }
-const updateBusinessDetails = async (db, payload) => {
-  const { outletId, data } = payload;
-  console.log(data);
-  let isOfflineImage = 0;
-  let localLogoPath = void 0;
-  if (data.logoUrl && data.logoUrl.startsWith("asset://")) {
-    isOfflineImage = 1;
-    try {
-      const urlObj = new URL(data.logoUrl);
-      let filename = urlObj.pathname.replace(/^\//, "");
-      if (!filename && urlObj.host) {
-        filename = urlObj.host;
-      }
-      const userDataPath = app.getPath("userData");
-      localLogoPath = path.join(userDataPath, "assets", filename);
-    } catch (e) {
-      console.error("Failed to parse asset URL", e);
-    }
-  }
+const getOutlet = async (db, id) => {
+  return db.get("SELECT * FROM business_outlet WHERE id = ?", [id]);
+};
+const getOutlets = async (db) => {
+  return db.query("SELECT * FROM business_outlet");
+};
+const saveOutletOnboarding = async (db, payload) => {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   db.run(
     `
-    UPDATE business_outlet
-    SET
-      name = COALESCE(@name, name),
-      email = COALESCE(@email, email),
-      phoneNumber = COALESCE(@phoneNumber, phoneNumber),
-      country = COALESCE(@country, country),
-      state = COALESCE(@state, state),
-      address = COALESCE(@address, address),
-      postalCode = COALESCE(@postalCode, postalCode),
-      businessType = COALESCE(@businessType, businessType),
-      currency = COALESCE(@currency, currency),
-
-      logoUrl = COALESCE(@logoUrl, logoUrl),
-      isOfflineImage = COALESCE(@isOfflineImage, isOfflineImage),
-      localLogoPath = COALESCE(@localLogoPath, localLogoPath),
-      updatedAt = @updatedAt
-    WHERE id = @outletId
-  `,
+      UPDATE business_outlet
+      SET
+        country = COALESCE(@country, country),
+        address = COALESCE(@address, address),
+        businessType = COALESCE(@businessType, businessType),
+        currency = COALESCE(@currency, currency),
+        revenueRange = COALESCE(@revenueRange, revenueRange),
+        logoUrl = COALESCE(@logoUrl, logoUrl),
+        isOfflineImage = COALESCE(@isOfflineImage, isOfflineImage),
+        localLogoPath = COALESCE(@localLogoPath, localLogoPath),
+        isOnboarded = 1,
+        updatedAt = @updatedAt
+      WHERE id = @outletId
+    `,
     {
-      outletId,
-      name: data.name,
-      email: data.email,
-      phoneNumber: data.phoneNumber,
-      country: data.country,
-      state: data.state,
-      address: data.address,
-      postalCode: data.postalCode,
-      businessType: data.businessType,
-      currency: data.currency,
-      logoUrl: data.logoUrl,
-      isOfflineImage,
-      localLogoPath,
+      outletId: payload.outletId,
+      country: payload.data.country,
+      address: payload.data.address,
+      businessType: payload.data.businessType,
+      currency: payload.data.currency,
+      revenueRange: payload.data.revenueRange,
+      logoUrl: payload.data.logoUrl,
+      isOfflineImage: payload.data.isOfflineImage,
+      localLogoPath: payload.data.localLogoPath,
       updatedAt: now
     }
   );
-  if (localLogoPath) {
-    db.addToImageQueue({
-      localPath: localLogoPath,
-      tableName: "business_outlet",
-      recordId: outletId,
-      columnName: "logoUrl"
+  const fullOutlet = await getOutlet(db, payload.outletId);
+  if (fullOutlet) {
+    console.log(
+      `[OutletFeature] Queuing sync for onboarded outlet: ${payload.outletId}`
+    );
+    db.addToQueue({
+      table: "business_outlet",
+      action: SYNC_ACTIONS.UPDATE,
+      data: fullOutlet,
+      id: payload.outletId
     });
-  } else {
-    const fullOutlet = db.getOutlet(outletId);
+  }
+};
+const updateBusinessDetails = async (db, payload) => {
+  const { businessId, outletId, business, location } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const businessFields = [];
+  const businessParams = { businessId, updatedAt: now };
+  if (business.name !== void 0) {
+    businessFields.push("name = @name");
+    businessParams.name = business.name;
+  }
+  if (business.email !== void 0) {
+    businessFields.push("email = @email");
+    businessParams.email = business.email;
+  }
+  if (business.phoneNumber !== void 0) {
+    businessFields.push("phoneNumber = @phoneNumber");
+    businessParams.phoneNumber = business.phoneNumber;
+  }
+  if (business.address !== void 0) {
+    businessFields.push("address = @address");
+    businessParams.address = business.address;
+  }
+  if (business.description !== void 0) {
+    businessFields.push("description = @description");
+    businessParams.description = business.description;
+  }
+  if (business.website !== void 0) {
+    businessFields.push("website = @website");
+    businessParams.website = business.website;
+  }
+  if (businessFields.length > 0) {
+    const businessSql = `
+      UPDATE business
+      SET ${businessFields.join(", ")}, updatedAt = @updatedAt
+      WHERE id = @businessId
+    `;
+    db.run(businessSql, businessParams);
+    const fullBusiness = db.get("SELECT * FROM business WHERE id = ?", [
+      businessId
+    ]);
+    if (fullBusiness) {
+      db.addToQueue({
+        table: "business",
+        action: SYNC_ACTIONS.UPDATE,
+        data: fullBusiness,
+        id: businessId
+      });
+    }
+  }
+  const locationFields = [];
+  const locationParams = { outletId, updatedAt: now };
+  if (location.name !== void 0) {
+    locationFields.push("name = @name");
+    locationParams.name = location.name;
+  }
+  if (location.address !== void 0) {
+    locationFields.push("address = @address");
+    locationParams.address = location.address;
+  }
+  if (location.phoneNumber !== void 0) {
+    locationFields.push("phoneNumber = @phoneNumber");
+    locationParams.phoneNumber = location.phoneNumber;
+  }
+  if (locationFields.length > 0) {
+    const locationSql = `
+      UPDATE business_outlet
+      SET ${locationFields.join(", ")}, updatedAt = @updatedAt
+      WHERE id = @outletId
+    `;
+    db.run(locationSql, locationParams);
+    const fullOutlet = await getOutlet(db, outletId);
     if (fullOutlet) {
       db.addToQueue({
         table: "business_outlet",
@@ -21760,8 +21915,8 @@ const updateBusinessDetails = async (db, payload) => {
   }
   return { success: true };
 };
-const getTiers = (db, outletId) => {
-  const outlet = db.getOutlet(outletId);
+const getTiers = async (db, outletId) => {
+  const outlet = await getOutlet(db, outletId);
   if (!outlet || !outlet.priceTier) return [];
   try {
     return typeof outlet.priceTier === "string" ? JSON.parse(outlet.priceTier) : outlet.priceTier;
@@ -21769,7 +21924,7 @@ const getTiers = (db, outletId) => {
     return [];
   }
 };
-const saveTiers = (db, outletId, priceTier) => {
+const saveTiers = async (db, outletId, priceTier) => {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const priceTierString = JSON.stringify(priceTier);
   db.run(
@@ -21786,7 +21941,7 @@ const saveTiers = (db, outletId, priceTier) => {
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -21798,24 +21953,24 @@ const saveTiers = (db, outletId, priceTier) => {
 };
 const updatePaymentTier = async (db, payload) => {
   const { outletId, priceTier } = payload;
-  saveTiers(db, outletId, priceTier);
+  await saveTiers(db, outletId, priceTier);
   return { success: true };
 };
 const bulkAddPaymentTiers = async (db, payload) => {
   const { outletId, tiers } = payload;
-  const currentTiers = getTiers(db, outletId);
+  const currentTiers = await getTiers(db, outletId);
   const newTiers = tiers.map((tier) => ({
     ...tier,
     id: typeof tier.id === "number" && tier.id < 0 ? uuidExports.v4() : tier.id || uuidExports.v4(),
     isNew: false
   }));
   currentTiers.push(...newTiers);
-  saveTiers(db, outletId, currentTiers);
+  await saveTiers(db, outletId, currentTiers);
   return { success: true, tiers: currentTiers };
 };
 const addPaymentTier = async (db, payload) => {
   const { outletId, tier } = payload;
-  const currentTiers = getTiers(db, outletId);
+  const currentTiers = await getTiers(db, outletId);
   const newTier = {
     ...tier,
     id: typeof tier.id === "number" && tier.id < 0 ? uuidExports.v4() : tier.id || uuidExports.v4(),
@@ -21823,23 +21978,23 @@ const addPaymentTier = async (db, payload) => {
     // Ensure isNew is false when saving to DB
   };
   currentTiers.push(newTier);
-  saveTiers(db, outletId, currentTiers);
+  await saveTiers(db, outletId, currentTiers);
   return { success: true, tier: newTier, tiers: currentTiers };
 };
 const deletePaymentTier = async (db, payload) => {
   const { outletId, tierId } = payload;
-  let currentTiers = getTiers(db, outletId);
+  let currentTiers = await getTiers(db, outletId);
   currentTiers = currentTiers.filter((t) => t.id !== tierId);
-  saveTiers(db, outletId, currentTiers);
+  await saveTiers(db, outletId, currentTiers);
   return { success: true, tiers: currentTiers };
 };
 const editPaymentTier = async (db, payload) => {
   const { outletId, tier } = payload;
-  const currentTiers = getTiers(db, outletId);
+  const currentTiers = await getTiers(db, outletId);
   const index = currentTiers.findIndex((t) => t.id === tier.id);
   if (index !== -1) {
     currentTiers[index] = { ...currentTiers[index], ...tier, isNew: false };
-    saveTiers(db, outletId, currentTiers);
+    await saveTiers(db, outletId, currentTiers);
     return { success: true, tier: currentTiers[index], tiers: currentTiers };
   }
   return { success: false, message: "Tier not found" };
@@ -21861,7 +22016,7 @@ const updateReceiptSettings = async (db, payload) => {
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -21889,7 +22044,7 @@ const updateLabelSettings = async (db, payload) => {
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -21917,7 +22072,7 @@ const updateInvoiceSettings = async (db, payload) => {
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -21945,7 +22100,7 @@ const updateOperatingHours = async (db, payload) => {
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -21957,7 +22112,7 @@ const updateOperatingHours = async (db, payload) => {
   return { success: true, operatingHours };
 };
 const updatePaymentMethods = async (db, payload) => {
-  const { outletId, paymentMethods } = payload;
+  const { outletId, methods } = payload;
   const now = (/* @__PURE__ */ new Date()).toISOString();
   db.run(
     `
@@ -21969,11 +22124,11 @@ const updatePaymentMethods = async (db, payload) => {
   `,
     {
       outletId,
-      paymentMethods: JSON.stringify(paymentMethods),
+      paymentMethods: JSON.stringify(methods),
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -21982,7 +22137,7 @@ const updatePaymentMethods = async (db, payload) => {
       id: outletId
     });
   }
-  return { success: true, paymentMethods };
+  return { success: true, methods };
 };
 const updateTaxSettings = async (db, payload) => {
   const { outletId, settings } = payload;
@@ -22001,7 +22156,7 @@ const updateTaxSettings = async (db, payload) => {
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -22013,23 +22168,23 @@ const updateTaxSettings = async (db, payload) => {
   return { success: true, settings };
 };
 const updateServiceCharges = async (db, payload) => {
-  const { outletId, charges } = payload;
+  const { outletId, settings } = payload;
   const now = (/* @__PURE__ */ new Date()).toISOString();
   db.run(
     `
     UPDATE business_outlet
     SET
-      serviceCharges = @serviceCharges,
+      serviceChargeSettings = @serviceChargeSettings,
       updatedAt = @updatedAt
     WHERE id = @outletId
   `,
     {
       outletId,
-      serviceCharges: JSON.stringify(charges),
+      serviceChargeSettings: JSON.stringify(settings),
       updatedAt: now
     }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -22038,7 +22193,7 @@ const updateServiceCharges = async (db, payload) => {
       id: outletId
     });
   }
-  return { success: true, charges };
+  return { success: true, settings };
 };
 const createOutlet = async (db, payload) => {
   const { businessId, location } = payload;
@@ -22098,7 +22253,9 @@ const updateOutlet = async (db, payload) => {
     WHERE id = @outletId
   `;
   db.run(sql, params);
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = db.get("SELECT * FROM business_outlet WHERE id = ?", [
+    outletId
+  ]);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -22116,7 +22273,9 @@ const deleteOutlet = async (db, payload) => {
     `UPDATE business_outlet SET isDeleted = 1, updatedAt = @updatedAt WHERE id = @outletId`,
     { outletId, updatedAt: now }
   );
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = db.get("SELECT * FROM business_outlet WHERE id = ?", [
+    outletId
+  ]);
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -22127,6 +22286,379 @@ const deleteOutlet = async (db, payload) => {
     });
   }
   return { success: true };
+};
+const createInventoryItem = async (db, payload) => {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const businessId = db.getIdentity()?.businessId || "";
+  const tx = db.transaction(() => {
+    const itemMasterId = uuidExports.v4();
+    const itemMaster = {
+      id: itemMasterId,
+      name: payload.itemName,
+      itemCode: payload.itemCode,
+      businessId,
+      category: payload.itemCategory,
+      itemType: payload.itemType,
+      unitOfPurchase: payload.unitOfPurchase,
+      unitOfTransfer: payload.unitOfTransfer,
+      unitOfConsumption: payload.unitOfConsumption,
+      displayedUnitOfMeasure: payload.displayedUnitOfMeasure,
+      transferPerPurchase: parseFloat(payload.noOfTransferBasedOnPurchase),
+      consumptionPerTransfer: parseFloat(payload.noOfConsumptionUnitBasedOnPurchase) / parseFloat(payload.noOfTransferBasedOnPurchase),
+      isTraceable: payload.makeItemTraceable ? 1 : 0,
+      isTrackable: payload.trackInventory ? 1 : 0,
+      createdAt: now,
+      updatedAt: now,
+      recordId: null,
+      version: 1
+    };
+    db.run(
+      itemMasterUpsertSql,
+      db.sanitize(buildItemMasterUpsertParams(itemMaster))
+    );
+    db.addToQueue({
+      table: "item_master",
+      action: SYNC_ACTIONS.CREATE,
+      data: itemMaster,
+      id: itemMasterId
+    });
+    let inventory = db.query("SELECT * FROM inventory WHERE outletId = ? LIMIT 1", [
+      payload.outletId
+    ])[0];
+    if (!inventory) {
+      const inventoryId = uuidExports.v4();
+      inventory = {
+        id: inventoryId,
+        type: "central",
+        allowProcurement: 1,
+        outletId: payload.outletId,
+        businessId,
+        createdAt: now,
+        updatedAt: now,
+        recordId: null,
+        version: 1
+      };
+      db.run(
+        inventoryUpsertSql,
+        db.sanitize(buildInventoryUpsertParams(inventory))
+      );
+      db.addToQueue({
+        table: "inventory",
+        action: SYNC_ACTIONS.CREATE,
+        data: inventory,
+        id: inventoryId
+      });
+    }
+    const inventoryItemId = uuidExports.v4();
+    const inventoryItem = {
+      id: inventoryItemId,
+      costMethod: "weighted_average",
+      costPrice: parseFloat(payload.costPrice),
+      currentStockLevel: parseFloat(payload.quantityPurchased),
+      minimumStockLevel: parseFloat(payload.minimumStockLevel),
+      reOrderLevel: parseFloat(payload.reOrderLevel),
+      isDeleted: 0,
+      addedBy: db.getSyncUserId(),
+      modifiedBy: db.getSyncUserId(),
+      createdAt: now,
+      updatedAt: now,
+      itemMasterId,
+      inventoryId: inventory.id,
+      recordId: null,
+      version: 1
+    };
+    db.run(
+      inventoryItemUpsertSql,
+      db.sanitize(buildInventoryItemUpsertParams(inventoryItem))
+    );
+    db.addToQueue({
+      table: "inventory_item",
+      action: SYNC_ACTIONS.CREATE,
+      data: inventoryItem,
+      id: inventoryItemId
+    });
+    const itemLotId = uuidExports.v4();
+    let supplierName = "";
+    if (Array.isArray(payload.suppliers)) {
+      const supplierIds = payload.suppliers.filter(Boolean);
+      if (supplierIds.length > 0) {
+        const placeholders = supplierIds.map(() => "?").join(",");
+        const supplierRows = db.query(
+          `SELECT id, name FROM customers WHERE id IN (${placeholders})`,
+          supplierIds
+        );
+        const names = supplierIds.map((id) => {
+          const found = supplierRows.find((r) => r.id === id);
+          return found?.name || id;
+        });
+        supplierName = names.join(", ");
+      }
+    } else {
+      supplierName = payload.suppliers || "";
+    }
+    const itemLot = {
+      id: itemLotId,
+      lotNumber: payload.lotNumber,
+      quantityPurchased: parseFloat(payload.quantityPurchased),
+      supplierName,
+      supplierSesrialNumber: payload.supplierBarcode,
+      supplierAddress: "",
+      currentStockLevel: parseFloat(payload.quantityPurchased),
+      initialStockLevel: parseFloat(payload.quantityPurchased),
+      expiryDate: payload.expiryDate,
+      costPrice: parseFloat(payload.costPrice),
+      createdAt: now,
+      updatedAt: now,
+      itemId: inventoryItemId,
+      recordId: null,
+      version: 1
+    };
+    db.run(itemLotUpsertSql, db.sanitize(buildItemLotUpsertParams(itemLot)));
+    db.addToQueue({
+      table: "item_lot",
+      action: SYNC_ACTIONS.CREATE,
+      data: itemLot,
+      id: itemLotId
+    });
+    return { itemMasterId, inventoryItemId, itemLotId };
+  });
+  return tx();
+};
+function createProductRecord(db, payload, id, now) {
+  const sql = `
+      INSERT OR REPLACE INTO product (
+        id,
+        name,
+        isActive,
+        description,
+        category,
+        price,
+        preparationArea,
+        weight,
+        productCode,
+        weightScale,
+        productAvailableStock,
+        packagingMethod,
+        priceTierId,
+        allergenList,
+        logoUrl,
+        logoHash,
+        leadTime,
+        availableAtStorefront,
+        createdAtStorefront,
+        isDeleted,
+        createdAt,
+        updatedAt,
+        lastSyncedAt,
+        outletId
+      ) VALUES (
+        @id,
+        @name,
+        @isActive,
+        @description,
+        @category,
+        @price,
+        @preparationArea,
+        @weight,
+        @productCode,
+        @weightScale,
+        @productAvailableStock,
+        @packagingMethod,
+        @priceTierId,
+        @allergenList,
+        @logoUrl,
+        @logoHash,
+        @leadTime,
+        @availableAtStorefront,
+        @createdAtStorefront,
+        @isDeleted,
+        @createdAt,
+        @updatedAt,
+        @lastSyncedAt,
+        @outletId
+      )
+    `;
+  const effectiveAllergenList = payload.allergenList && payload.allergenList.length > 0 ? payload.allergenList : payload.allergens && payload.allergens.length > 0 ? payload.allergens : [];
+  const row = {
+    id,
+    name: payload.name,
+    isActive: payload.isActive ?? 1,
+    description: payload.description ?? null,
+    category: payload.category ?? null,
+    price: payload.price ?? null,
+    preparationArea: payload.preparationArea ?? null,
+    weight: payload.weight ?? null,
+    productCode: payload.productCode ?? null,
+    weightScale: payload.weightScale ?? null,
+    productAvailableStock: payload.productAvailableStock ?? null,
+    packagingMethod: payload.packagingMethod ? JSON.stringify(payload.packagingMethod) : null,
+    priceTierId: payload.priceTierId ? JSON.stringify(payload.priceTierId) : null,
+    allergenList: effectiveAllergenList.length > 0 ? JSON.stringify(effectiveAllergenList) : null,
+    logoUrl: payload.logoUrl ?? null,
+    logoHash: payload.logoHash ?? null,
+    leadTime: payload.leadTime ?? null,
+    availableAtStorefront: payload.availableAtStorefront ?? 1,
+    createdAtStorefront: payload.createdAtStorefront ?? 1,
+    isDeleted: payload.isDeleted ?? 0,
+    createdAt: payload.createdAt ?? now,
+    updatedAt: payload.updatedAt ?? now,
+    lastSyncedAt: payload.lastSyncedAt ?? null,
+    outletId: payload.outletId ?? null
+  };
+  db.run(sql, row);
+  return row;
+}
+function buildProductSyncOp(row, id, ts) {
+  return {
+    type: "product",
+    op: "upsert",
+    id,
+    outletId: row.outletId,
+    data: row,
+    ts
+  };
+}
+function createProduct(db, payload) {
+  const id = payload.id || uuidExports.v4();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const row = createProductRecord(db, payload, id, now);
+  const syncOp = buildProductSyncOp(row, id, now);
+  db.addToQueue(syncOp);
+  return { id };
+}
+function bulkCreateProducts(db, payload) {
+  const { outletId, data } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const createdIds = [];
+  const tx = db.transaction(() => {
+    for (const p of data) {
+      const id = p.id || uuidExports.v4();
+      const productPayload = { ...p, outletId };
+      const row = createProductRecord(db, productPayload, id, now);
+      const syncOp = buildProductSyncOp(row, id, now);
+      db.addToQueue(syncOp);
+      createdIds.push(id);
+    }
+  });
+  tx();
+  return { ids: createdIds, status: "success", count: createdIds.length };
+}
+const bulkCreateCustomers = async (db, payload) => {
+  const { outletId, data } = payload;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const createdIds = [];
+  const tx = db.transaction(() => {
+    for (const c of data) {
+      const id = c.id || uuidExports.v4();
+      const customerData = {
+        ...c,
+        id,
+        outletId,
+        createdAt: c.createdAt || now,
+        updatedAt: now,
+        status: c.status || "active",
+        customerType: c.customerType || "individual",
+        emailVerified: c.emailVerified ? 1 : 0,
+        phoneVerfied: c.phoneVerfied ? 1 : 0,
+        version: c.version || 1
+      };
+      const params = buildCustomerUpsertParams(customerData);
+      db.run(customerUpsertSql, db.sanitize(params));
+      db.addToQueue({
+        table: "customers",
+        action: SYNC_ACTIONS.CREATE,
+        data: customerData,
+        id
+      });
+      createdIds.push(id);
+    }
+  });
+  tx();
+  return { ids: createdIds, status: "success", count: createdIds.length };
+};
+const upsertCustomer = async (db, payload) => {
+  const id = payload.id || uuidExports.v4();
+  const params = db.sanitize(buildCustomerUpsertParams(payload));
+  db.run(customerUpsertSql, params);
+  db.addToQueue({
+    table: "customers",
+    action: payload.createdAt === payload.updatedAt ? SYNC_ACTIONS.CREATE : SYNC_ACTIONS.UPDATE,
+    data: payload,
+    id
+  });
+  return { id };
+};
+const getCustomers = async (db) => {
+  return db.query("SELECT * FROM customers");
+};
+const getPaymentTerms = async (db, outletId) => {
+  return db.query(
+    "SELECT * FROM payment_terms WHERE outletId = ? AND deletedAt IS NULL",
+    [outletId]
+  );
+};
+const savePaymentTerm = async (db, payload) => {
+  const id = payload.id || uuidExports.v4();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const data = {
+    id,
+    name: payload.name,
+    paymentType: payload.paymentType,
+    instantPayment: payload.instantPayment ? 1 : 0,
+    paymentOnDelivery: payload.paymentOnDelivery ? 1 : 0,
+    paymentInInstallment: payload.paymentInInstallment ? JSON.stringify(payload.paymentInInstallment) : null,
+    outletId: payload.outletId,
+    version: 1,
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null
+  };
+  db.run(
+    `
+    INSERT INTO payment_terms (
+      id, name, paymentType, instantPayment, paymentOnDelivery, 
+      paymentInInstallment, outletId, version, createdAt, updatedAt, deletedAt
+    ) VALUES (
+      @id, @name, @paymentType, @instantPayment, @paymentOnDelivery, 
+      @paymentInInstallment, @outletId, @version, @createdAt, @updatedAt, @deletedAt
+    ) ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      paymentType = excluded.paymentType,
+      instantPayment = excluded.instantPayment,
+      paymentOnDelivery = excluded.paymentOnDelivery,
+      paymentInInstallment = excluded.paymentInInstallment,
+      version = payment_terms.version + 1,
+      updatedAt = excluded.updatedAt
+  `,
+    data
+  );
+  db.addToQueue({
+    table: "payment_terms",
+    action: payload.id ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
+    data: {
+      ...data,
+      paymentInInstallment: payload.paymentInInstallment
+      // Send original object to sync
+    },
+    id
+  });
+  return data;
+};
+const deletePaymentTerm = async (db, id) => {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  db.run("UPDATE payment_terms SET deletedAt = ? WHERE id = ?", [now, id]);
+  const record = db.query("SELECT * FROM payment_terms WHERE id = ?", [id])[0];
+  if (record) {
+    db.addToQueue({
+      table: "payment_terms",
+      action: SYNC_ACTIONS.DELETE,
+      data: record,
+      id
+    });
+  }
+};
+const getBusinesses = async (db) => {
+  return db.query("SELECT * FROM business");
 };
 protocol.registerSchemesAsPrivileged([
   {
@@ -22246,23 +22778,23 @@ app.whenReady().then(() => {
   );
   ipcMain.handle(
     "db:saveOutletOnboarding",
-    (_event, payload) => dbService.saveOutletOnboarding(payload)
+    (_event, payload) => saveOutletOnboarding(dbService, payload)
   );
-  ipcMain.handle("db:getOutlets", () => dbService.getOutlets());
-  ipcMain.handle("db:getCustomers", () => dbService.getCustomers());
+  ipcMain.handle("db:getOutlets", () => getOutlets(dbService));
+  ipcMain.handle("db:getCustomers", () => getCustomers(dbService));
   ipcMain.handle(
     "db:getPaymentTerms",
-    (_event, outletId) => dbService.getPaymentTerms(outletId)
+    (_event, outletId) => getPaymentTerms(dbService, outletId)
   );
   ipcMain.handle(
     "db:savePaymentTerm",
-    (_event, payload) => dbService.savePaymentTerm(payload)
+    (_event, payload) => savePaymentTerm(dbService, payload)
   );
   ipcMain.handle(
     "db:deletePaymentTerm",
-    (_event, id) => dbService.deletePaymentTerm(id)
+    (_event, id) => deletePaymentTerm(dbService, id)
   );
-  ipcMain.handle("db:getBusinesses", () => dbService.getBusinesses());
+  ipcMain.handle("db:getBusinesses", () => getBusinesses(dbService));
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle(
     "db:updateBusinessDetails",
@@ -22330,19 +22862,23 @@ app.whenReady().then(() => {
   );
   ipcMain.handle(
     "db:createProduct",
-    (_event, payload) => dbService.createProduct(payload)
+    (_event, payload) => createProduct(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:createInventoryItem",
+    (_event, payload) => createInventoryItem(dbService, payload)
   );
   ipcMain.handle(
     "db:bulkCreateProducts",
-    (_event, payload) => dbService.bulkCreateProducts(payload)
+    (_event, payload) => bulkCreateProducts(dbService, payload)
   );
   ipcMain.handle(
     "db:bulkCreateCustomers",
-    (_event, payload) => dbService.bulkCreateCustomers(payload)
+    (_event, payload) => bulkCreateCustomers(dbService, payload)
   );
   ipcMain.handle(
     "db:upsertCustomer",
-    (_event, payload) => dbService.upsertCustomer(payload)
+    (_event, payload) => upsertCustomer(dbService, payload)
   );
   ipcMain.handle(
     "db:query",

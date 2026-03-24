@@ -100,7 +100,9 @@ export const updateOutlet = async (
   db.run(sql, params);
 
   // 2. Queue Sync
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = db.get("SELECT * FROM business_outlet WHERE id = ?", [
+    outletId,
+  ]) as any;
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",
@@ -129,7 +131,9 @@ export const deleteOutlet = async (
   );
 
   // Queue Sync
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = db.get("SELECT * FROM business_outlet WHERE id = ?", [
+    outletId,
+  ]) as any;
   if (fullOutlet) {
     db.addToQueue({
       table: "business_outlet",

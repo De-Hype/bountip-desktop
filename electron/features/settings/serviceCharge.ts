@@ -1,14 +1,15 @@
 import { DatabaseService } from "../../services/DatabaseService";
 import { SYNC_ACTIONS } from "../../types/action.types";
+import { getOutlet } from "../outlets";
 
 export const updateServiceCharges = async (
   db: DatabaseService,
   payload: {
     outletId: string;
-    charges: any;
+    settings: any;
   },
 ) => {
-  const { outletId, charges } = payload;
+  const { outletId, settings } = payload;
 
   // 1. Update local DB
   const now = new Date().toISOString();
@@ -16,19 +17,19 @@ export const updateServiceCharges = async (
     `
     UPDATE business_outlet
     SET
-      serviceCharges = @serviceCharges,
+      serviceChargeSettings = @serviceChargeSettings,
       updatedAt = @updatedAt
     WHERE id = @outletId
   `,
     {
       outletId,
-      serviceCharges: JSON.stringify(charges),
+      serviceChargeSettings: JSON.stringify(settings),
       updatedAt: now,
     },
   );
 
   // 2. Queue Sync
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
 
   if (fullOutlet) {
     db.addToQueue({
@@ -39,5 +40,5 @@ export const updateServiceCharges = async (
     });
   }
 
-  return { success: true, charges };
+  return { success: true, settings };
 };

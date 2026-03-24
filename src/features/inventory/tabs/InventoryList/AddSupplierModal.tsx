@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Info, Trash2 } from "lucide-react";
+import { X, Info, Trash2, Loader2 } from "lucide-react";
 import { PhoneInput } from "@/features/settings/ui/PhoneInput";
 import { getPhoneCountries, PhoneCountry } from "@/utils/getPhoneCountries";
 
 interface AddSupplierModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (supplierData: any) => void;
+  onSave: (supplierData: any) => Promise<void>;
 }
 
 const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
@@ -16,6 +16,7 @@ const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
 }) => {
   const phoneCountries = useMemo(() => getPhoneCountries(), []);
   const [activeTab, setActiveTab] = useState<"basic" | "items">("basic");
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     supplierName: "",
     representatives: [""],
@@ -38,6 +39,7 @@ const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
         notes: "",
       });
       setActiveTab("basic");
+      setIsSaving(false);
     }
   }, [isOpen, phoneCountries]);
 
@@ -82,10 +84,17 @@ const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = () => {
-    if (!isFormValid) return;
-    onSave(formData);
-    onClose();
+  const handleSave = async () => {
+    if (!isFormValid || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(formData);
+    } catch (error) {
+      console.error("Failed to save supplier", error);
+    } finally {
+      setIsSaving(false);
+      onClose();
+    }
   };
 
   const isFormValid =
@@ -208,7 +217,6 @@ const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
                   </button>
                 </div>
               </div>
-
 
               <div className="space-y-4">
                 <label className="text-sm font-semibold text-[#1C1B20]">
@@ -357,14 +365,18 @@ const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={!isFormValid}
-            className={`w-full h-14 rounded-xl font-bold text-[16px] transition-colors ${
-              isFormValid
+            disabled={!isFormValid || isSaving}
+            className={`w-full h-14 rounded-xl font-bold text-[16px] transition-colors flex items-center justify-center ${
+              isFormValid && !isSaving
                 ? "bg-[#15BA5C] text-white hover:bg-[#13A652] cursor-pointer"
                 : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}
           >
-            Save Supplier
+            {isSaving ? (
+              <Loader2 className="size-6 animate-spin" />
+            ) : (
+              "Save Supplier"
+            )}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { DatabaseService } from "../../services/DatabaseService";
 import { SYNC_ACTIONS } from "../../types/action.types";
+import { getOutlet } from "../outlets";
 
 export const updateInvoiceSettings = async (
   db: DatabaseService,
@@ -28,7 +29,7 @@ export const updateInvoiceSettings = async (
   );
 
   // 2. Queue Sync
-  const fullOutlet = db.getOutlet(outletId);
+  const fullOutlet = await getOutlet(db, outletId);
 
   if (fullOutlet) {
     db.addToQueue({

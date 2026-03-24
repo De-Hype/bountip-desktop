@@ -82,7 +82,7 @@ const Toast = ({
   const currentConfig = config[type];
 
   return (
-    <div className="fixed top-7 right-4 z-50 pointer-events-none">
+    <div className="fixed top-7 right-4 z-[2147483647] pointer-events-none">
       <div
         className={`
           ${currentConfig.bgColor} border-l-[5px] ${

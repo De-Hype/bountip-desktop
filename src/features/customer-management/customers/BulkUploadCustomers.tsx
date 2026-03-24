@@ -199,16 +199,16 @@ const BulkUploadCustomers: React.FC<BulkUploadCustomersProps> = ({
       const paymentTermId = row.paymentTermId || row.PaymentTerm || "";
 
       if (!name.trim()) {
-        errors.push(`Row \${rowNumber}: Name is required`);
+        errors.push(`Row ${rowNumber}: Name is required`);
       }
       if (!email.trim() && !phoneNumber.trim()) {
         errors.push(
-          `Row \${rowNumber}: Either Email or Phone Number is required`,
+          `Row ${rowNumber}: Either Email or Phone Number is required`,
         );
       }
       if (!["individual", "organization"].includes(customerType)) {
         errors.push(
-          `Row \${rowNumber}: Type must be 'individual' or 'organization'`,
+          `Row ${rowNumber}: Type must be 'individual' or 'organization'`,
         );
       }
 

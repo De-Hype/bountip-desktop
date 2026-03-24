@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   SlidersHorizontal,
@@ -8,11 +8,13 @@ import {
 } from "lucide-react";
 import NotFound from "../../NotFound";
 import { Pagination } from "@/shared/Pagination/pagination";
+import CreateAddReceive from "./CreateAddReceive";
 
 const AddReceiveList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [items, setItems] = useState<any[]>([]);
+  const [items] = useState<any[]>([]);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -63,26 +65,39 @@ const AddReceiveList = () => {
             placeholder="Search by invoice number, supplier, or..."
             className="w-[380px] h-11 px-4 bg-white border border-gray-200 rounded-l-[10px] outline-none focus:border-[#15BA5C] transition-all text-sm placeholder:text-gray-400"
           />
-          <button className="h-11 px-4 bg-[#15BA5C] text-white rounded-r-[10px] hover:bg-[#119E4D] transition-colors cursor-pointer flex items-center justify-center">
+          <button
+            type="button"
+            className="h-11 px-4 bg-[#15BA5C] text-white rounded-r-[10px] hover:bg-[#119E4D] transition-colors cursor-pointer flex items-center justify-center"
+          >
             <Search className="size-5" />
           </button>
         </div>
 
         <div className="flex items-center gap-3">
           {/* More Actions Button */}
-          <button className="h-11 px-5 bg-white border border-gray-200 rounded-[10px] text-[14px] font-medium text-[#4B5563] hover:bg-gray-50 transition-all flex items-center gap-2 cursor-pointer">
+          <button
+            type="button"
+            className="h-11 px-5 bg-white border border-gray-200 rounded-[10px] text-[14px] font-medium text-[#4B5563] hover:bg-gray-50 transition-all flex items-center gap-2 cursor-pointer"
+          >
             <MoreHorizontal className="size-4 text-gray-400" />
             More Actions
           </button>
 
           {/* Filters Button */}
-          <button className="h-11 px-5 bg-white border border-gray-200 rounded-[10px] text-[14px] font-medium text-[#4B5563] hover:bg-gray-50 transition-all flex items-center gap-2 cursor-pointer">
+          <button
+            type="button"
+            className="h-11 px-5 bg-white border border-gray-200 rounded-[10px] text-[14px] font-medium text-[#4B5563] hover:bg-gray-50 transition-all flex items-center gap-2 cursor-pointer"
+          >
             <SlidersHorizontal className="size-4 text-gray-400" />
             Filters
           </button>
 
           {/* Add Button */}
-          <button className="h-11 px-5 bg-[#15BA5C] text-white rounded-[10px] text-[14px] font-medium hover:bg-[#119E4D] transition-all flex items-center gap-2 cursor-pointer">
+          <button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            className="h-11 px-5 bg-[#15BA5C] text-white rounded-[10px] text-[14px] font-medium hover:bg-[#119E4D] transition-all flex items-center gap-2 cursor-pointer"
+          >
             <Plus className="size-4" />
             Add
           </button>
@@ -115,7 +130,7 @@ const AddReceiveList = () => {
                 {isLoading ? (
                   <TableSkeleton />
                 ) : (
-                  items.map((item, index) => (
+                  items.map((_, index) => (
                     <tr
                       key={index}
                       className="hover:bg-gray-50 transition-colors"
@@ -132,7 +147,7 @@ const AddReceiveList = () => {
             <NotFound
               title="No Invoices here"
               description="You don't have any invoices. Click on 'Add' to get started."
-              onAddClick={() => {}}
+              onAddClick={() => setIsCreateOpen(true)}
             />
           </div>
         )}
@@ -149,6 +164,14 @@ const AddReceiveList = () => {
           />
         )}
       </div>
+
+      {isCreateOpen && (
+        <div className="fixed inset-0 z-150 bg-black/40 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-[1100px] h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+            <CreateAddReceive onClose={() => setIsCreateOpen(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,107 +1,97 @@
-import { app } from "electron";
-import path from "path";
 import { DatabaseService } from "../../services/DatabaseService";
 import { SYNC_ACTIONS } from "../../types/action.types";
+import { getOutlet } from "../outlets";
 
 export const updateBusinessDetails = async (
   db: DatabaseService,
   payload: {
+    businessId: string;
     outletId: string;
-    data: {
-      name: string;
-      email: string;
-      phoneNumber: string;
-      country: string;
-      state: string;
-      address: string;
-      postalCode: string;
-      businessType: string;
-      currency?: string;
-      logoUrl?: string;
-    };
+    business: any;
+    location: any;
   },
 ) => {
-  const { outletId, data } = payload;
-  console.log(data);
-  let isOfflineImage = 0;
-  let localLogoPath: string | undefined = undefined;
+  const { businessId, outletId, business, location } = payload;
+  const now = new Date().toISOString();
 
-  if (data.logoUrl && data.logoUrl.startsWith("asset://")) {
-    isOfflineImage = 1;
-    try {
-      // asset://filename -> filename
-      // asset://host/filename -> filename
-      const urlObj = new URL(data.logoUrl);
-      let filename = urlObj.pathname.replace(/^\//, "");
-      if (!filename && urlObj.host) {
-        filename = urlObj.host;
-      }
+  // 1. Update Business table
+  const businessFields = [];
+  const businessParams: any = { businessId, updatedAt: now };
 
-      // Reconstruct full path
-      // We need to know where assets are stored.
-      // AssetService uses app.getPath("userData") / "assets"
-      const userDataPath = app.getPath("userData");
-      localLogoPath = path.join(userDataPath, "assets", filename);
-    } catch (e) {
-      console.error("Failed to parse asset URL", e);
+  if (business.name !== undefined) {
+    businessFields.push("name = @name");
+    businessParams.name = business.name;
+  }
+  if (business.email !== undefined) {
+    businessFields.push("email = @email");
+    businessParams.email = business.email;
+  }
+  if (business.phoneNumber !== undefined) {
+    businessFields.push("phoneNumber = @phoneNumber");
+    businessParams.phoneNumber = business.phoneNumber;
+  }
+  if (business.address !== undefined) {
+    businessFields.push("address = @address");
+    businessParams.address = business.address;
+  }
+  if (business.description !== undefined) {
+    businessFields.push("description = @description");
+    businessParams.description = business.description;
+  }
+  if (business.website !== undefined) {
+    businessFields.push("website = @website");
+    businessParams.website = business.website;
+  }
+
+  if (businessFields.length > 0) {
+    const businessSql = `
+      UPDATE business
+      SET ${businessFields.join(", ")}, updatedAt = @updatedAt
+      WHERE id = @businessId
+    `;
+    db.run(businessSql, businessParams);
+
+    // Sync business
+    const fullBusiness = db.get("SELECT * FROM business WHERE id = ?", [
+      businessId,
+    ]) as any;
+    if (fullBusiness) {
+      db.addToQueue({
+        table: "business",
+        action: SYNC_ACTIONS.UPDATE,
+        data: fullBusiness,
+        id: businessId,
+      });
     }
   }
 
-  // 1. Update local DB
-  const now = new Date().toISOString();
-  db.run(
-    `
-    UPDATE business_outlet
-    SET
-      name = COALESCE(@name, name),
-      email = COALESCE(@email, email),
-      phoneNumber = COALESCE(@phoneNumber, phoneNumber),
-      country = COALESCE(@country, country),
-      state = COALESCE(@state, state),
-      address = COALESCE(@address, address),
-      postalCode = COALESCE(@postalCode, postalCode),
-      businessType = COALESCE(@businessType, businessType),
-      currency = COALESCE(@currency, currency),
+  // 2. Update Business Outlet table
+  const locationFields = [];
+  const locationParams: any = { outletId, updatedAt: now };
 
-      logoUrl = COALESCE(@logoUrl, logoUrl),
-      isOfflineImage = COALESCE(@isOfflineImage, isOfflineImage),
-      localLogoPath = COALESCE(@localLogoPath, localLogoPath),
-      updatedAt = @updatedAt
-    WHERE id = @outletId
-  `,
-    {
-      outletId,
-      name: data.name,
-      email: data.email,
-      phoneNumber: data.phoneNumber,
-      country: data.country,
-      state: data.state,
-      address: data.address,
-      postalCode: data.postalCode,
-      businessType: data.businessType,
-      currency: data.currency,
-      logoUrl: data.logoUrl,
-      isOfflineImage,
-      localLogoPath,
-      updatedAt: now,
-    },
-  );
+  if (location.name !== undefined) {
+    locationFields.push("name = @name");
+    locationParams.name = location.name;
+  }
+  if (location.address !== undefined) {
+    locationFields.push("address = @address");
+    locationParams.address = location.address;
+  }
+  if (location.phoneNumber !== undefined) {
+    locationFields.push("phoneNumber = @phoneNumber");
+    locationParams.phoneNumber = location.phoneNumber;
+  }
 
-  // 2. Queue Sync
-  // If we have a local image that needs uploading, queue that first.
-  // The SyncService will handle uploading, updating the record with the remote URL,
-  // and then adding the full record update to the main sync queue.
-  if (localLogoPath) {
-    db.addToImageQueue({
-      localPath: localLogoPath,
-      tableName: "business_outlet",
-      recordId: outletId,
-      columnName: "logoUrl",
-    });
-  } else {
-    // No new image to upload, sync immediately.
-    const fullOutlet = db.getOutlet(outletId);
+  if (locationFields.length > 0) {
+    const locationSql = `
+      UPDATE business_outlet
+      SET ${locationFields.join(", ")}, updatedAt = @updatedAt
+      WHERE id = @outletId
+    `;
+    db.run(locationSql, locationParams);
 
+    // Sync outlet
+    const fullOutlet = await getOutlet(db, outletId);
     if (fullOutlet) {
       db.addToQueue({
         table: "business_outlet",

@@ -55,6 +55,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   updateOutlet: async (payload) => electron.ipcRenderer.invoke("db:updateOutlet", payload),
   deleteOutlet: async (payload) => electron.ipcRenderer.invoke("db:deleteOutlet", payload),
   createProduct: async (payload) => electron.ipcRenderer.invoke("db:createProduct", payload),
+  createInventoryItem: async (payload) => electron.ipcRenderer.invoke("db:createInventoryItem", payload),
   bulkCreateProducts: async (payload) => electron.ipcRenderer.invoke("db:bulkCreateProducts", payload),
   bulkCreateCustomers: async (payload) => electron.ipcRenderer.invoke("db:bulkCreateCustomers", payload),
   upsertCustomer: async (payload) => electron.ipcRenderer.invoke("db:upsertCustomer", payload),
