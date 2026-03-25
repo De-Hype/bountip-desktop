@@ -330,8 +330,6 @@ const StockList = () => {
             <NotFound
               title="No Inventory Item Selected"
               description="Search for an inventory item to start the stock count process."
-              onAddClick={() => {}}
-              actionText="Search Item"
             />
           </div>
         )}

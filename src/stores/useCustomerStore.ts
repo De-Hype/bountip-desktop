@@ -98,7 +98,7 @@ const useCustomerStore = create<CustomerState>((set) => ({
     try {
       const api = (window as any).electronAPI;
       if (api) {
-        let sqlWhere = " WHERE c.outletId = ?";
+        let sqlWhere = " WHERE c.outletId = ? AND c.deletedAt IS NULL";
         const params: any[] = [currentOutletId];
 
         // Search
@@ -184,7 +184,7 @@ const useCustomerStore = create<CustomerState>((set) => ({
           SELECT c.*, pt.name as paymentTermName 
           FROM customers c
           LEFT JOIN payment_terms pt ON c.paymentTermId = pt.id
-          WHERE c.outletId = ?
+          WHERE c.outletId = ? AND c.deletedAt IS NULL
         `;
         const allParams: any[] = [currentOutletId];
 

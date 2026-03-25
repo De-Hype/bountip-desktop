@@ -3,10 +3,13 @@ import {
   X,
   Plus,
   Trash2,
+  Ban,
   ChevronDown,
   Loader2,
   Calendar,
   Clock,
+  AlertTriangle,
+  CheckCircle,
 } from "lucide-react";
 import { Button } from "../../settings/ui/Button";
 import { PhoneInput } from "../../settings/ui/PhoneInput";
@@ -71,6 +74,10 @@ const EditCustomerModal = ({
   const [actualPaymentTerms, setActualPaymentTerms] = useState<any[]>([]);
   const [isPricingTierOpen, setIsPricingTierOpen] = useState(false);
   const [isPaymentTermOpen, setIsPaymentTermOpen] = useState(false);
+  const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const phoneCountries = useMemo(() => getPhoneCountries(), []);
 
@@ -141,6 +148,14 @@ const EditCustomerModal = ({
     }
   }, [isOpen, customer, phoneCountries]);
 
+  useEffect(() => {
+    if (isOpen) return;
+    setIsDeactivateConfirmOpen(false);
+    setIsDeleteConfirmOpen(false);
+    setIsDeactivating(false);
+    setIsDeleting(false);
+  }, [isOpen]);
+
   // Fetch payment terms
   useEffect(() => {
     const fetchPaymentTerms = async () => {
@@ -209,7 +224,7 @@ const EditCustomerModal = ({
         pricingTier,
         paymentTermId: paymentTerm,
         outletId: selectedOutlet?.id,
-        status: customer.status || "active",
+        status: String(customer.status || "active").toLowerCase(),
         updatedAt: new Date().toISOString(),
         updatedBy: currentUser?.name || "System",
       };
@@ -228,6 +243,160 @@ const EditCustomerModal = ({
       showToast("error", "Error", "Failed to update customer.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeactivateCustomer = async () => {
+    if (!customer?.id || !selectedOutlet?.id) return;
+    const api = (window as any).electronAPI;
+    if (!api?.dbQuery) return;
+
+    setIsDeactivating(true);
+    try {
+      const now = new Date().toISOString();
+      await api.dbQuery(
+        `
+          UPDATE customers
+          SET status = ?, updatedAt = ?, updatedBy = ?, version = COALESCE(version, 0) + 1
+          WHERE id = ? AND outletId = ? AND deletedAt IS NULL
+        `,
+        [
+          "inactive",
+          now,
+          currentUser?.name || "System",
+          customer.id,
+          selectedOutlet.id,
+        ],
+      );
+
+      if (api.queueAdd) {
+        const row = await api.dbQuery("SELECT * FROM customers WHERE id = ?", [
+          customer.id,
+        ]);
+        if (row?.[0]) {
+          await api.queueAdd({
+            table: "customers",
+            action: "UPDATE",
+            data: row[0],
+            id: customer.id,
+          });
+        }
+      }
+
+      const { fetchCustomers } = useCustomerStore.getState();
+      await fetchCustomers(selectedOutlet.id);
+
+      showToast("success", "Success", "Customer deactivated successfully.");
+      onSuccess?.();
+      onClose();
+    } catch (error) {
+      console.error("Failed to deactivate customer:", error);
+      showToast("error", "Error", "Failed to deactivate customer.");
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!customer?.id || !selectedOutlet?.id) return;
+    const api = (window as any).electronAPI;
+    if (!api?.dbQuery) return;
+
+    setIsDeleting(true);
+    try {
+      const now = new Date().toISOString();
+      await api.dbQuery(
+        `
+          UPDATE customers
+          SET deletedAt = ?, reason = ?, updatedAt = ?, updatedBy = ?, version = COALESCE(version, 0) + 1
+          WHERE id = ? AND outletId = ? AND deletedAt IS NULL
+        `,
+        [
+          now,
+          "deleted",
+          now,
+          currentUser?.name || "System",
+          customer.id,
+          selectedOutlet.id,
+        ],
+      );
+
+      if (api.queueAdd) {
+        const row = await api.dbQuery("SELECT * FROM customers WHERE id = ?", [
+          customer.id,
+        ]);
+        if (row?.[0]) {
+          await api.queueAdd({
+            table: "customers",
+            action: "DELETE",
+            data: row[0],
+            id: customer.id,
+          });
+        }
+      }
+
+      const { fetchCustomers } = useCustomerStore.getState();
+      await fetchCustomers(selectedOutlet.id);
+
+      showToast("success", "Success", "Customer deleted successfully.");
+      onSuccess?.();
+      onClose();
+    } catch (error) {
+      console.error("Failed to delete customer:", error);
+      showToast("error", "Error", "Failed to delete customer.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleReactivateCustomer = async () => {
+    if (!customer?.id || !selectedOutlet?.id) return;
+    const api = (window as any).electronAPI;
+    if (!api?.dbQuery) return;
+
+    setIsDeactivating(true);
+    try {
+      const now = new Date().toISOString();
+      await api.dbQuery(
+        `
+          UPDATE customers
+          SET status = ?, updatedAt = ?, updatedBy = ?, version = COALESCE(version, 0) + 1
+          WHERE id = ? AND outletId = ? AND deletedAt IS NULL
+        `,
+        [
+          "active",
+          now,
+          currentUser?.name || "System",
+          customer.id,
+          selectedOutlet.id,
+        ],
+      );
+
+      if (api.queueAdd) {
+        const row = await api.dbQuery("SELECT * FROM customers WHERE id = ?", [
+          customer.id,
+        ]);
+        if (row?.[0]) {
+          await api.queueAdd({
+            table: "customers",
+            action: "UPDATE",
+            data: row[0],
+            id: customer.id,
+          });
+        }
+      }
+
+      const { fetchCustomers } = useCustomerStore.getState();
+      await fetchCustomers(selectedOutlet.id);
+
+      showToast("success", "Success", "Customer reactivated successfully.");
+      onSuccess?.();
+      onClose();
+    } catch (error) {
+      console.error("Failed to reactivate customer:", error);
+      showToast("error", "Error", "Failed to reactivate customer.");
+    } finally {
+      setIsDeactivating(false);
     }
   };
 
@@ -262,7 +431,7 @@ const EditCustomerModal = ({
   return (
     <div className="fixed inset-0 z-[100] flex justify-end bg-black/20 backdrop-blur-sm transition-all duration-300">
       <div
-        className="h-full w-full max-w-[650px] bg-white shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col"
+        className="h-full w-full max-w-[750px] bg-white shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -276,8 +445,15 @@ const EditCustomerModal = ({
                 <span className="px-3 py-1 rounded-lg bg-green-50 text-green-600 text-xs font-semibold">
                   {customerType}
                 </span>
-                <span className="px-3 py-1 rounded-lg bg-green-50 text-green-600 text-xs font-semibold capitalize">
-                  {customer.status || "Active"}
+                <span
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize ${
+                    String(customer.status || "active").toLowerCase() ===
+                    "active"
+                      ? "bg-green-50 text-green-600"
+                      : "bg-red-50 text-red-600"
+                  }`}
+                >
+                  {String(customer.status || "active")}
                 </span>
               </div>
             </div>
@@ -361,7 +537,6 @@ const EditCustomerModal = ({
                   className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-[#15BA5C0D] focus:border-[#15BA5C] transition-all text-sm font-medium"
                 />
               </div>
-              
 
               {/* Phone Numbers */}
               <div className="space-y-3">
@@ -600,26 +775,164 @@ const EditCustomerModal = ({
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-6 border-t border-gray-100 bg-white sticky bottom-0">
-          <Button
-            onClick={handleUpdateCustomer}
-            disabled={!isFormValid || isSubmitting}
-            className={`w-full rounded-xl py-4 font-bold text-base transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed \${
-              !isFormValid || isSubmitting
-                ? "bg-gray-400 text-white shadow-none"
-                : "bg-[#15BA5C] hover:bg-[#119E4D] text-white shadow-lg shadow-[#15BA5C33]"
-            }`}
-          >
-            {isSubmitting ? (
-              <div className="flex items-center justify-center gap-2">
-                <Loader2 className="size-5 animate-spin" />
-                <span>Updating...</span>
-              </div>
+        <div className="px-8 py-4 border-t border-gray-100 bg-white sticky bottom-0">
+          <div className="grid grid-cols-3 gap-3">
+            <Button
+              onClick={handleUpdateCustomer}
+              disabled={!isFormValid || isSubmitting}
+              className={`w-full rounded-xl py-3 font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
+                !isFormValid || isSubmitting
+                  ? "bg-gray-400 text-white shadow-none"
+                  : "bg-[#15BA5C] hover:bg-[#119E4D] text-white shadow-lg shadow-[#15BA5C33]"
+              }`}
+            >
+              {isSubmitting ? (
+                <div className="flex items-center justify-center gap-1.5">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Updating...</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-1.5">
+                  <span>Edit Customer Details</span>
+                </div>
+              )}
+            </Button>
+
+            {String(customer.status || "active").toLowerCase() === "active" ? (
+              <button
+                type="button"
+                onClick={() => setIsDeactivateConfirmOpen(true)}
+                disabled={isSubmitting || isDeleting || isDeactivating}
+                className="w-full rounded-xl py-3 font-semibold text-sm transition-all active:scale-[0.98] border border-[#EF4444] text-[#EF4444] bg-white hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isDeactivating ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <>
+                    <Ban className="size-4" />
+                    <span>Deactivate Customer</span>
+                  </>
+                )}
+              </button>
             ) : (
-              "Update Customer"
+              <button
+                type="button"
+                onClick={handleReactivateCustomer}
+                disabled={isSubmitting || isDeleting || isDeactivating}
+                className="w-full rounded-xl py-3 font-semibold text-sm transition-all active:scale-[0.98] border border-[#15BA5C] text-[#15BA5C] bg-white hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {isDeactivating ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <>
+                    <CheckCircle className="size-4" />
+                    <span>Reactivate Customer</span>
+                  </>
+                )}
+              </button>
             )}
-          </Button>
+
+            <button
+              type="button"
+              onClick={() => setIsDeleteConfirmOpen(true)}
+              disabled={isSubmitting || isDeleting || isDeactivating}
+              className="w-full rounded-xl py-3 font-semibold text-sm transition-all active:scale-[0.98] bg-[#EF4444] hover:bg-[#DC2626] text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {isDeleting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <>
+                  <Trash2 className="size-4" />
+                  <span>Delete Customer</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
+
+        {isDeactivateConfirmOpen ? (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+            <div className="relative w-full max-w-[520px] rounded-[20px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#FEF3C7]">
+                  <AlertTriangle className="h-8 w-8 text-[#F59E0B]" />
+                </div>
+
+                <h2 className="text-[22px] font-bold text-[#1C1B20]">
+                  Deactivate Customer
+                </h2>
+
+                <p className="mt-3 text-[15px] text-[#6B7280] leading-relaxed">
+                  You are about to deactivate this customer,
+                  <br />
+                  Do you wish to continue?
+                </p>
+
+                <div className="mt-8 flex w-full gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeactivateConfirmOpen(false)}
+                    className="h-12 flex-1 cursor-pointer rounded-full border border-[#EF4444] text-[15px] font-bold text-[#EF4444] hover:bg-red-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsDeactivateConfirmOpen(false);
+                      await handleDeactivateCustomer();
+                    }}
+                    className="h-12 flex-1 cursor-pointer rounded-full bg-[#15BA5C] text-[15px] font-bold text-white hover:bg-[#119E4D] transition-colors"
+                  >
+                    Yes, Deactivate
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isDeleteConfirmOpen ? (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+            <div className="relative w-full max-w-[520px] rounded-[20px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#FEE2E2]">
+                  <AlertTriangle className="h-8 w-8 text-[#EF4444]" />
+                </div>
+
+                <h2 className="text-[22px] font-bold text-[#1C1B20]">
+                  Delete Customer
+                </h2>
+
+                <p className="mt-3 text-[15px] text-[#6B7280] leading-relaxed">
+                  You are about to delete this customer,
+                  <br />
+                  Do you wish to continue?
+                </p>
+
+                <div className="mt-8 flex w-full gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeleteConfirmOpen(false)}
+                    className="h-12 flex-1 cursor-pointer rounded-full border border-[#EF4444] text-[15px] font-bold text-[#EF4444] hover:bg-red-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsDeleteConfirmOpen(false);
+                      await handleDeleteCustomer();
+                    }}
+                    className="h-12 flex-1 cursor-pointer rounded-full bg-[#E33629] text-[15px] font-bold text-white hover:bg-[#C52B1F] transition-colors"
+                  >
+                    Yes, Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

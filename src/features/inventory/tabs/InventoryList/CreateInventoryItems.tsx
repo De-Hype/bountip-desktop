@@ -7,7 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { SystemDefaultType } from "../../../../../electron/types/system-default";
 import SystemDefaultModal from "@/shared/SystemDefaultModal";
-import AddSupplierModal from "./AddSupplierModal";
+import AddSupplierModal from "../Procurement/tabs/suppliers/AddSupplierModal";
 import useToastStore from "@/stores/toastStore";
 
 interface CreateInventoryItemsProps {

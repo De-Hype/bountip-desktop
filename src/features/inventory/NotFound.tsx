@@ -6,6 +6,8 @@ interface NotFoundProps {
   description: string;
   onAddClick?: () => void;
   actionText?: string;
+  imageSrc?: string;
+  imageAlt?: string;
 }
 
 const NotFound = ({
@@ -13,6 +15,8 @@ const NotFound = ({
   description,
   onAddClick,
   actionText,
+  imageSrc,
+  imageAlt = "empty",
 }: NotFoundProps) => {
   return (
     <div className="flex flex-col items-center justify-center py-16 bg-white w-full">
@@ -21,8 +25,8 @@ const NotFound = ({
         onClick={onAddClick}
       >
         <img
-          src={EmptyStateAssests.InventoryEmptyState}
-          alt="empty"
+          src={imageSrc || EmptyStateAssests.InventoryEmptyState}
+          alt={imageAlt}
           width={240}
           height={240}
           className="w-60 h-60 transition-transform duration-300 group-hover:scale-105"

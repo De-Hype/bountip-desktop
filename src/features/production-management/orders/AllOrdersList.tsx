@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Search, SlidersHorizontal, MoreVertical } from "lucide-react";
 import { Pagination } from "@/shared/Pagination/pagination";
 import AllOrderFilter, { OrderFilterState } from "./AllOrderFilter";
@@ -6,14 +6,16 @@ import useOrderStore from "@/stores/useOrderStore";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { format } from "date-fns";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
+import CreateProductionSchedule from "./CreateProductionSchedule";
 
 const AllOrdersList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isCreateScheduleOpen, setIsCreateScheduleOpen] = useState(false);
 
-  const { orders, fetchOrders, isLoading } = useOrderStore();
+  const { orders, fetchOrders } = useOrderStore();
   const { selectedOutlet } = useBusinessStore();
 
   useEffect(() => {
@@ -92,13 +94,17 @@ const AllOrdersList = () => {
               placeholder="Search"
               className="w-full sm:w-[240px] h-11 px-4 bg-white border border-gray-200 rounded-l-[10px] outline-none focus:border-[#15BA5C] transition-all text-sm placeholder:text-gray-400"
             />
-            <button className="h-11 px-4 bg-[#15BA5C] text-white rounded-r-[10px] hover:bg-[#119E4D] transition-colors cursor-pointer flex items-center justify-center">
+            <button
+              type="button"
+              className="h-11 px-4 bg-[#15BA5C] text-white rounded-r-[10px] hover:bg-[#119E4D] transition-colors cursor-pointer flex items-center justify-center"
+            >
               <Search className="size-5" />
             </button>
           </div>
 
           {/* Filters Button */}
           <button
+            type="button"
             onClick={() => setIsFilterOpen(true)}
             className="h-11 px-5 bg-white border border-gray-200 rounded-[10px] text-[14px] font-medium text-[#4B5563] hover:bg-gray-50 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
           >
@@ -107,12 +113,19 @@ const AllOrdersList = () => {
           </button>
 
           {/* View Production Schedule Button */}
-          <button className="h-11 px-5 bg-white border border-[#15BA5C] text-[#15BA5C] rounded-[10px] text-[14px] font-medium hover:bg-green-50 transition-all cursor-pointer">
+          <button
+            type="button"
+            className="h-11 px-5 bg-white border border-[#15BA5C] text-[#15BA5C] rounded-[10px] text-[14px] font-medium hover:bg-green-50 transition-all cursor-pointer"
+          >
             View Production Schedule
           </button>
 
           {/* Create Production Schedule Button */}
-          <button className="h-11 px-5 bg-[#15BA5C] text-white rounded-[10px] text-[14px] font-medium hover:bg-[#119E4D] transition-all cursor-pointer">
+          <button
+            type="button"
+            onClick={() => setIsCreateScheduleOpen(true)}
+            className="h-11 px-5 bg-[#15BA5C] text-white rounded-[10px] text-[14px] font-medium hover:bg-[#119E4D] transition-all cursor-pointer"
+          >
             Create Production Schedule
           </button>
         </div>
@@ -194,7 +207,10 @@ const AllOrdersList = () => {
                     : "N/A"}
                 </td>
                 <td className="px-4 py-5">
-                  <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <button
+                    type="button"
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  >
                     <MoreVertical className="size-4 text-gray-400" />
                   </button>
                 </td>
@@ -218,6 +234,15 @@ const AllOrdersList = () => {
         isOpen={isFilterOpen}
         onClose={() => setIsFilterOpen(false)}
         onApply={handleApplyFilters}
+      />
+
+      <CreateProductionSchedule
+        isOpen={isCreateScheduleOpen}
+        onClose={() => setIsCreateScheduleOpen(false)}
+        orders={orders}
+        onCreated={() => {
+          setIsCreateScheduleOpen(false);
+        }}
       />
     </div>
   );

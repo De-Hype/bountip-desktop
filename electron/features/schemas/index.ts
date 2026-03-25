@@ -29,6 +29,10 @@ import { invoiceSchema } from "./invoice.schema";
 import { invoiceItemSchema } from "./invoice_item.schema";
 import { supplierSchema } from "./supplier.schema";
 import { supplierItemSchema } from "./supplier_item.schema";
+import { componentSchema } from "./component.schema";
+import { componentItemSchema } from "./component_item.schema";
+import { componentLotSchema } from "./component_lot.schema";
+import { componentLotLogSchema } from "./component_lot_log.schema";
 
 export const schemas: TableSchema[] = [
   userSchema,
@@ -61,4 +65,8 @@ export const schemas: TableSchema[] = [
   invoiceItemSchema,
   supplierSchema,
   supplierItemSchema,
+  componentSchema,
+  componentItemSchema,
+  componentLotSchema,
+  componentLotLogSchema,
 ];

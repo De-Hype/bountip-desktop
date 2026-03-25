@@ -72,6 +72,22 @@ import {
   buildSupplierItemUpsertParams,
 } from "../features/schemas/supplier_item.schema";
 import {
+  componentUpsertSql,
+  buildComponentUpsertParams,
+} from "../features/schemas/component.schema";
+import {
+  componentItemUpsertSql,
+  buildComponentItemUpsertParams,
+} from "../features/schemas/component_item.schema";
+import {
+  componentLotUpsertSql,
+  buildComponentLotUpsertParams,
+} from "../features/schemas/component_lot.schema";
+import {
+  componentLotLogUpsertSql,
+  buildComponentLotLogUpsertParams,
+} from "../features/schemas/component_lot_log.schema";
+import {
   cartUpsertSql,
   buildCartUpsertParams,
 } from "../features/schemas/cart.schema";
@@ -1018,6 +1034,40 @@ export class DatabaseService {
         const stmt = this.prepare(supplierItemUpsertSql);
         for (const si of data.supplierItems) {
           stmt.run(this.sanitize(buildSupplierItemUpsertParams(si)));
+        }
+      }
+
+      if (Array.isArray(data.components) && data.components.length > 0) {
+        const stmt = this.prepare(componentUpsertSql);
+        for (const c of data.components) {
+          stmt.run(this.sanitize(buildComponentUpsertParams(c)));
+        }
+      }
+
+      if (
+        Array.isArray(data.componentItems) &&
+        data.componentItems.length > 0
+      ) {
+        const stmt = this.prepare(componentItemUpsertSql);
+        for (const ci of data.componentItems) {
+          stmt.run(this.sanitize(buildComponentItemUpsertParams(ci)));
+        }
+      }
+
+      if (Array.isArray(data.componentLots) && data.componentLots.length > 0) {
+        const stmt = this.prepare(componentLotUpsertSql);
+        for (const cl of data.componentLots) {
+          stmt.run(this.sanitize(buildComponentLotUpsertParams(cl)));
+        }
+      }
+
+      if (
+        Array.isArray(data.componentLotLogs) &&
+        data.componentLotLogs.length > 0
+      ) {
+        const stmt = this.prepare(componentLotLogUpsertSql);
+        for (const cll of data.componentLotLogs) {
+          stmt.run(this.sanitize(buildComponentLotLogUpsertParams(cll)));
         }
       }
 

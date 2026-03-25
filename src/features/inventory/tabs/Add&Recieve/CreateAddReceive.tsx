@@ -5,8 +5,9 @@ import { Plus, Search, Trash2, X, Info } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dropdown } from "@/shared/AppDropdowns/CreateDropdown";
 import { useBusinessStore } from "@/stores/useBusinessStore";
+import { useAuthStore } from "@/stores/authStore";
 import useToastStore from "@/stores/toastStore";
-import AddSupplierModal from "../InventoryList/AddSupplierModal";
+import AddSupplierModal from "../Procurement/tabs/suppliers/AddSupplierModal";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 
 type InvoiceLine = {
@@ -44,6 +45,7 @@ const sanitizeNumber = (value: string) => value.replace(/[^0-9.]/g, "");
 
 const CreateAddReceive = ({ onClose, onSuccess }: CreateAddReceiveProps) => {
   const { selectedOutlet } = useBusinessStore();
+  const authUser = useAuthStore((s) => s.user);
   const { showToast } = useToastStore();
   const currencySymbol = selectedOutlet?.currency
     ? getCurrencySymbol(selectedOutlet.currency)
@@ -217,7 +219,12 @@ const CreateAddReceive = ({ onClose, onSuccess }: CreateAddReceiveProps) => {
   const isValid =
     invoiceNumber.trim() !== "" &&
     supplierId !== "" &&
-    selectedItems.length > 0;
+    selectedItems.length > 0 &&
+    selectedItems.every((l) => {
+      const qty = parseFloat(l.qtyPurchased) || 0;
+      const amt = parseFloat(l.amountPurchased) || 0;
+      return l.lotNo.trim() !== "" && qty > 0 && amt >= 0;
+    });
 
   const handleSaveSupplier = async (supplierData: any) => {
     try {
@@ -283,7 +290,195 @@ const CreateAddReceive = ({ onClose, onSuccess }: CreateAddReceiveProps) => {
     if (!isValid || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      showToast("success", "Submitted", "Invoice submitted successfully");
+      const api = (window as any).electronAPI;
+      if (!api?.dbQuery) return;
+
+      const now = new Date().toISOString();
+      const invoiceId = crypto.randomUUID();
+
+      const supplierName =
+        supplierOptions.find((s) => s.value === supplierId)?.label || "";
+
+      const taxesPayload = taxes
+        .map((t) => ({
+          name: t.name.trim(),
+          ratePercent: parseFloat(t.amount) || 0,
+        }))
+        .filter((t) => t.name !== "" && t.ratePercent > 0);
+
+      const chargesPayload = charges
+        .map((c) => ({
+          name: c.name.trim(),
+          amount: parseFloat(c.amount) || 0,
+        }))
+        .filter((c) => c.name !== "" && c.amount > 0);
+
+      await api.dbQuery(
+        `
+          INSERT INTO invoices (
+            id, invoiceNumber, subTotal, totalAmount, totalItemCount, status, submittedBy,
+            taxes, charges, createdAt, updatedAt, deletedAt, outletId, supplierId, recordId, version
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          invoiceId,
+          invoiceNumber.trim(),
+          subTotal,
+          total,
+          selectedItems.length,
+          "Direct",
+          authUser?.name || "",
+          JSON.stringify(taxesPayload),
+          JSON.stringify(chargesPayload),
+          now,
+          now,
+          null,
+          selectedOutlet?.id || null,
+          supplierId,
+          null,
+          1,
+        ],
+      );
+
+      const createdInvoiceItems: { id: string; inventoryItemId: string }[] = [];
+      const createdLotIds: { id: string; inventoryItemId: string }[] = [];
+
+      for (const line of selectedItems) {
+        const qty = parseFloat(line.qtyPurchased) || 0;
+        const lineTotal = parseFloat(line.amountPurchased) || 0;
+        const unitPrice = qty > 0 ? lineTotal / qty : 0;
+
+        const invoiceItemId = crypto.randomUUID();
+        await api.dbQuery(
+          `
+            INSERT INTO invoice_items (
+              id, description, barcode, quantity, unitPrice, inventoryItemId, lineTotal,
+              invoiceId, createdAt, updatedAt, deletedAt, recordId, version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            invoiceItemId,
+            "N/A",
+            null,
+            qty,
+            unitPrice,
+            line.inventoryItemId,
+            lineTotal,
+            invoiceId,
+            now,
+            now,
+            null,
+            null,
+            1,
+          ],
+        );
+        createdInvoiceItems.push({
+          id: invoiceItemId,
+          inventoryItemId: line.inventoryItemId,
+        });
+
+        const lotId = crypto.randomUUID();
+        await api.dbQuery(
+          `
+            INSERT INTO item_lot (
+              id, lotNumber, quantityPurchased, supplierName, supplierSesrialNumber, supplierAddress,
+              currentStockLevel, initialStockLevel, expiryDate, costPrice, createdAt, updatedAt, itemId, recordId, version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            lotId,
+            line.lotNo,
+            qty,
+            supplierName,
+            "",
+            "",
+            qty,
+            qty,
+            line.expiryDate ? line.expiryDate.toISOString() : null,
+            lineTotal,
+            now,
+            now,
+            line.inventoryItemId,
+            null,
+            1,
+          ],
+        );
+        createdLotIds.push({
+          id: lotId,
+          inventoryItemId: line.inventoryItemId,
+        });
+
+        await api.dbQuery(
+          `
+            UPDATE inventory_item
+            SET
+              currentStockLevel = COALESCE(currentStockLevel, 0) + ?,
+              updatedAt = ?,
+              version = COALESCE(version, 0) + 1
+            WHERE id = ?
+          `,
+          [qty, now, line.inventoryItemId],
+        );
+      }
+
+      if (api.queueAdd) {
+        const invRow = await api.dbQuery(
+          "SELECT * FROM invoices WHERE id = ?",
+          [invoiceId],
+        );
+        if (invRow?.[0]) {
+          await api.queueAdd({
+            table: "invoices",
+            action: "CREATE",
+            data: invRow[0],
+            id: invoiceId,
+          });
+        }
+
+        for (const ii of createdInvoiceItems) {
+          const row = await api.dbQuery(
+            "SELECT * FROM invoice_items WHERE id = ?",
+            [ii.id],
+          );
+          if (row?.[0]) {
+            await api.queueAdd({
+              table: "invoice_items",
+              action: "CREATE",
+              data: row[0],
+              id: ii.id,
+            });
+          }
+        }
+
+        for (const lot of createdLotIds) {
+          const row = await api.dbQuery("SELECT * FROM item_lot WHERE id = ?", [
+            lot.id,
+          ]);
+          if (row?.[0]) {
+            await api.queueAdd({
+              table: "item_lot",
+              action: "CREATE",
+              data: row[0],
+              id: lot.id,
+            });
+          }
+
+          const invItemRow = await api.dbQuery(
+            "SELECT * FROM inventory_item WHERE id = ?",
+            [lot.inventoryItemId],
+          );
+          if (invItemRow?.[0]) {
+            await api.queueAdd({
+              table: "inventory_item",
+              action: "UPDATE",
+              data: invItemRow[0],
+              id: lot.inventoryItemId,
+            });
+          }
+        }
+      }
+
+      showToast("success", "Success", "Invoice created successfully");
       onSuccess?.();
       onClose?.();
     } catch (err) {

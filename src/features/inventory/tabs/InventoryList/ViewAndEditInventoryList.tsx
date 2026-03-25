@@ -23,7 +23,7 @@ import {
 } from "date-fns";
 import { SystemDefaultType } from "../../../../../electron/types/system-default";
 import SystemDefaultModal from "@/shared/SystemDefaultModal";
-import AddSupplierModal from "./AddSupplierModal";
+import AddSupplierModal from "../Procurement/tabs/suppliers/AddSupplierModal";
 import useToastStore from "@/stores/toastStore";
 
 type TabKey = "basic" | "stock" | "cost" | "traceability";

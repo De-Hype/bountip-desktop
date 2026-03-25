@@ -4,9 +4,8 @@ import {
   List,
   Search,
   SlidersHorizontal,
-  Image as ImageIcon,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import NotFound from "./NotFound";
 import useBusinessStore from "@/stores/useBusinessStore";
 import { Switch } from "@/features/settings/ui/Switch";
@@ -59,6 +58,10 @@ const CatalogueProductList = ({
     availability: "All",
   });
   const [filtersInitialized, setFiltersInitialized] = useState(false);
+  const lastBoundsRef = useRef<{ minPrice: number; maxPrice: number }>({
+    minPrice: 0,
+    maxPrice: 1000,
+  });
 
   // Fetch filter stats (bounds)
   useEffect(() => {
@@ -86,14 +89,18 @@ const CatalogueProductList = ({
 
           setFilterBounds({ minPrice: min, maxPrice: max, categories: cats });
 
-          // Initialize filters only once or when bounds change significantly if needed
-          if (!filtersInitialized) {
-            setActiveFilters((prev) => ({
-              ...prev,
-              priceRange: [min, max],
-            }));
-            setFiltersInitialized(true);
-          }
+          setActiveFilters((prev) => {
+            const prevMin = prev.priceRange?.[0] ?? 0;
+            const prevMax = prev.priceRange?.[1] ?? 0;
+            const wasAuto =
+              !filtersInitialized ||
+              (prevMin === lastBoundsRef.current.minPrice &&
+                prevMax === lastBoundsRef.current.maxPrice);
+            if (!wasAuto) return prev;
+            return { ...prev, priceRange: [min, max] };
+          });
+          lastBoundsRef.current = { minPrice: min, maxPrice: max };
+          if (!filtersInitialized) setFiltersInitialized(true);
         }
       } catch (error) {
         console.error("Failed to fetch product stats:", error);

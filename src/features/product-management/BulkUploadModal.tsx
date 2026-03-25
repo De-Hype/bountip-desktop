@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Upload,
   Download,
@@ -80,29 +80,48 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
   const [duplicatesHandled, setDuplicatesHandled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Function to detect duplicates by name
-  const detectDuplicates = (products: ParsedProduct[]): ParsedProduct[] => {
-    const productNames = new Set<string>();
-    const duplicateNames = new Set<string>();
+  // Detect duplicates by name (within file and against DB for this outlet)
+  const detectDuplicates = async (
+    products: ParsedProduct[],
+  ): Promise<ParsedProduct[]> => {
+    const inFileCounts = new Map<string, number>();
+    for (const p of products) {
+      const key = p.name.toLowerCase().trim();
+      inFileCounts.set(key, (inFileCounts.get(key) || 0) + 1);
+    }
 
-    // First pass: identify duplicate names
-    products.forEach((product) => {
-      const normalizedName = product.name.toLowerCase().trim();
-      if (productNames.has(normalizedName)) {
-        duplicateNames.add(normalizedName);
-      } else {
-        productNames.add(normalizedName);
+    let existingNames = new Set<string>();
+    try {
+      const api = (window as any).electronAPI;
+      if (api?.dbQuery && storeCode) {
+        const rows =
+          (await api.dbQuery(
+            "SELECT LOWER(name) as name FROM product WHERE outletId = ? AND isDeleted = 0",
+            [storeCode],
+          )) || [];
+        existingNames = new Set(
+          rows
+            .map((r: any) =>
+              String(r.name || "")
+                .toLowerCase()
+                .trim(),
+            )
+            .filter(Boolean),
+        );
       }
-    });
+    } catch (e) {
+      console.error("Failed to load existing product names:", e);
+    }
 
-    // Second pass: mark duplicates
-    return products.map((product) => {
-      const normalizedName = product.name.toLowerCase().trim();
-      const isDuplicate = duplicateNames.has(normalizedName);
+    return products.map((p) => {
+      const key = p.name.toLowerCase().trim();
+      const fileDup = (inFileCounts.get(key) || 0) > 1;
+      const dbDup = existingNames.has(key);
+      const isDuplicate = fileDup || dbDup;
       return {
-        ...product,
+        ...p,
         isDuplicate,
-        status: isDuplicate ? "duplicate" : product.status,
+        status: isDuplicate ? "duplicate" : p.status,
       };
     });
   };
@@ -284,9 +303,7 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
 
     try {
       // Filter valid products that are not duplicates (unless duplicates have been handled)
-      const validProducts = products.filter(
-        (p) => p.isValid && (!p.isDuplicate || duplicatesHandled),
-      );
+      const validProducts = products.filter((p) => p.isValid && !p.isDuplicate);
       const errorProducts = products.filter((p) => !p.isValid);
       const duplicateProducts = products.filter(
         (p) => p.isDuplicate && !duplicatesHandled,
@@ -436,7 +453,8 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
           );
         }
 
-        setParsedProducts(products);
+        const withDupes = await detectDuplicates(products);
+        setParsedProducts(withDupes);
 
         console.log("File parsed successfully, products:", products.length);
 
@@ -453,11 +471,13 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
   const handleStartUpload = async () => {
     if (parsedProducts.length === 0) return;
 
-    // Check if there are duplicates that haven't been handled
+    // Block upload if there are duplicate names
     const duplicateCount = parsedProducts.filter((p) => p.isDuplicate).length;
-    if (duplicateCount > 0 && !duplicatesHandled) {
-      alert(
-        'Please handle duplicate entries by clicking "Merge Duplicates" or "Skip Duplicates" before uploading.',
+    if (duplicateCount > 0) {
+      showToast(
+        "error",
+        "Duplicate products detected",
+        "Some product names already exist. Please rename or remove duplicates before uploading.",
       );
       return;
     }
@@ -509,6 +529,13 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
       fileInputRef.current.value = "";
     }
   };
+
+  // Reset state when the modal closes so it opens fresh next time
+  useEffect(() => {
+    if (!isOpen) {
+      handleReupload();
+    }
+  }, [isOpen]);
 
   const getFilteredData = (): ParsedProduct[] => {
     // If we have upload results, filter based on those

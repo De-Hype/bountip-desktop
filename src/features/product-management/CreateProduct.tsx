@@ -146,7 +146,7 @@ const AddEntityModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4 sm:p-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-110 flex items-center justify-center bg-black/40 p-4 sm:p-6 backdrop-blur-sm">
       <div className="relative w-full max-w-md rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
         <button
           type="button"
@@ -471,6 +471,27 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
         "No outlet selected. Please select an outlet.",
       );
       return;
+    }
+
+    try {
+      const apiGlobal: any = (window as any).electronAPI as any;
+      if (apiGlobal?.dbQuery) {
+        const dupRows =
+          (await apiGlobal.dbQuery(
+            "SELECT id FROM product WHERE outletId = ? AND isDeleted = 0 AND LOWER(name) = LOWER(?) LIMIT 1",
+            [selectedOutletId, productName.trim()],
+          )) || [];
+        if (dupRows.length > 0) {
+          showToast(
+            "error",
+            "Duplicate product",
+            "A product with this name already exists in this outlet.",
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("Duplicate check failed:", e);
     }
 
     setIsSubmitting(true);

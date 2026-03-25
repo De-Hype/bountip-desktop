@@ -12,6 +12,7 @@ import ViewAndEditInventoryList from "./ViewAndEditInventoryList";
 import { Pagination } from "@/shared/Pagination/pagination";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { useAuthStore } from "@/stores/authStore";
+import useInventoryStore from "@/stores/useInventoryStore";
 import { format } from "date-fns";
 import InventoryListFilter, {
   InventoryFilterState,
@@ -41,6 +42,8 @@ const InventoryList = () => {
 
   const { selectedOutlet } = useBusinessStore();
   const authUser = useAuthStore((s) => s.user);
+  const lastUpdated = useInventoryStore((s) => s.lastUpdated);
+  const refreshInventory = useInventoryStore((s) => s.refreshInventory);
 
   const [filters, setFilters] = useState<InventoryFilterState>({
     category: "All",
@@ -254,6 +257,7 @@ const InventoryList = () => {
     sortConfig,
     authUser?.id,
     authUser?.name,
+    lastUpdated,
   ]);
 
   useEffect(() => {
@@ -496,6 +500,7 @@ const InventoryList = () => {
                 setSortConfig({ key: "updatedAt", direction: "DESC" });
                 setCurrentPage(1);
                 setRefreshNonce((n) => n + 1);
+                refreshInventory();
               }}
             />
           </div>
@@ -522,9 +527,11 @@ const InventoryList = () => {
         }}
         onUpdated={() => {
           setRefreshNonce((n) => n + 1);
+          refreshInventory();
         }}
         onDeleted={() => {
           setRefreshNonce((n) => n + 1);
+          refreshInventory();
         }}
       />
     </div>

@@ -503,6 +503,24 @@ const EditProduct = ({
     const api = getElectronAPI();
     if (!api || !selectedOutletId || !product) return;
 
+    try {
+      const dup =
+        (await ((window as any).electronAPI?.dbQuery?.(
+          "SELECT id FROM product WHERE outletId = ? AND isDeleted = 0 AND LOWER(name) = LOWER(?) AND id != ? LIMIT 1",
+          [selectedOutletId, productName.trim(), product.id],
+        ) as Promise<any[]>)) || [];
+      if (dup.length > 0) {
+        showToast(
+          "error",
+          "Duplicate product",
+          "Another product with this name already exists in this outlet.",
+        );
+        return;
+      }
+    } catch (e) {
+      console.error("Duplicate check failed:", e);
+    }
+
     setIsUpdating(true);
     const selectedCategory = categories.find(
       (c) => c.id === selectedCategoryId,
@@ -1405,7 +1423,5 @@ const EditProduct = ({
     </div>
   );
 };
-
-
 
 export default EditProduct;
