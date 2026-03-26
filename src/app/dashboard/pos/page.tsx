@@ -55,6 +55,7 @@ const POSPage = () => {
           </div>
         </div>
       </div>
+      <div className=""></div>
 
       {/* Tab Content Section */}
       <div className="flex-1 bg-white px-8 pt-3 pb-8 overflow-hidden">

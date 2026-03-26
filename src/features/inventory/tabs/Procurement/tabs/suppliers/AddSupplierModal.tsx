@@ -112,8 +112,6 @@ const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (!isOpen) return null;
-
   const handleAddField = (
     field: "representatives" | "phoneNumbers" | "emails",
   ) => {
@@ -206,6 +204,8 @@ const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
     formData.phoneNumbers.some((phone) => phone.number.trim() !== "") &&
     formData.emails.some((email) => email.trim() !== "") &&
     formData.address.trim() !== "";
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[200] bg-black/40 backdrop-blur-sm flex justify-end">

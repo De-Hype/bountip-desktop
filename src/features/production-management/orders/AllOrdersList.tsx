@@ -7,6 +7,7 @@ import { useBusinessStore } from "@/stores/useBusinessStore";
 import { format } from "date-fns";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import CreateProductionSchedule from "./CreateProductionSchedule";
+import ViewProductionSchedule from "./ViewProductionSchedule";
 
 const AllOrdersList = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -14,6 +15,7 @@ const AllOrdersList = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isCreateScheduleOpen, setIsCreateScheduleOpen] = useState(false);
+  const [isViewScheduleOpen, setIsViewScheduleOpen] = useState(false);
 
   const { orders, fetchOrders } = useOrderStore();
   const { selectedOutlet } = useBusinessStore();
@@ -115,6 +117,7 @@ const AllOrdersList = () => {
           {/* View Production Schedule Button */}
           <button
             type="button"
+            onClick={() => setIsViewScheduleOpen(true)}
             className="h-11 px-5 bg-white border border-[#15BA5C] text-[#15BA5C] rounded-[10px] text-[14px] font-medium hover:bg-green-50 transition-all cursor-pointer"
           >
             View Production Schedule
@@ -243,6 +246,11 @@ const AllOrdersList = () => {
         onCreated={() => {
           setIsCreateScheduleOpen(false);
         }}
+      />
+
+      <ViewProductionSchedule
+        isOpen={isViewScheduleOpen}
+        onClose={() => setIsViewScheduleOpen(false)}
       />
     </div>
   );

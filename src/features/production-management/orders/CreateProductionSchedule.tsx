@@ -59,8 +59,6 @@ const generateBatchId = () => {
 };
 
 const sanitizeNumber = (value: string) => value.replace(/[^0-9.]/g, "");
-const sanitizeTime = (value: string) =>
-  value.replace(/[^0-9:]/g, "").slice(0, 5);
 
 const CreateProductionSchedule = ({
   isOpen,
@@ -116,6 +114,16 @@ const CreateProductionSchedule = ({
     setIsSavingDraft(false);
     setIsSubmitting(false);
   }, [authUser?.name, isOpen]);
+
+  const disablePastDates = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return (day: Date) => {
+      const d = new Date(day);
+      d.setHours(0, 0, 0, 0);
+      return d < today;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -529,6 +537,7 @@ const CreateProductionSchedule = ({
                 className="w-full h-12 rounded-[8px] justify-between flex-row-reverse"
                 popoverClassName="z-[200]"
                 placeholder="Select Date"
+                disabledDates={disablePastDates}
               />
             </div>
 
@@ -538,15 +547,12 @@ const CreateProductionSchedule = ({
               </label>
               <div className="relative">
                 <input
-                  type="text"
+                  type="time"
                   value={productionTime}
-                  onChange={(e) =>
-                    setProductionTime(sanitizeTime(e.target.value))
-                  }
-                  placeholder="Select Time"
+                  onChange={(e) => setProductionTime(e.target.value)}
                   className="w-full h-12 px-4 pr-12 rounded-[8px] border border-gray-200 bg-white text-sm text-[#1C1B20] outline-none focus:border-[#15BA5C] transition-all"
                 />
-                <div className="absolute right-0 top-0 h-12 w-12 flex items-center justify-center bg-[#E5E7EB] rounded-r-[8px]">
+                <div className="pointer-events-none absolute right-0 top-0 h-12 w-12 flex items-center justify-center bg-[#E5E7EB] rounded-r-[8px]">
                   <Clock className="h-5 w-5 text-[#737373]" />
                 </div>
               </div>
