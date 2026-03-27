@@ -109,7 +109,7 @@ const BulkUploadCustomers: React.FC<BulkUploadCustomersProps> = ({
           const emailPlaceholders = emailList.map(() => "?").join(",");
           const phonePlaceholders = phoneList.map(() => "?").join(",");
 
-          let query = `SELECT email, phoneNumber FROM customers WHERE outletId = ? AND (`;
+          let query = `SELECT email, phoneNumber FROM customers WHERE outletId = ? AND (deletedAt IS NULL OR deletedAt = '') AND (`;
           const queryParts = [];
           const params = [selectedOutlet.id];
 

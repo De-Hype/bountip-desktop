@@ -3,7 +3,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import React, { useMemo, useState } from "react";
 import UserProfile from "./UserProfile";
-import { X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { performLogout } from "@/services/authSession";
 import { useAuthStore } from "@/stores/authStore";
 import { useBusinessStore } from "@/stores/useBusinessStore";
@@ -47,6 +47,8 @@ export default function AppHeader() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { selectedOutlet } = useBusinessStore();
+  const [isFactoryResetOpen, setIsFactoryResetOpen] = useState(false);
+  const [isFactoryResetting, setIsFactoryResetting] = useState(false);
 
   // Notifications state
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -180,6 +182,15 @@ export default function AppHeader() {
           )}
 
           <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setIsFactoryResetOpen(true)}
+              className="h-10 px-4 rounded-[12px] border border-[#EF4444] text-[#EF4444] font-semibold inline-flex items-center gap-2 hover:bg-[#EF4444] hover:text-white transition-colors"
+              title="Clear all data"
+            >
+              <Trash2 className="h-4 w-4" />
+              Clear all data
+            </button>
             <Link
               to="/dashboard"
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative"
@@ -237,6 +248,73 @@ export default function AppHeader() {
           className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity duration-300"
           onClick={closePanel}
         />
+      )}
+
+      {isFactoryResetOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-[24px] bg-white p-8 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setIsFactoryResetOpen(false)}
+              className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+              aria-label="Close"
+              title="Close"
+              disabled={isFactoryResetting}
+            >
+              <X className="h-5 w-5 text-gray-700" />
+            </button>
+
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#FEE2E2]">
+                <Trash2 className="h-8 w-8 text-[#EF4444]" />
+              </div>
+
+              <h2 className="text-[22px] font-bold text-[#1C1B20]">
+                Clear all data
+              </h2>
+              <p className="mt-4 text-[16px] text-[#6B7280] leading-relaxed">
+                This will sign you out and permanently remove all app data on
+                this device (database, cache, and offline changes). The app will
+                remain installed.
+              </p>
+
+              <div className="mt-10 flex w-full gap-4">
+                <button
+                  type="button"
+                  onClick={() => setIsFactoryResetOpen(false)}
+                  disabled={isFactoryResetting}
+                  className="h-14 flex-1 cursor-pointer rounded-full border border-[#D1D5DB] text-[16px] font-bold text-[#4B5563] hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isFactoryResetting}
+                  onClick={async () => {
+                    if (isFactoryResetting) return;
+                    setIsFactoryResetting(true);
+                    try {
+                      const api: any = (window as any).electronAPI;
+                      if (api?.factoryReset) {
+                        api.factoryReset();
+                        return;
+                      }
+                      await api?.clearTokens?.();
+                      await api?.queueClear?.();
+                      await api?.wipeData?.();
+                      window.location.reload();
+                    } finally {
+                      setIsFactoryResetting(false);
+                    }
+                  }}
+                  className="h-14 flex-1 cursor-pointer rounded-full bg-[#E33629] text-[16px] font-bold text-white hover:bg-[#C52B1F] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isFactoryResetting ? "Clearing..." : "Clear all data"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Sliding Notifications Panel */}

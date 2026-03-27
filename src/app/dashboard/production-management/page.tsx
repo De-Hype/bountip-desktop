@@ -7,6 +7,9 @@ import { OrderStatus } from "../../../../electron/types/order.types";
 import ToBeProducedList from "@/features/production-management/tabs/ToBeProducedList";
 import ProductionStats from "@/features/production-management/stats/ProductionStats";
 import SubmittedProductionModal from "@/features/production-management/tabs/SubmittedProductionModal";
+import ScheduledProductionModal from "@/features/production-management/tabs/ScheduledProductionModal";
+import QualityControlModal from "@/features/production-management/tabs/QualityControlModal";
+import ReadyModal from "@/features/production-management/tabs/ReadyModal";
 
 const ProductionManagementPage = () => {
   const { productions, fetchProductions } = useProductionStore();
@@ -122,6 +125,12 @@ const ProductionManagementPage = () => {
         <ToBeProducedList />
       ) : activeTab === "Submitted" ? (
         <SubmittedProductionModal />
+      ) : activeTab === "Scheduled for production" ? (
+        <ScheduledProductionModal />
+      ) : activeTab === "Quality Control" ? (
+        <QualityControlModal />
+      ) : activeTab === "Ready" ? (
+        <ReadyModal />
       ) : (
         <AllOrdersList />
       )}

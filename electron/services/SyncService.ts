@@ -430,6 +430,9 @@ export class SyncService {
           "isOfflineImage",
           "isEmailVerified",
           "isPin",
+          "showInPos",
+          "limitTotalSelection",
+          "limitQuantity",
         ];
 
         for (const field of booleanFields) {

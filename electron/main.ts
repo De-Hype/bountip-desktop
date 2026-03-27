@@ -5,6 +5,7 @@ import {
   nativeImage,
   protocol,
   net,
+  shell,
 } from "electron";
 import fs from "fs";
 import path from "path";
@@ -429,6 +430,25 @@ app.whenReady().then(() => {
   ipcMain.on("network:setOnline", (_event, flag) =>
     networkService.setOnline(flag),
   );
+
+  ipcMain.handle("shell:openExternal", async (_event, url: string) => {
+    try {
+      const u = String(url || "").trim();
+      if (!u) return false;
+      if (
+        !u.startsWith("mailto:") &&
+        !u.startsWith("https://") &&
+        !u.startsWith("http://")
+      ) {
+        return false;
+      }
+      await shell.openExternal(u);
+      return true;
+    } catch (err) {
+      console.error("[Main] shell:openExternal failed:", err);
+      return false;
+    }
+  });
 
   ipcMain.handle("p2p:getPeers", () => p2pService.getPeers());
   ipcMain.on("p2p:broadcast", (_event, payload) =>

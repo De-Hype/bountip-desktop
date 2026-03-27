@@ -175,5 +175,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () =>
       ipcRenderer.removeListener("updater:download-progress", handler);
   },
+  openExternal: async (url: string) =>
+    ipcRenderer.invoke("shell:openExternal", url),
   factoryReset: () => ipcRenderer.send("system:factoryReset"),
 });

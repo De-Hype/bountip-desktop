@@ -1,4 +1,4 @@
-import require$$1$2, { app, BrowserWindow, net, protocol, ipcMain, nativeImage } from "electron";
+import require$$1$2, { app, BrowserWindow, net, protocol, ipcMain, shell, nativeImage } from "electron";
 import fs$1 from "fs";
 import path from "path";
 import crypto, { randomUUID } from "crypto";
@@ -1609,6 +1609,80 @@ const itemLotSchema = {
     "CREATE INDEX IF NOT EXISTS idx_item_lot_itemId ON item_lot(itemId)"
   ]
 };
+const recipeUpsertSql = `
+  INSERT INTO recipes (
+    id,
+    name,
+    productReference,
+    productName,
+    outletId,
+    mix,
+    totalPortions,
+    totalMixCost,
+    preparationTime,
+    difficulty_level,
+    instructions,
+    imageUrl,
+    createdAt,
+    updatedAt,
+    createdBy,
+    isDeleted,
+    inventoryId
+  ) VALUES (
+    @id,
+    @name,
+    @productReference,
+    @productName,
+    @outletId,
+    @mix,
+    @totalPortions,
+    @totalMixCost,
+    @preparationTime,
+    @difficulty_level,
+    @instructions,
+    @imageUrl,
+    @createdAt,
+    @updatedAt,
+    @createdBy,
+    @isDeleted,
+    @inventoryId
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    productReference = excluded.productReference,
+    productName = excluded.productName,
+    outletId = excluded.outletId,
+    mix = excluded.mix,
+    totalPortions = excluded.totalPortions,
+    totalMixCost = excluded.totalMixCost,
+    preparationTime = excluded.preparationTime,
+    difficulty_level = excluded.difficulty_level,
+    instructions = excluded.instructions,
+    imageUrl = excluded.imageUrl,
+    updatedAt = excluded.updatedAt,
+    createdBy = excluded.createdBy,
+    isDeleted = excluded.isDeleted,
+    inventoryId = excluded.inventoryId
+`;
+const buildRecipeUpsertParams = (r) => ({
+  id: r.id,
+  name: r.name,
+  productReference: r.productReference || r.productId || r.product_id,
+  productName: r.productName || "",
+  outletId: r.outletId,
+  mix: r.mix || "standard",
+  totalPortions: Number(r.totalPortions || 0),
+  totalMixCost: Number(r.totalMixCost || 0),
+  preparationTime: Number(r.preparationTime || 0),
+  difficulty_level: r.difficulty_level || "Medium",
+  instructions: r.instructions || "",
+  imageUrl: r.imageUrl || null,
+  createdAt: r.createdAt || null,
+  updatedAt: r.updatedAt || null,
+  createdBy: r.createdBy || "",
+  isDeleted: r.isDeleted ? 1 : 0,
+  inventoryId: r.inventoryId || null
+});
 const recipesSchema = {
   name: "recipes",
   create: `
@@ -1633,6 +1707,60 @@ const recipesSchema = {
     );
   `
 };
+const recipeIngredientUpsertSql = `
+  INSERT INTO recipe_ingredients (
+    id,
+    itemName,
+    unitOfMeasure,
+    quantity,
+    proposedFoodCost,
+    prepWaste,
+    critical,
+    isDeleted,
+    createdAt,
+    updatedAt,
+    recipeId,
+    itemId
+  ) VALUES (
+    @id,
+    @itemName,
+    @unitOfMeasure,
+    @quantity,
+    @proposedFoodCost,
+    @prepWaste,
+    @critical,
+    @isDeleted,
+    @createdAt,
+    @updatedAt,
+    @recipeId,
+    @itemId
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    itemName = excluded.itemName,
+    unitOfMeasure = excluded.unitOfMeasure,
+    quantity = excluded.quantity,
+    proposedFoodCost = excluded.proposedFoodCost,
+    prepWaste = excluded.prepWaste,
+    critical = excluded.critical,
+    isDeleted = excluded.isDeleted,
+    updatedAt = excluded.updatedAt,
+    recipeId = excluded.recipeId,
+    itemId = excluded.itemId
+`;
+const buildRecipeIngredientUpsertParams = (ri) => ({
+  id: ri.id,
+  itemName: ri.itemName,
+  unitOfMeasure: ri.unitOfMeasure,
+  quantity: Number(ri.quantity || 0),
+  proposedFoodCost: Number(ri.proposedFoodCost || 0),
+  prepWaste: Number(ri.prepWaste || 0),
+  critical: ri.critical ? 1 : 0,
+  isDeleted: ri.isDeleted ? 1 : 0,
+  createdAt: ri.createdAt || null,
+  updatedAt: ri.updatedAt || null,
+  recipeId: ri.recipeId || null,
+  itemId: ri.itemId || null
+});
 const recipeIngredientsSchema = {
   name: "recipe_ingredients",
   create: `
@@ -2920,6 +3048,150 @@ const componentLotLogSchema = {
     "CREATE INDEX IF NOT EXISTS idx_component_lot_logs_createdAt ON component_lot_logs(createdAt);"
   ]
 };
+const modifierUpsertSql = `
+  INSERT OR REPLACE INTO modifier (
+    id,
+    modifierType,
+    modifierMode,
+    showInPos,
+    name,
+    limitTotalSelection,
+    maximumQuantity,
+    productId,
+    outletId,
+    reference,
+    recordId,
+    version,
+    createdAt,
+    updatedAt,
+    deletedAt
+  ) VALUES (
+    @id,
+    @modifierType,
+    @modifierMode,
+    @showInPos,
+    @name,
+    @limitTotalSelection,
+    @maximumQuantity,
+    @productId,
+    @outletId,
+    @reference,
+    @recordId,
+    @version,
+    @createdAt,
+    @updatedAt,
+    @deletedAt
+  )
+`;
+const buildModifierUpsertParams = (m) => ({
+  id: String(m.id || ""),
+  modifierType: m.modifier_type ?? m.modifierType ?? null,
+  modifierMode: m.modifier_mode ?? m.modifierMode ?? null,
+  showInPos: m.show_in_pos ? 1 : m.showInPos ? 1 : 0,
+  name: m.name ?? null,
+  limitTotalSelection: m.limit_total_selection ? 1 : m.limitTotalSelection ? 1 : 0,
+  maximumQuantity: Number(m.maximum_quantity ?? m.maximumQuantity ?? 0),
+  productId: m.productId ?? m.product_id ?? null,
+  outletId: m.outletId ?? m.outlet_id ?? null,
+  reference: m.reference ?? null,
+  recordId: m.recordId ?? m.record_id ?? null,
+  version: Number(m.version ?? 0),
+  createdAt: m.created_at ?? m.createdAt ?? null,
+  updatedAt: m.updated_at ?? m.updatedAt ?? null,
+  deletedAt: m.deleted_at ?? m.deletedAt ?? null
+});
+const modifierSchema = {
+  name: "modifier",
+  create: `
+    CREATE TABLE IF NOT EXISTS modifier (
+      id TEXT PRIMARY KEY,
+      modifierType TEXT,
+      modifierMode TEXT,
+      showInPos INTEGER DEFAULT 0 NOT NULL,
+      name TEXT,
+      limitTotalSelection INTEGER DEFAULT 0 NOT NULL,
+      maximumQuantity INTEGER DEFAULT 0 NOT NULL,
+      productId TEXT,
+      outletId TEXT,
+      reference TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL,
+      createdAt TEXT,
+      updatedAt TEXT,
+      deletedAt TEXT
+    );
+  `,
+  indexes: [
+    `CREATE INDEX IF NOT EXISTS idx_modifier_outletId ON modifier(outletId);`,
+    `CREATE INDEX IF NOT EXISTS idx_modifier_productId ON modifier(productId);`,
+    `CREATE INDEX IF NOT EXISTS idx_modifier_type ON modifier(modifierType);`
+  ]
+};
+const modifierOptionUpsertSql = `
+  INSERT OR REPLACE INTO modifier_option (
+    id,
+    name,
+    amount,
+    maximumQuantity,
+    limitQuantity,
+    modifierId,
+    reference,
+    recordId,
+    version,
+    createdAt,
+    updatedAt,
+    deletedAt
+  ) VALUES (
+    @id,
+    @name,
+    @amount,
+    @maximumQuantity,
+    @limitQuantity,
+    @modifierId,
+    @reference,
+    @recordId,
+    @version,
+    @createdAt,
+    @updatedAt,
+    @deletedAt
+  )
+`;
+const buildModifierOptionUpsertParams = (mo) => ({
+  id: String(mo.id || ""),
+  name: mo.name ?? null,
+  amount: Number(mo.amount ?? 0),
+  maximumQuantity: Number(mo.maximum_quantity ?? mo.maximumQuantity ?? 0),
+  limitQuantity: mo.limit_quantity ? 1 : mo.limitQuantity ? 1 : 0,
+  modifierId: mo.modifierId ?? mo.modifier_id ?? null,
+  reference: mo.reference ?? null,
+  recordId: mo.recordId ?? mo.record_id ?? null,
+  version: Number(mo.version ?? 0),
+  createdAt: mo.created_at ?? mo.createdAt ?? null,
+  updatedAt: mo.updated_at ?? mo.updatedAt ?? null,
+  deletedAt: mo.deleted_at ?? mo.deletedAt ?? null
+});
+const modifierOptionSchema = {
+  name: "modifier_option",
+  create: `
+    CREATE TABLE IF NOT EXISTS modifier_option (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      amount REAL DEFAULT 0 NOT NULL,
+      maximumQuantity INTEGER DEFAULT 0 NOT NULL,
+      limitQuantity INTEGER DEFAULT 0 NOT NULL,
+      modifierId TEXT,
+      reference TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL,
+      createdAt TEXT,
+      updatedAt TEXT,
+      deletedAt TEXT
+    );
+  `,
+  indexes: [
+    `CREATE INDEX IF NOT EXISTS idx_modifier_option_modifierId ON modifier_option(modifierId);`
+  ]
+};
 const schemas = [
   userSchema,
   productSchema,
@@ -2954,7 +3226,9 @@ const schemas = [
   componentSchema,
   componentItemSchema,
   componentLotSchema,
-  componentLotLogSchema
+  componentLotLogSchema,
+  modifierSchema,
+  modifierOptionSchema
 ];
 var rng;
 var hasRequiredRng;
@@ -3753,6 +4027,44 @@ class DatabaseService {
         const stmt = this.prepare(productUpsertSql);
         for (const p of data.products) {
           stmt.run(this.sanitize(buildProductUpsertParams(p)));
+        }
+      }
+      if (Array.isArray(data.modifiers) && data.modifiers.length > 0) {
+        const stmt = this.prepare(modifierUpsertSql);
+        for (const m of data.modifiers) {
+          stmt.run(this.sanitize(buildModifierUpsertParams(m)));
+        }
+      }
+      if (Array.isArray(data.modifierOptions) && data.modifierOptions.length > 0) {
+        const stmt = this.prepare(modifierOptionUpsertSql);
+        for (const mo of data.modifierOptions) {
+          stmt.run(this.sanitize(buildModifierOptionUpsertParams(mo)));
+        }
+      }
+      if (Array.isArray(data.recipes) && data.recipes.length > 0) {
+        const stmt = this.prepare(recipeUpsertSql);
+        const productNameById = this.prepare(
+          "SELECT name FROM product WHERE id = ? OR productCode = ? LIMIT 1"
+        );
+        for (const r0 of data.recipes) {
+          const productRef = r0.productReference || r0.productId || r0.product_id || "";
+          let productName = r0.productName || "";
+          if (!productName && productRef) {
+            const row = productNameById.get(productRef, productRef);
+            if (row?.name) productName = String(row.name);
+          }
+          const r = {
+            ...r0,
+            productReference: productRef,
+            productName
+          };
+          stmt.run(this.sanitize(buildRecipeUpsertParams(r)));
+        }
+      }
+      if (Array.isArray(data.recipeIngredients) && data.recipeIngredients.length > 0) {
+        const stmt = this.prepare(recipeIngredientUpsertSql);
+        for (const ri of data.recipeIngredients) {
+          stmt.run(this.sanitize(buildRecipeIngredientUpsertParams(ri)));
         }
       }
       if (Array.isArray(data.systemDefaults) && data.systemDefaults.length > 0) {
@@ -22131,7 +22443,10 @@ ${signature}\r
           "isOnboarded",
           "isOfflineImage",
           "isEmailVerified",
-          "isPin"
+          "isPin",
+          "showInPos",
+          "limitTotalSelection",
+          "limitQuantity"
         ];
         for (const field of booleanFields) {
           if (typeof sanitizedPayload[field] === "number") {
@@ -23428,6 +23743,20 @@ ${signature}\r
     "network:setOnline",
     (_event, flag) => networkService.setOnline(flag)
   );
+  ipcMain.handle("shell:openExternal", async (_event, url) => {
+    try {
+      const u = String(url || "").trim();
+      if (!u) return false;
+      if (!u.startsWith("mailto:") && !u.startsWith("https://") && !u.startsWith("http://")) {
+        return false;
+      }
+      await shell.openExternal(u);
+      return true;
+    } catch (err) {
+      console.error("[Main] shell:openExternal failed:", err);
+      return false;
+    }
+  });
   ipcMain.handle("p2p:getPeers", () => p2pService.getPeers());
   ipcMain.on(
     "p2p:broadcast",

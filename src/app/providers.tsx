@@ -7,7 +7,7 @@
 
 import ReactQueryProvider from "@/react-query/providers";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { tokenManager } from "@/utils/tokenManager";
 import { userStorage } from "@/services/userStorage";
@@ -47,10 +47,52 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [isInitialSyncing, setIsInitialSyncing] = useState(false);
   const { isOnline, hasCheckedStatus } = useNetworkStore();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncSplashIndex, setSyncSplashIndex] = useState(0);
+  const [syncSplashProgress, setSyncSplashProgress] = useState(18);
 
   const SYNC_INTERVAL_MS = Number(
     import.meta.env.VITE_SYNC_INTERVAL_MS || 300000,
   );
+
+  const syncSplashMessages = useMemo(
+    () => [
+      {
+        title: "Getting your workspace ready...",
+        subtitle: "Syncing menus, inventory, and recipes — just a moment.",
+      },
+      {
+        title: "Pulling your latest data...",
+        subtitle: "Updating products, ingredients, and settings.",
+      },
+      {
+        title: "Almost there...",
+        subtitle: "Finishing setup so you can start working.",
+      },
+    ],
+    [],
+  );
+
+  useEffect(() => {
+    if (!isInitialSyncing) return;
+    setSyncSplashIndex(0);
+    setSyncSplashProgress(18);
+
+    const messageTimer = window.setInterval(() => {
+      setSyncSplashIndex((prev) => (prev + 1) % syncSplashMessages.length);
+    }, 2400);
+
+    const progressTimer = window.setInterval(() => {
+      setSyncSplashProgress((prev) => {
+        if (prev >= 86) return 22;
+        return prev + 6;
+      });
+    }, 320);
+
+    return () => {
+      window.clearInterval(messageTimer);
+      window.clearInterval(progressTimer);
+    };
+  }, [isInitialSyncing, syncSplashMessages.length]);
 
   /**
    * ------------------------------------------------------
@@ -239,6 +281,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     isInitialSyncing ||
     (isAuthenticated && !hasInitialized)
   ) {
+    const splash = syncSplashMessages[syncSplashIndex] || syncSplashMessages[0];
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <img
@@ -247,13 +290,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
           className="w-36 animate-pulse"
         />
         {isInitialSyncing && (
-          <div className="mt-4 flex flex-col items-center gap-2">
-            <p className="text-gray-600 font-medium animate-pulse">
-              Preparing your workspace...
-            </p>
-            <p className="text-gray-400 text-sm">
-              This will only take a moment
-            </p>
+          <div className="mt-8 w-full max-w-[520px] px-6 flex flex-col items-center">
+            <div className="text-[22px] font-bold text-[#111827] text-center">
+              {splash.title}
+            </div>
+            <div className="mt-3 text-[14px] text-[#6B7280] text-center">
+              {splash.subtitle}
+            </div>
+
+            <div className="mt-7 h-3 w-full rounded-full bg-[#E5E7EB] overflow-hidden">
+              <div
+                className="h-full bg-[#15BA5C] transition-[width] duration-300 ease-out"
+                style={{ width: `${syncSplashProgress}%` }}
+              />
+            </div>
           </div>
         )}
       </div>

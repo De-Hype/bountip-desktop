@@ -1,4 +1,4 @@
-
+const syncApiResRaw = String.raw`
 {
   “records”: [
     {
@@ -58,7 +58,6 @@
     }
   ]
 }
-
 
 {
   "records": [
@@ -356,4 +355,6 @@
     }
   ]
 }
+`;
 
+export default syncApiResRaw;

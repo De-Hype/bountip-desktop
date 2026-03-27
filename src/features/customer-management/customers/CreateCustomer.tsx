@@ -183,7 +183,7 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
         const emailPlaceholders = emailList.map(() => "?").join(",");
         const phonePlaceholders = phoneList.map(() => "?").join(",");
 
-        let checkQuery = `SELECT email, phoneNumber FROM customers WHERE outletId = ? AND (`;
+        let checkQuery = `SELECT email, phoneNumber FROM customers WHERE outletId = ? AND (deletedAt IS NULL OR deletedAt = '') AND (`;
         const queryParts = [];
         const params = [selectedOutlet?.id];
 

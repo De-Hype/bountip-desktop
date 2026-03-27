@@ -1,5 +1,13 @@
-import { useState, useEffect } from "react";
-import { X, Check, Loader2, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FilePlus2,
+  Pencil,
+  X,
+  Check,
+  Loader2,
+  Trash2,
+  Plus,
+} from "lucide-react";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
 import useBusinessStore from "@/stores/useBusinessStore";
 import useToastStore from "@/stores/toastStore";
@@ -7,6 +15,9 @@ import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import { SYNC_ACTIONS } from "../../../electron/types/action.types";
 import ImageHandler from "@/shared/Image/ImageHandler";
 import DeleteConfirmModal from "./DeleteConfirmModal";
+import EmptyStateAssests from "@/assets/images/empty-state";
+import CreateModifier from "./CreateModifier";
+import EditModifier from "./EditModifier";
 
 type ProductUpdatePayload = {
   id: string;
@@ -39,6 +50,7 @@ type ElectronAPI = {
   addSystemDefault: (key: string, data: any, outletId: string) => Promise<any>;
   deleteSystemDefault: (id: string) => Promise<void>;
   queueAdd: (op: any) => Promise<void>;
+  dbQuery: (sql: string, params: any[]) => Promise<any[]>;
 };
 
 const getElectronAPI = (): ElectronAPI | null => {
@@ -84,6 +96,13 @@ type WeightUnit = {
 type PackagingMethod = {
   id: number | string;
   name: string;
+};
+
+type ModifierRow = {
+  id: string;
+  name: string | null;
+  modifierType: string | null;
+  modifierMode: string | null;
 };
 
 interface Product {
@@ -146,6 +165,736 @@ const ToggleSwitch = ({ checked, onToggle }: ToggleSwitchProps) => {
   );
 };
 
+type ModifierEditOptionRow = {
+  id: string;
+  name: string;
+  amount: string;
+  maximumQuantity: string;
+};
+
+type EditModifierModalProps = {
+  isOpen: boolean;
+  modifierId: string | null;
+  outletId: string;
+  onClose: () => void;
+  onSaved: () => void;
+};
+
+const sanitizeNumber = (value: string) => value.replace(/[^0-9.]/g, "");
+
+const formatModifierModeLabel = (mode: string | null) => {
+  if (!mode) return "";
+  if (mode === "SINGLE_CHOICE") return "Single Choice";
+  if (mode === "MULTI_CHOICE") return "Multi Choice";
+  return mode;
+};
+
+const EditModifierModal = ({
+  isOpen,
+  modifierId,
+  outletId,
+  onClose,
+  onSaved,
+}: EditModifierModalProps) => {
+  const { showToast } = useToastStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [modifierType, setModifierType] = useState<string>("VARIANCE");
+  const [modifierMode, setModifierMode] = useState<string>("SINGLE_CHOICE");
+  const [groupName, setGroupName] = useState("");
+  const [showInPos, setShowInPos] = useState(true);
+  const [limitTotalSelection, setLimitTotalSelection] = useState(true);
+  const [maximumQuantity, setMaximumQuantity] = useState("");
+  const [limitQuantityPerOption, setLimitQuantityPerOption] = useState(false);
+  const [options, setOptions] = useState<ModifierEditOptionRow[]>([]);
+  const initialSnapshot = useRef<string>("");
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!modifierId) return;
+    if (!outletId) return;
+    const api = getElectronAPI();
+    if (!api?.dbQuery) return;
+
+    setIsLoading(true);
+    (async () => {
+      try {
+        const modifierRows = await api.dbQuery(
+          `
+            SELECT
+              id,
+              modifierType,
+              modifierMode,
+              showInPos,
+              name,
+              limitTotalSelection,
+              maximumQuantity
+            FROM modifier
+            WHERE id = ? AND outletId = ? AND (deletedAt IS NULL OR deletedAt = '')
+            LIMIT 1
+          `,
+          [modifierId, outletId],
+        );
+        const modifier = modifierRows?.[0];
+        if (!modifier) {
+          onClose();
+          return;
+        }
+
+        const optionRows = await api.dbQuery(
+          `
+            SELECT id, name, amount, maximumQuantity, limitQuantity
+            FROM modifier_option
+            WHERE modifierId = ? AND (deletedAt IS NULL OR deletedAt = '')
+            ORDER BY COALESCE(updatedAt, createdAt) ASC
+          `,
+          [modifierId],
+        );
+
+        const nextMode = String(modifier.modifierMode || "SINGLE_CHOICE");
+        const nextMaxQty =
+          modifier.maximumQuantity != null
+            ? String(modifier.maximumQuantity)
+            : "";
+        const nextOptions: ModifierEditOptionRow[] = (optionRows || []).map(
+          (r: any) => ({
+            id: String(r.id || crypto.randomUUID()),
+            name: r.name != null ? String(r.name) : "",
+            amount:
+              r.amount != null && Number.isFinite(Number(r.amount))
+                ? String(r.amount)
+                : "",
+            maximumQuantity:
+              r.maximumQuantity != null &&
+              Number.isFinite(Number(r.maximumQuantity))
+                ? String(r.maximumQuantity)
+                : "",
+          }),
+        );
+
+        const nextLimitQtyPerOption = (optionRows || []).some(
+          (r: any) => Number(r?.limitQuantity || 0) === 1,
+        );
+
+        setModifierType(String(modifier.modifierType || "VARIANCE"));
+        setModifierMode(nextMode);
+        setGroupName(modifier.name != null ? String(modifier.name) : "");
+        setShowInPos(Number(modifier.showInPos || 0) === 1);
+        setLimitTotalSelection(Number(modifier.limitTotalSelection || 0) === 1);
+        setMaximumQuantity(nextMaxQty);
+        setLimitQuantityPerOption(nextLimitQtyPerOption);
+        setOptions(
+          nextOptions.length > 0
+            ? nextOptions
+            : [
+                {
+                  id: crypto.randomUUID(),
+                  name: "",
+                  amount: "",
+                  maximumQuantity: "",
+                },
+              ],
+        );
+
+        initialSnapshot.current = JSON.stringify({
+          modifierType: String(modifier.modifierType || "VARIANCE"),
+          modifierMode: nextMode,
+          groupName: modifier.name != null ? String(modifier.name) : "",
+          showInPos: Number(modifier.showInPos || 0) === 1,
+          limitTotalSelection: Number(modifier.limitTotalSelection || 0) === 1,
+          maximumQuantity: nextMaxQty,
+          limitQuantityPerOption: nextLimitQtyPerOption,
+          options:
+            nextOptions.length > 0
+              ? nextOptions
+              : [{ id: "seed", name: "", amount: "", maximumQuantity: "" }],
+        });
+      } catch (e) {
+        console.error("Failed to load modifier:", e);
+        showToast("error", "Failed to load", "Unable to load modifier details");
+        onClose();
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [isOpen, modifierId, onClose, outletId, showToast]);
+
+  const isDirty = useMemo(() => {
+    if (!isOpen) return false;
+    if (!modifierId) return false;
+    return (
+      JSON.stringify({
+        modifierType,
+        modifierMode,
+        groupName,
+        showInPos,
+        limitTotalSelection,
+        maximumQuantity,
+        limitQuantityPerOption,
+        options,
+      }) !== initialSnapshot.current
+    );
+  }, [
+    groupName,
+    isOpen,
+    limitQuantityPerOption,
+    limitTotalSelection,
+    maximumQuantity,
+    modifierId,
+    modifierMode,
+    modifierType,
+    options,
+    showInPos,
+  ]);
+
+  const canSave = useMemo(() => {
+    if (!isDirty) return false;
+    if (groupName.trim() === "") return false;
+    const hasOption = options.some((o) => o.name.trim() !== "");
+    if (!hasOption) return false;
+    if (modifierMode !== "MULTI_CHOICE") return true;
+    const groupMax = parseFloat(maximumQuantity);
+    if (!Number.isFinite(groupMax) || groupMax <= 0) return true;
+    if (!limitQuantityPerOption) return true;
+    const sum = options.reduce((acc, o) => {
+      const optMax = parseFloat(o.maximumQuantity);
+      return acc + (Number.isFinite(optMax) ? optMax : 0);
+    }, 0);
+    if (sum > groupMax) return false;
+    return options.every((o) => {
+      const optMax = parseFloat(o.maximumQuantity);
+      if (!Number.isFinite(optMax)) return true;
+      return optMax <= groupMax;
+    });
+  }, [
+    groupName,
+    isDirty,
+    limitQuantityPerOption,
+    maximumQuantity,
+    modifierMode,
+    options,
+  ]);
+
+  const addOption = () => {
+    setOptions((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: "", amount: "", maximumQuantity: "" },
+    ]);
+  };
+
+  const removeOption = (optionId: string) => {
+    setOptions((prev) => {
+      const next = prev.filter((o) => o.id !== optionId);
+      return next.length > 0
+        ? next
+        : [
+            {
+              id: crypto.randomUUID(),
+              name: "",
+              amount: "",
+              maximumQuantity: "",
+            },
+          ];
+    });
+  };
+
+  const clearAllOptions = () => {
+    setOptions([
+      { id: crypto.randomUUID(), name: "", amount: "", maximumQuantity: "" },
+    ]);
+  };
+
+  const updateOption = (
+    optionId: string,
+    patch: Partial<ModifierEditOptionRow>,
+  ) => {
+    setOptions((prev) => {
+      const groupMax = parseFloat(maximumQuantity);
+      const nextPatch = { ...patch };
+      if (nextPatch.maximumQuantity != null) {
+        const raw = String(nextPatch.maximumQuantity).trim();
+        if (raw === "") {
+          nextPatch.maximumQuantity = "";
+        } else {
+          const parsed = parseFloat(raw);
+          nextPatch.maximumQuantity = Number.isFinite(parsed)
+            ? String(Math.max(0, parsed))
+            : "";
+        }
+      }
+
+      if (
+        modifierMode === "MULTI_CHOICE" &&
+        limitQuantityPerOption &&
+        Number.isFinite(groupMax) &&
+        groupMax > 0 &&
+        nextPatch.maximumQuantity != null &&
+        nextPatch.maximumQuantity !== ""
+      ) {
+        const desired = parseFloat(String(nextPatch.maximumQuantity));
+        const othersSum = prev.reduce((acc, o) => {
+          if (o.id === optionId) return acc;
+          const optMax = parseFloat(o.maximumQuantity);
+          return acc + (Number.isFinite(optMax) ? optMax : 0);
+        }, 0);
+        const remaining = Math.max(0, groupMax - othersSum);
+        const capped = Math.min(
+          Number.isFinite(desired) ? desired : 0,
+          remaining,
+        );
+        nextPatch.maximumQuantity = String(capped);
+      } else if (
+        modifierMode === "MULTI_CHOICE" &&
+        Number.isFinite(groupMax) &&
+        groupMax > 0 &&
+        nextPatch.maximumQuantity != null &&
+        nextPatch.maximumQuantity !== ""
+      ) {
+        const desired = parseFloat(String(nextPatch.maximumQuantity));
+        if (Number.isFinite(desired) && desired > groupMax) {
+          nextPatch.maximumQuantity = String(groupMax);
+        }
+      }
+
+      return prev.map((o) => (o.id === optionId ? { ...o, ...nextPatch } : o));
+    });
+  };
+
+  const updateMaximumQuantity = (nextValue: string) => {
+    const next = sanitizeNumber(nextValue);
+    setMaximumQuantity(next);
+    const groupMax = parseFloat(next);
+    if (!Number.isFinite(groupMax) || groupMax <= 0) return;
+    if (modifierMode !== "MULTI_CHOICE") return;
+
+    setOptions((prev) => {
+      const cappedOptions = prev.map((o) => {
+        const raw = String(o.maximumQuantity ?? "").trim();
+        if (raw === "") return o;
+        const optMax = parseFloat(raw);
+        if (!Number.isFinite(optMax)) return o;
+        if (optMax <= groupMax) return o;
+        return { ...o, maximumQuantity: String(groupMax) };
+      });
+
+      if (!limitQuantityPerOption) return cappedOptions;
+
+      let remaining = groupMax;
+      return cappedOptions.map((o) => {
+        const raw = String(o.maximumQuantity ?? "").trim();
+        if (raw === "" || !Number.isFinite(parseFloat(raw))) return o;
+        const optMax = Math.max(0, parseFloat(raw));
+        const nextMax = Math.min(optMax, remaining);
+        remaining = Math.max(0, remaining - nextMax);
+        return { ...o, maximumQuantity: String(nextMax) };
+      });
+    });
+  };
+
+  const handleSave = async () => {
+    if (!modifierId) return;
+    if (!canSave) return;
+    const api = getElectronAPI();
+    if (!api?.dbQuery) {
+      showToast("error", "Unavailable", "Database API not available");
+      return;
+    }
+    const now = new Date().toISOString();
+    try {
+      const trimmedName = groupName.trim();
+      const groupMaxQty = Number.isFinite(parseFloat(maximumQuantity))
+        ? parseFloat(maximumQuantity)
+        : 0;
+
+      await api.dbQuery(
+        `
+          UPDATE modifier
+          SET
+            name = ?,
+            showInPos = ?,
+            limitTotalSelection = ?,
+            maximumQuantity = ?,
+            updatedAt = ?
+          WHERE id = ? AND outletId = ?
+        `,
+        [
+          trimmedName,
+          showInPos ? 1 : 0,
+          modifierMode === "MULTI_CHOICE" ? (limitTotalSelection ? 1 : 0) : 1,
+          modifierMode === "MULTI_CHOICE" ? groupMaxQty : 1,
+          now,
+          modifierId,
+          outletId,
+        ],
+      );
+
+      await api.dbQuery(
+        `
+          UPDATE modifier_option
+          SET deletedAt = ?, updatedAt = ?
+          WHERE modifierId = ? AND (deletedAt IS NULL OR deletedAt = '')
+        `,
+        [now, now, modifierId],
+      );
+
+      const liveOptions = options
+        .map((o) => ({
+          name: o.name.trim(),
+          amount: parseFloat(o.amount) || 0,
+          maximumQuantity: parseFloat(o.maximumQuantity) || 0,
+        }))
+        .filter((o) => o.name !== "");
+
+      let remaining = groupMaxQty;
+      for (const opt of liveOptions) {
+        const cappedOptionMax =
+          modifierMode === "MULTI_CHOICE" &&
+          limitQuantityPerOption &&
+          groupMaxQty > 0
+            ? Math.min(opt.maximumQuantity, Math.max(0, remaining))
+            : 0;
+        if (
+          modifierMode === "MULTI_CHOICE" &&
+          limitQuantityPerOption &&
+          groupMaxQty > 0
+        ) {
+          remaining = Math.max(0, remaining - cappedOptionMax);
+        }
+        await api.dbQuery(
+          `
+            INSERT INTO modifier_option (
+              id,
+              name,
+              amount,
+              maximumQuantity,
+              limitQuantity,
+              modifierId,
+              reference,
+              recordId,
+              version,
+              createdAt,
+              updatedAt,
+              deletedAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            crypto.randomUUID(),
+            opt.name,
+            opt.amount,
+            modifierMode === "MULTI_CHOICE" && limitQuantityPerOption
+              ? cappedOptionMax
+              : 0,
+            modifierMode === "MULTI_CHOICE" && limitQuantityPerOption ? 1 : 0,
+            modifierId,
+            null,
+            null,
+            0,
+            now,
+            now,
+            null,
+          ],
+        );
+      }
+
+      showToast("success", "Modifier updated", "Changes saved successfully");
+      onSaved();
+      onClose();
+    } catch (e) {
+      console.error("Failed to update modifier:", e);
+      showToast("error", "Update failed", "Failed to update modifier");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-120 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-[920px] rounded-[22px] bg-white shadow-2xl overflow-hidden">
+        <div className="flex items-start justify-between px-8 py-7">
+          <div>
+            <h2 className="text-[22px] font-bold text-[#111827]">
+              Edit Modifier
+            </h2>
+            <div className="mt-1 text-sm text-[#6B7280]">
+              {(modifierType || "TYPE") +
+                " • " +
+                formatModifierModeLabel(modifierMode)}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FEE2E2] text-[#EF4444] cursor-pointer"
+            aria-label="Close edit modifier modal"
+            title="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="h-px w-full bg-[#E5E7EB]" />
+
+        <div className="max-h-[70vh] overflow-y-auto px-8 py-7">
+          {isLoading ? (
+            <div className="min-h-[280px] flex items-center justify-center text-sm text-gray-500">
+              Loading...
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <div>
+                <div className="text-[16px] font-bold text-[#111827]">
+                  Group Name
+                </div>
+                <input
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Enter a Name for the group"
+                  className="mt-3 h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
+                />
+              </div>
+
+              {modifierMode === "MULTI_CHOICE" && (
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-8 items-start">
+                  <div>
+                    <div className="text-[16px] font-bold text-[#111827]">
+                      Maximum Quantity
+                    </div>
+                    <input
+                      value={maximumQuantity}
+                      onChange={(e) => updateMaximumQuantity(e.target.value)}
+                      placeholder="Enter Maximum Qty"
+                      className="mt-3 h-14 w-full max-w-[420px] rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 md:pt-9">
+                    <div className="text-[14px] font-medium text-[#111827] leading-snug">
+                      Limit total selections from this
+                      <br />
+                      group
+                    </div>
+                    <ToggleSwitch
+                      checked={limitTotalSelection}
+                      onToggle={() => setLimitTotalSelection((v) => !v)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {modifierMode === "MULTI_CHOICE" && (
+                <div className="flex items-center justify-between">
+                  <div className="text-[14px] font-medium text-[#111827]">
+                    Limit quantity per individual
+                    <br />
+                    option
+                  </div>
+                  <ToggleSwitch
+                    checked={limitQuantityPerOption}
+                    onToggle={() => {
+                      setLimitQuantityPerOption((v) => !v);
+                      if (limitQuantityPerOption) {
+                        setOptions((prev) =>
+                          prev.map((o) => ({ ...o, maximumQuantity: "" })),
+                        );
+                      }
+                    }}
+                  />
+                  <span />
+                </div>
+              )}
+
+              <div className="rounded-[16px] border border-[#E5E7EB] bg-white overflow-hidden">
+                <div className="px-6 py-6">
+                  <div
+                    className={`grid grid-cols-1 gap-6 ${
+                      modifierMode === "MULTI_CHOICE"
+                        ? "md:grid-cols-3"
+                        : "md:grid-cols-2"
+                    }`}
+                  >
+                    <div className="text-[16px] font-bold text-[#111827]">
+                      Option Name
+                    </div>
+                    <div className="text-[16px] font-bold text-[#111827]">
+                      Amount
+                    </div>
+                    {modifierMode === "MULTI_CHOICE" && (
+                      <div className="text-[16px] font-bold text-[#111827]">
+                        Maximum Quantity
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 space-y-6">
+                    {options.map((o) => (
+                      <div
+                        key={o.id}
+                        className={`grid grid-cols-1 gap-6 ${
+                          modifierMode === "MULTI_CHOICE"
+                            ? "md:grid-cols-3"
+                            : "md:grid-cols-2"
+                        } items-end`}
+                      >
+                        <input
+                          value={o.name}
+                          onChange={(e) =>
+                            updateOption(o.id, { name: e.target.value })
+                          }
+                          placeholder="Enter Name"
+                          className="h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
+                        />
+                        <div className="flex items-end gap-4">
+                          <input
+                            value={o.amount}
+                            onChange={(e) =>
+                              updateOption(o.id, {
+                                amount: sanitizeNumber(e.target.value),
+                              })
+                            }
+                            placeholder="0"
+                            className="h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeOption(o.id)}
+                            className="h-12 w-12 rounded-[14px] bg-[#FEE2E2] text-[#EF4444] inline-flex items-center justify-center cursor-pointer"
+                            aria-label="Remove option"
+                            title="Remove"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
+                        {modifierMode === "MULTI_CHOICE" && (
+                          <input
+                            value={o.maximumQuantity}
+                            onChange={(e) =>
+                              updateOption(o.id, {
+                                maximumQuantity: sanitizeNumber(e.target.value),
+                              })
+                            }
+                            placeholder="0"
+                            disabled={!limitQuantityPerOption}
+                            className={`h-14 w-full rounded-[14px] border border-[#E5E7EB] px-5 text-[16px] outline-none ${
+                              limitQuantityPerOption
+                                ? "bg-white"
+                                : "bg-[#F3F4F6] text-gray-500"
+                            }`}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-8 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={addOption}
+                      className="text-[#15BA5C] font-semibold inline-flex items-center gap-2 cursor-pointer"
+                    >
+                      <Plus className="h-5 w-5" />
+                      Add another option
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={clearAllOptions}
+                      className="text-[#EF4444] font-semibold inline-flex items-center gap-2 cursor-pointer"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="h-px w-full bg-[#E5E7EB]" />
+
+                <div className="px-6 py-5 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="text-[14px] font-medium text-[#111827]">
+                      Show modifier when selling item
+                      <br />
+                      in point of sales
+                    </div>
+                    <ToggleSwitch
+                      checked={showInPos}
+                      onToggle={() => setShowInPos((v) => !v)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {isDirty && (
+          <div className="px-8 py-6 border-t border-[#E5E7EB] bg-white">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!canSave}
+              className="h-12 w-full rounded-[14px] bg-[#15BA5C] text-white font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#119E4D] transition-colors"
+            >
+              Save Changes
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+type DeleteModifierConfirmModalProps = {
+  isOpen: boolean;
+  modifierName: string;
+  onClose: () => void;
+  onConfirm: () => void;
+};
+
+const DeleteModifierConfirmModal = ({
+  isOpen,
+  modifierName,
+  onClose,
+  onConfirm,
+}: DeleteModifierConfirmModalProps) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-120 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-md rounded-[24px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#FEE2E2]">
+            <Trash2 className="h-8 w-8 text-[#EF4444]" />
+          </div>
+
+          <h2 className="text-[22px] font-bold text-[#1C1B20]">
+            Delete Modifier
+          </h2>
+
+          <p className="mt-4 text-[16px] text-[#6B7280] leading-relaxed">
+            Are you sure you want to delete "{modifierName}"? This action cannot
+            be undone.
+          </p>
+
+          <div className="mt-10 flex w-full gap-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-14 flex-1 cursor-pointer rounded-full border border-[#D1D5DB] text-[16px] font-bold text-[#4B5563] hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="h-14 flex-1 cursor-pointer rounded-full bg-[#E33629] text-[16px] font-bold text-white hover:bg-[#C52B1F] transition-colors"
+            >
+              Delete Modifier
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AddEntityModal = ({
   isOpen,
   title = "Add item",
@@ -167,7 +916,7 @@ const AddEntityModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4 sm:p-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-110 flex items-center justify-center bg-black/40 p-4 sm:p-6 backdrop-blur-sm">
       <div className="relative w-full max-w-md rounded-[24px] bg-white shadow-2xl animate-in zoom-in-95 duration-200">
         <button
           type="button"
@@ -249,6 +998,20 @@ const EditProduct = ({
   >({});
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
+  const [isModifiersLoading, setIsModifiersLoading] = useState(false);
+  const [productModifiers, setProductModifiers] = useState<ModifierRow[]>([]);
+  const [isCreateModifierOpen, setIsCreateModifierOpen] = useState(false);
+  const [isEditModifierOpen, setIsEditModifierOpen] = useState(false);
+  const [editingModifierId, setEditingModifierId] = useState<string | null>(
+    null,
+  );
+  const [isDeleteModifierConfirmOpen, setIsDeleteModifierConfirmOpen] =
+    useState(false);
+  const [deletingModifierId, setDeletingModifierId] = useState<string | null>(
+    null,
+  );
+  const [isDeletingModifier, setIsDeletingModifier] = useState(false);
+
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -323,6 +1086,14 @@ const EditProduct = ({
       setSelectedPackagingMethods({});
       setPriceTiers([]);
       setPriceTierEnabled(false);
+      setIsModifiersLoading(false);
+      setProductModifiers([]);
+      setIsCreateModifierOpen(false);
+      setIsEditModifierOpen(false);
+      setEditingModifierId(null);
+      setIsDeleteModifierConfirmOpen(false);
+      setDeletingModifierId(null);
+      setIsDeletingModifier(false);
     };
 
     if (!isOpen) {
@@ -435,6 +1206,129 @@ const EditProduct = ({
       }
     }
   }, [isOpen, product, selectedOutletId, selectedOutlet?.priceTier]);
+
+  const refreshModifiers = useCallback(() => {
+    if (!isOpen) return;
+    if (activeTab !== "modifiers") return;
+    if (!product?.id) return;
+    if (!selectedOutletId) return;
+
+    const api = getElectronAPI();
+    if (!api?.dbQuery) return;
+
+    setIsModifiersLoading(true);
+    api
+      .dbQuery(
+        `
+          SELECT id, name, modifierType, modifierMode
+          FROM modifier
+          WHERE productId = ? AND outletId = ? AND (deletedAt IS NULL OR deletedAt = '')
+          ORDER BY COALESCE(updatedAt, createdAt) DESC
+        `,
+        [product.id, selectedOutletId],
+      )
+      .then((rows) => {
+        setProductModifiers(
+          (rows || []).map((r: any) => ({
+            id: String(r.id || ""),
+            name: r.name != null ? String(r.name) : null,
+            modifierType:
+              r.modifierType != null ? String(r.modifierType) : null,
+            modifierMode:
+              r.modifierMode != null ? String(r.modifierMode) : null,
+          })),
+        );
+      })
+      .catch((e) => {
+        console.error("Failed to load product modifiers:", e);
+        setProductModifiers([]);
+      })
+      .finally(() => setIsModifiersLoading(false));
+  }, [activeTab, isOpen, product?.id, selectedOutletId]);
+
+  useEffect(() => {
+    refreshModifiers();
+  }, [refreshModifiers]);
+
+  const modifierToDelete = useMemo(
+    () => productModifiers.find((m) => m.id === deletingModifierId) || null,
+    [deletingModifierId, productModifiers],
+  );
+
+  const handleDeleteModifier = async () => {
+    if (!deletingModifierId) return;
+    if (!selectedOutletId) return;
+    const api = getElectronAPI();
+    if (!api?.dbQuery) return;
+
+    setIsDeleteModifierConfirmOpen(false);
+    setIsDeletingModifier(true);
+    const now = new Date().toISOString();
+    try {
+      const modifierRows = await api.dbQuery(
+        `
+          SELECT *
+          FROM modifier
+          WHERE id = ? AND outletId = ?
+          LIMIT 1
+        `,
+        [deletingModifierId, selectedOutletId],
+      );
+      const modifierRecord = modifierRows?.[0] || null;
+
+      const optionRows = await api.dbQuery(
+        `
+          SELECT *
+          FROM modifier_option
+          WHERE modifierId = ? AND (deletedAt IS NULL OR deletedAt = '')
+        `,
+        [deletingModifierId],
+      );
+
+      await api.dbQuery(
+        `
+          UPDATE modifier
+          SET deletedAt = ?, updatedAt = ?
+          WHERE id = ? AND outletId = ?
+        `,
+        [now, now, deletingModifierId, selectedOutletId],
+      );
+      await api.dbQuery(
+        `
+          UPDATE modifier_option
+          SET deletedAt = ?, updatedAt = ?
+          WHERE modifierId = ? AND (deletedAt IS NULL OR deletedAt = '')
+        `,
+        [now, now, deletingModifierId],
+      );
+      if (api?.queueAdd) {
+        if (modifierRecord) {
+          await api.queueAdd({
+            table: "modifier",
+            action: SYNC_ACTIONS.DELETE,
+            id: deletingModifierId,
+            data: { ...modifierRecord, deletedAt: now, updatedAt: now },
+          });
+        }
+        for (const opt of optionRows || []) {
+          await api.queueAdd({
+            table: "modifier_option",
+            action: SYNC_ACTIONS.DELETE,
+            id: opt.id,
+            data: { ...opt, deletedAt: now, updatedAt: now },
+          });
+        }
+      }
+      showToast("success", "Modifier deleted", "The modifier has been removed");
+      setDeletingModifierId(null);
+      refreshModifiers();
+    } catch (e) {
+      console.error("Failed to delete modifier:", e);
+      showToast("error", "Delete failed", "Failed to delete modifier");
+    } finally {
+      setIsDeletingModifier(false);
+    }
+  };
 
   const calculateTierPrice = (rules?: PriceTier["pricingRules"]) => {
     const price = parseFloat(defaultPrice);
@@ -1163,218 +2057,196 @@ const EditProduct = ({
                 </div>
               </div>
             ) : (
-              <div className=""></div>
-              // <div className="space-y-6">
-              //   <div className="space-y-3">
-              //     <div className="flex items-center justify-between">
-              //       <div>
-              //         <p className="text-[15px] font-medium text-[#1C1B20]">
-              //           Add Allergens
-              //         </p>
-              //         <p className="text-xs text-[#6B7280]">
-              //           Select or add all allergens associated with this Product
-              //         </p>
-              //       </div>
-              //       <ToggleSwitch
-              //         checked={allergensEnabled}
-              //         onToggle={() => setAllergensEnabled(!allergensEnabled)}
-              //       />
-              //     </div>
+              <div className="space-y-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    {productModifiers.length > 0 ? (
+                      <>
+                        <div className="text-[16px] font-semibold text-[#111827]">
+                          {productModifiers.length}{" "}
+                          {productModifiers.length === 1
+                            ? "Modifier"
+                            : "Modifiers"}{" "}
+                          available, click the button to continue
+                        </div>
+                        <p className="mt-2 text-sm text-[#737373]">
+                          Create different variations for products
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-[20px] font-bold text-[#111827]">
+                          Modifiers
+                        </h3>
+                        <p className="mt-1 text-sm text-[#737373]">
+                          Create different variations for products
+                        </p>
+                      </>
+                    )}
+                  </div>
 
-              //     {allergensEnabled && (
-              //       <div className="flex flex-wrap gap-3">
-              //         {allergens.map((a) => (
-              //           <div
-              //             key={a.id}
-              //             className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm ${a.selected ? "border-[#15BA5C] bg-[#ECFDF3] text-[#047857]" : "border-[#E5E7EB] bg-white"}`}
-              //           >
-              //             <button
-              //               type="button"
-              //               onClick={() => handleAllergenToggle(a.id)}
-              //             >
-              //               {a.name}
-              //             </button>
-              //             <button
-              //               type="button"
-              //               onClick={() => handleAllergenDelete(a.id)}
-              //               className="ml-1 text-[#9CA3AF] hover:text-[#EF4444]"
-              //             >
-              //               <X className="h-3 w-3" />
-              //             </button>
-              //           </div>
-              //         ))}
-              //         <button
-              //           type="button"
-              //           onClick={() => setIsAddAllergenModalOpen(true)}
-              //           className="flex items-center gap-2 rounded-full border border-[#15BA5C] px-4 py-2 text-sm text-[#15BA5C]"
-              //         >
-              //           <span className="text-base leading-none">+</span>
-              //           <span>Add</span>
-              //         </button>
-              //       </div>
-              //     )}
-              //   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateModifierOpen(true)}
+                    className="h-11 px-6 rounded-[12px] bg-[#15BA5C] text-white font-semibold flex items-center gap-2 cursor-pointer hover:bg-[#119E4D] transition-colors"
+                  >
+                    <Plus className="h-5 w-5" />
+                    Create a Modifier
+                  </button>
+                </div>
 
-              //   <div className="space-y-2">
-              //     <p className="text-[15px] font-medium text-[#1C1B20]">
-              //       Lead Time <span className="text-[#EF4444]">*</span>
-              //     </p>
-              //     <div className="grid gap-3 md:grid-cols-3">
-              //       {["Days", "Hours", "Minutes"].map((label, i) => {
-              //         const value =
-              //           i === 0
-              //             ? leadTimeDays
-              //             : i === 1
-              //               ? leadTimeHours
-              //               : leadTimeMinutes;
-              //         const setter =
-              //           i === 0
-              //             ? setLeadTimeDays
-              //             : i === 1
-              //               ? setLeadTimeHours
-              //               : setLeadTimeMinutes;
-              //         return (
-              //           <div
-              //             key={label}
-              //             className="flex items-center rounded-[12px] bg-[#FAFAFC] px-3 py-3 text-sm"
-              //           >
-              //             <input
-              //               type="number"
-              //               value={value}
-              //               onChange={(e) => setter(e.target.value)}
-              //               placeholder={label}
-              //               className="flex-1 bg-transparent outline-none"
-              //             />
-              //             <Check className="h-4 w-4 text-[#9CA3AF]" />
-              //           </div>
-              //         );
-              //       })}
-              //     </div>
-              //   </div>
+                {isModifiersLoading ? (
+                  <div className="min-h-[52vh] flex items-center justify-center text-sm text-gray-500">
+                    Loading...
+                  </div>
+                ) : productModifiers.length === 0 ? (
+                  <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6">
+                    <img
+                      className="h-[260px] sm:h-[320px] md:h-[360px] object-contain"
+                      src={EmptyStateAssests.ProductManagementEmptyState}
+                      alt="No Modifiers"
+                    />
+                    <div className="text-center">
+                      <h4 className="text-[22px] font-bold text-[#111827]">
+                        No Modifiers
+                      </h4>
+                      <p className="mt-3 text-[16.5px] text-[#9CA3AF] max-w-[520px] leading-snug">
+                        You have no modifiers created, click on the create
+                        modifier to get
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {productModifiers.map((m, idx) => (
+                      <div key={m.id} className="space-y-3">
+                        <div className="text-[14px] font-semibold text-[#111827]">
+                          Modifier {idx + 1}
+                        </div>
+                        <div className="rounded-[18px] border border-[#E5E7EB] bg-white px-6 py-4 flex items-center justify-between shadow-sm">
+                          <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-full border border-[#E5E7EB] flex items-center justify-center">
+                              <FilePlus2 className="h-5 w-5 text-[#15BA5C]" />
+                            </div>
+                            <div className="text-[15px] font-semibold text-[#111827]">
+                              {(m.name || "Modifier") +
+                                " || " +
+                                formatModifierModeLabel(m.modifierMode)}
+                            </div>
+                          </div>
 
-              //   <div className="grid gap-6 md:grid-cols-2">
-              //     <div className="space-y-2">
-              //       <p className="text-[15px] font-medium text-[#1C1B20]">
-              //         Weight
-              //       </p>
-              //       <input
-              //         type="text"
-              //         value={weight}
-              //         onChange={(e) => setWeight(e.target.value)}
-              //         placeholder="0.00"
-              //         className="w-full rounded-[12px] border border-[#E5E7EB] bg-[#FAFAFC] px-4 py-3 text-sm outline-none"
-              //       />
-              //     </div>
-              //     <div className="space-y-2">
-              //       <p className="text-[15px] font-medium text-[#1C1B20]">
-              //         Weight Unit of Measure
-              //       </p>
-              //       <Dropdown
-              //         name="weightUnit"
-              //         options={weightUnits.map((u) => ({
-              //           value: String(u.id),
-              //           label: u.name,
-              //         }))}
-              //         selectedValue={
-              //           selectedWeightUnitId
-              //             ? String(selectedWeightUnitId)
-              //             : undefined
-              //         }
-              //         onChange={setSelectedWeightUnitId}
-              //         placeholder="Select unit"
-              //         className="w-full"
-              //         allowAddNew
-              //         onAddNewClick={() => setIsAddWeightUnitModalOpen(true)}
-              //         addNewLabel="+"
-              //         onDeleteOption={handleWeightUnitDelete}
-              //       />
-              //     </div>
-              //   </div>
-
-              //   <div className="space-y-2">
-              //     <p className="text-[15px] font-medium text-[#1C1B20]">
-              //       Packaging Method
-              //     </p>
-              //     <Dropdown
-              //       name="packagingMethod"
-              //       mode="checkbox"
-              //       options={packagingMethods.map((m) => ({
-              //         value: String(m.id),
-              //         label: m.name,
-              //       }))}
-              //       selectedValues={selectedPackagingMethods}
-              //       onMultiChange={setSelectedPackagingMethods}
-              //       placeholder="Select method"
-              //       className="w-full"
-              //       allowAddNew
-              //       onAddNew={handlePackagingMethodAdded}
-              //       onDeleteOption={handlePackagingMethodDelete}
-              //     />
-              //   </div>
-
-              //   <div className="space-y-2">
-              //     <p className="text-[15px] font-medium text-[#1C1B20]">
-              //       Product Image
-              //     </p>
-              //     <ImageHandler
-              //       value={logoUrl}
-              //       onChange={({ url }) => setLogoUrl(url)}
-              //       label=""
-              //       className="w-full"
-              //       previewSize="lg"
-              //     />
-              //   </div>
-              // </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingModifierId(m.id);
+                                setIsEditModifierOpen(true);
+                              }}
+                              className="h-10 px-6 rounded-full bg-[#15BA5C] text-white font-semibold inline-flex items-center gap-2 cursor-pointer hover:bg-[#119E4D] transition-colors"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeletingModifierId(m.id);
+                                setIsDeleteModifierConfirmOpen(true);
+                              }}
+                              disabled={isDeletingModifier}
+                              className="h-10 px-6 rounded-full border border-[#EF4444] text-[#EF4444] font-semibold inline-flex items-center gap-2 cursor-pointer hover:bg-[#EF4444] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
-
-          <div className="flex items-center justify-end gap-3 px-8 py-4 border-t border-[#E5E7EB]">
-            <button
-              type="button"
-              onClick={() => setIsDeleteConfirmOpen(true)}
-              disabled={isDeleting || isUpdating}
-              className={`rounded-[12px] w-full border px-6 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
-                isDeleting || isUpdating
-                  ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-                  : "border-[#EF4444] text-[#EF4444] hover:bg-[#EF4444] hover:text-white cursor-pointer"
-              }`}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleUpdateProduct}
-              disabled={isDeleting || isUpdating}
-              className={`rounded-[12px] w-full px-10 py-3 text-sm font-bold text-white transition-colors flex items-center justify-center gap-2 ${
-                isDeleting || isUpdating
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-[#15BA5C] hover:bg-[#13A652] cursor-pointer"
-              }`}
-            >
-              {isUpdating ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4" />
-                  Update Product
-                </>
-              )}
-            </button>
-          </div>
+          {activeTab == "basic" && (
+            <div className="flex items-center justify-end gap-3 px-8 py-4 border-t border-[#E5E7EB]">
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                disabled={isDeleting || isUpdating}
+                className={`rounded-[12px] w-full border px-6 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                  isDeleting || isUpdating
+                    ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                    : "border-[#EF4444] text-[#EF4444] hover:bg-[#EF4444] hover:text-white cursor-pointer"
+                }`}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateProduct}
+                disabled={isDeleting || isUpdating}
+                className={`rounded-[12px] w-full px-10 py-3 text-sm font-bold text-white transition-colors flex items-center justify-center gap-2 ${
+                  isDeleting || isUpdating
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-[#15BA5C] hover:bg-[#13A652] cursor-pointer"
+                }`}
+              >
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Update Product
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
+
+        <CreateModifier
+          isOpen={isCreateModifierOpen}
+          onClose={() => setIsCreateModifierOpen(false)}
+          productId={product?.id || ""}
+          outletId={selectedOutletId || ""}
+          onCreated={refreshModifiers}
+        />
+
+        <EditModifier
+          isOpen={isEditModifierOpen}
+          modifierId={editingModifierId}
+          outletId={selectedOutletId || ""}
+          productId={product?.id || ""}
+          onClose={() => {
+            setIsEditModifierOpen(false);
+            setEditingModifierId(null);
+          }}
+          onSaved={refreshModifiers}
+        />
+
+        <DeleteModifierConfirmModal
+          isOpen={isDeleteModifierConfirmOpen}
+          modifierName={modifierToDelete?.name || "Modifier"}
+          onClose={() => {
+            setIsDeleteModifierConfirmOpen(false);
+            setDeletingModifierId(null);
+          }}
+          onConfirm={handleDeleteModifier}
+        />
 
         <AddEntityModal
           isOpen={isAddCategoryModalOpen}

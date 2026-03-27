@@ -33,6 +33,8 @@ import { componentSchema } from "./component.schema";
 import { componentItemSchema } from "./component_item.schema";
 import { componentLotSchema } from "./component_lot.schema";
 import { componentLotLogSchema } from "./component_lot_log.schema";
+import { modifierSchema } from "./modifier.schema";
+import { modifierOptionSchema } from "./modifier_option.schema";
 
 export const schemas: TableSchema[] = [
   userSchema,
@@ -69,4 +71,6 @@ export const schemas: TableSchema[] = [
   componentItemSchema,
   componentLotSchema,
   componentLotLogSchema,
+  modifierSchema,
+  modifierOptionSchema,
 ];

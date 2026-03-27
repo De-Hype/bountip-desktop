@@ -75,4 +75,6 @@ export interface ElectronAPI {
   onP2PMessage: (cb: (payload: any) => void) => () => void;
 
   dbQuery: (sql: string, params?: any[]) => Promise<any>;
+
+  openExternal: (url: string) => Promise<boolean>;
 }

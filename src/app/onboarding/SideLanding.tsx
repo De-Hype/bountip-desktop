@@ -1,4 +1,3 @@
-
 import AssetsFiles from "@/assets";
 import React from "react";
 
@@ -90,28 +89,28 @@ const ConcentricArcsLayout = () => {
       >
         {/* Top-left profile - moved closer to the arc line */}
         <ProfileImage
-          src={AssetsFiles.AuthBgImage.src}
+          src={AssetsFiles.AuthBgImage}
           alt="Profile 4"
           className="bottom-16 top-90 lg:right-60 md:right-54 transform -translate-x-1/2"
         />
 
         {/* Left profile - moved closer to the arc line */}
         <ProfileImage
-          src={AssetsFiles.AuthBgImage.src}
+          src={AssetsFiles.AuthBgImage}
           alt="Profile 4"
           className="bottom-16 lg:top-20 md:top-35  right-20 transform -translate-x-1/2"
         />
 
         {/* Right profile - moved closer to the arc line */}
         <ProfileImage
-          src={AssetsFiles.AuthBgImage.src}
+          src={AssetsFiles.AuthBgImage}
           alt="Profile 4"
           className="lg:bottom-20 md:bottom-35 right-20 transform -translate-x-1/2"
         />
 
         {/* Bottom profile - moved closer to the arc line */}
         <ProfileImage
-          src={AssetsFiles.AuthBgImage.src}
+          src={AssetsFiles.AuthBgImage}
           alt="Profile 4"
           className="bottom-90 right-5 transform -translate-x-1/2"
         />

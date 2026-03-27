@@ -95,6 +95,22 @@ import {
   cartItemUpsertSql,
   buildCartItemUpsertParams,
 } from "../features/schemas/cart_item.schema";
+import {
+  recipeUpsertSql,
+  buildRecipeUpsertParams,
+} from "../features/schemas/recipes.schema";
+import {
+  recipeIngredientUpsertSql,
+  buildRecipeIngredientUpsertParams,
+} from "../features/schemas/recipe_ingredients.schema";
+import {
+  modifierUpsertSql,
+  buildModifierUpsertParams,
+} from "../features/schemas/modifier.schema";
+import {
+  modifierOptionUpsertSql,
+  buildModifierOptionUpsertParams,
+} from "../features/schemas/modifier_option.schema";
 import { v4 as uuidv4 } from "uuid";
 import { LocalUserProfile } from "../types/user.types";
 import { SYNC_ACTIONS } from "../types/action.types";
@@ -927,6 +943,59 @@ export class DatabaseService {
 
         for (const p of data.products) {
           stmt.run(this.sanitize(buildProductUpsertParams(p)));
+        }
+      }
+
+      if (Array.isArray(data.modifiers) && data.modifiers.length > 0) {
+        const stmt = this.prepare(modifierUpsertSql);
+        for (const m of data.modifiers) {
+          stmt.run(this.sanitize(buildModifierUpsertParams(m)));
+        }
+      }
+
+      if (
+        Array.isArray(data.modifierOptions) &&
+        data.modifierOptions.length > 0
+      ) {
+        const stmt = this.prepare(modifierOptionUpsertSql);
+        for (const mo of data.modifierOptions) {
+          stmt.run(this.sanitize(buildModifierOptionUpsertParams(mo)));
+        }
+      }
+
+      if (Array.isArray(data.recipes) && data.recipes.length > 0) {
+        const stmt = this.prepare(recipeUpsertSql);
+        const productNameById = this.prepare(
+          "SELECT name FROM product WHERE id = ? OR productCode = ? LIMIT 1",
+        );
+
+        for (const r0 of data.recipes) {
+          const productRef =
+            r0.productReference || r0.productId || r0.product_id || "";
+          let productName = r0.productName || "";
+          if (!productName && productRef) {
+            const row = productNameById.get(productRef, productRef) as
+              | { name?: string }
+              | undefined;
+            if (row?.name) productName = String(row.name);
+          }
+
+          const r = {
+            ...r0,
+            productReference: productRef,
+            productName,
+          };
+          stmt.run(this.sanitize(buildRecipeUpsertParams(r)));
+        }
+      }
+
+      if (
+        Array.isArray(data.recipeIngredients) &&
+        data.recipeIngredients.length > 0
+      ) {
+        const stmt = this.prepare(recipeIngredientUpsertSql);
+        for (const ri of data.recipeIngredients) {
+          stmt.run(this.sanitize(buildRecipeIngredientUpsertParams(ri)));
         }
       }
 

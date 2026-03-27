@@ -124,5 +124,6 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
     electron.ipcRenderer.on("updater:download-progress", handler);
     return () => electron.ipcRenderer.removeListener("updater:download-progress", handler);
   },
+  openExternal: async (url) => electron.ipcRenderer.invoke("shell:openExternal", url),
   factoryReset: () => electron.ipcRenderer.send("system:factoryReset")
 });
