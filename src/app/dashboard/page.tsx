@@ -191,8 +191,8 @@ const Dashboard = () => {
       icon: AssetsFiles.noodlebowl,
       title: "Recipe Management",
       path: "/dashboard/recipe-management",
-      badge: "Coming Soon",
-      available: false,
+      // badge: "Coming Soon",
+      // available: false,
     },
     {
       icon: AssetsFiles.inventory,

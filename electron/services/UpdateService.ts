@@ -9,6 +9,25 @@ export class UpdateService {
     this.initListeners();
   }
 
+  private formatUpdaterError(err: unknown): string {
+    const raw = err instanceof Error ? err.message : String(err ?? "");
+    const lower = raw.toLowerCase();
+
+    if (
+      lower.includes("not signed by the application owner") ||
+      lower.includes("not digitally signed") ||
+      lower.includes("signercertificate") ||
+      lower.includes("publishernames")
+    ) {
+      return (
+        "Update skipped: this Windows build isn't code-signed. " +
+        "Please install updates by downloading the latest installer from the Releases page."
+      );
+    }
+
+    return "Error in auto-updater. " + raw;
+  }
+
   initListeners() {
     autoUpdater.on("checking-for-update", () => {
       this.sendStatusToWindow("Checking for update...");
@@ -24,7 +43,7 @@ export class UpdateService {
       if (win) win.webContents.send("updater:update-not-available", info);
     });
     autoUpdater.on("error", (err) => {
-      this.sendStatusToWindow("Error in auto-updater. " + err);
+      this.sendStatusToWindow(this.formatUpdaterError(err));
       const win = BrowserWindow.getAllWindows()[0];
       if (win) win.webContents.send("updater:error", err.toString());
     });

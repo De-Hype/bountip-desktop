@@ -70,8 +70,13 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
 
   if (!isOpen) return null;
 
-  const totalPages = Math.ceil(customers.length / pagination.itemsPerPage) || 1;
-  const paginatedCustomers = customers.slice(
+  const activeCustomers = (customers || []).filter(
+    (c) => String(c.status) === "Active",
+  );
+
+  const totalPages =
+    Math.ceil(activeCustomers.length / pagination.itemsPerPage) || 1;
+  const paginatedCustomers = activeCustomers.slice(
     (pagination.currentPage - 1) * pagination.itemsPerPage,
     pagination.currentPage * pagination.itemsPerPage,
   );
@@ -175,7 +180,7 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
                 </table>
               </div>
 
-              {customers.length > 0 && (
+              {activeCustomers.length > 0 && (
                 <Pagination
                   currentPage={pagination.currentPage}
                   totalPages={totalPages}

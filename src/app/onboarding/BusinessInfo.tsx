@@ -4,8 +4,8 @@
 //@ts-nocheck
 "use client";
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import BusinessRevenueComponent from "./BusinessRevenueComponent";
 import { Country, ICountry } from "country-state-city";
 import C from "currency-codes";
@@ -73,6 +73,7 @@ interface BusinessInfoProps {
 }
 
 const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
+  const navigate = useNavigate();
   const [businessType, setBusinessType] = useState<{
     value: string;
     label: string;
@@ -94,9 +95,11 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
 
   const [logoUrl, setLogoUrl] = useState("");
   const [searchParams] = useSearchParams();
-  const { outlets, updateOutletLocal } = useBusinessStore();
+  const { outlets, updateOutletLocal, selectOutlet, selectedOutletId } =
+    useBusinessStore();
   const { isOnline } = useNetworkStore();
   const outletIdParam = searchParams.get("outletId") || "";
+  const showBackButton = Boolean(outletIdParam);
   const outlet = outlets.find((o) => o.id === outletIdParam) as unknown as
     | {
         isOnboarded?: boolean;
@@ -276,6 +279,32 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
     }
   };
 
+  const handleBack = () => {
+    if (!outletIdParam) {
+      navigate(-1);
+      return;
+    }
+
+    const candidates = outlets.filter(
+      (o) => o.id !== outletIdParam && o.isOnboarded,
+    );
+    const fallback = candidates[0] ?? null;
+
+    if (fallback) {
+      selectOutlet(fallback.id);
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+
+    if (selectedOutletId && selectedOutletId !== outletIdParam) {
+      selectOutlet(selectedOutletId);
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+
+    navigate("/dashboard", { replace: true });
+  };
+
   // Show loading state
   if (isBusinessLoading) {
     return (
@@ -288,6 +317,18 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
 
   return (
     <>
+      {showBackButton && (
+        <div className="flex items-center justify-start mt-4">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex cursor-pointer items-center gap-2 px-4 py-2 rounded-[12px] border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-[#111827] font-semibold"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            Back
+          </button>
+        </div>
+      )}
       <h3 className="text-[#1E1E1E] text-[26px] font-bold mt-6 mb-4 text-center">
         Tell us About your <span className="text-[#15BA5C]">Business</span>
       </h3>
@@ -383,7 +424,7 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
             )}
           </button>
 
-          <div className="flex justify-center pt-4">
+          {/* <div className="flex justify-center pt-4">
             <button
               type="button"
               onClick={handleReset}
@@ -391,7 +432,7 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
             >
               Factory Reset (Clear all data)
             </button>
-          </div>
+          </div> */}
         </div>
       </form>
     </>

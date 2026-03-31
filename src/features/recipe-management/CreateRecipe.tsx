@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Leaf, Plus, Trash2, X } from "lucide-react";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
 import {
   Dropdown as CreateDropdown,
@@ -541,7 +541,7 @@ const CreateRecipe = ({ isOpen, onClose, onCreated }: CreateRecipeProps) => {
         <div className="relative flex h-full w-full max-w-[1100px] flex-col rounded-l-[20px] bg-white shadow-2xl">
           <div className="flex items-start justify-between px-10 py-8">
             <div>
-              <h2 className="text-[28px] font-bold text-[#000000]">
+              <h2 className="text-[22px] font-bold text-[#000000]">
                 Create a Recipe
               </h2>
               <p className="mt-2 text-[14px] text-gray-500 max-w-[740px]">
@@ -636,9 +636,14 @@ const CreateRecipe = ({ isOpen, onClose, onCreated }: CreateRecipeProps) => {
                       <tr>
                         <td
                           colSpan={8}
-                          className="px-4 py-8 text-sm text-gray-500"
+                          className="px-4 py-10 text-sm text-gray-500"
                         >
-                          No ingredients added yet.
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <div className="h-10 w-10 rounded-full bg-[#F3F4F6] flex items-center justify-center">
+                              <Leaf className="h-5 w-5 text-[#9CA3AF]" />
+                            </div>
+                            <div>No ingredients added yet.</div>
+                          </div>
                         </td>
                       </tr>
                     ) : (

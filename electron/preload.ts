@@ -177,5 +177,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   openExternal: async (url: string) =>
     ipcRenderer.invoke("shell:openExternal", url),
+  printHtml: async (payload: { html: string; options?: any }) =>
+    ipcRenderer.invoke("print:html", payload),
   factoryReset: () => ipcRenderer.send("system:factoryReset"),
 });

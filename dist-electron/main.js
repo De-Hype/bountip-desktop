@@ -21915,6 +21915,14 @@ class UpdateService {
     mainExports.autoUpdater.logger = log;
     this.initListeners();
   }
+  formatUpdaterError(err) {
+    const raw = err instanceof Error ? err.message : String(err ?? "");
+    const lower = raw.toLowerCase();
+    if (lower.includes("not signed by the application owner") || lower.includes("not digitally signed") || lower.includes("signercertificate") || lower.includes("publishernames")) {
+      return "Update skipped: this Windows build isn't code-signed. Please install updates by downloading the latest installer from the Releases page.";
+    }
+    return "Error in auto-updater. " + raw;
+  }
   initListeners() {
     mainExports.autoUpdater.on("checking-for-update", () => {
       this.sendStatusToWindow("Checking for update...");
@@ -21930,7 +21938,7 @@ class UpdateService {
       if (win) win.webContents.send("updater:update-not-available", info);
     });
     mainExports.autoUpdater.on("error", (err) => {
-      this.sendStatusToWindow("Error in auto-updater. " + err);
+      this.sendStatusToWindow(this.formatUpdaterError(err));
       const win = BrowserWindow.getAllWindows()[0];
       if (win) win.webContents.send("updater:error", err.toString());
     });
@@ -22466,6 +22474,7 @@ ${signature}\r
             "bankDetails",
             "generalSettings"
           ],
+          orders: ["timeline"],
           payment_terms: ["paymentInInstallment"],
           system_default: ["data"]
         };
@@ -22496,7 +22505,7 @@ ${signature}\r
           updatedAt: item.created_at
         };
       });
-      console.log("Recordss stuff", records[0].payload.taxSettings);
+      console.log("Recordss stuff", records[0].payload);
       const payload = { records };
       console.log(payload);
       const response = await net.fetch(PUSH_ENDPOINT, {
@@ -22933,6 +22942,61 @@ const updateServiceCharges = async (db, payload) => {
     });
   }
   return { success: true, settings };
+};
+const printHtml = async (payload) => {
+  const html = String(payload?.html || "");
+  if (!html.trim()) {
+    return { success: false, error: "Empty HTML" };
+  }
+  const options = payload?.options || {};
+  const isSilent = Boolean(options.silent);
+  const win = new BrowserWindow({
+    show: !isSilent,
+    width: 900,
+    height: 700,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true
+    }
+  });
+  try {
+    const url = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+    await win.loadURL(url);
+    await new Promise(
+      (resolve) => win.webContents.once("did-finish-load", () => resolve())
+    );
+    if (!isSilent) {
+      try {
+        win.show();
+        win.focus();
+      } catch {
+      }
+    }
+    const res = await new Promise(
+      (resolve) => {
+        win.webContents.print(
+          {
+            silent: isSilent,
+            printBackground: options.printBackground !== false,
+            deviceName: options.deviceName
+          },
+          (success, failureReason) => {
+            if (!success) resolve({ success: false, error: failureReason });
+            else resolve({ success: true });
+          }
+        );
+      }
+    );
+    return res;
+  } catch (e) {
+    return { success: false, error: String(e?.message || e) };
+  } finally {
+    try {
+      win.close();
+    } catch {
+    }
+  }
 };
 const createOutlet = async (db, payload) => {
   const { businessId, location } = payload;
@@ -23779,6 +23843,9 @@ ${signature}\r
     } catch (error2) {
       console.error("Factory reset failed:", error2);
     }
+  });
+  ipcMain.handle("print:html", async (_event, payload) => {
+    return printHtml(payload);
   });
   setTimeout(() => {
     if (app.isPackaged) {

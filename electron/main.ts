@@ -34,6 +34,7 @@ import { updateOperatingHours } from "./features/settings/operatingHours";
 import { updatePaymentMethods } from "./features/settings/paymentMethods";
 import { updateTaxSettings } from "./features/settings/taxSettings";
 import { updateServiceCharges } from "./features/settings/serviceCharge";
+import { printHtml } from "./features/printing/printHtml";
 import {
   createOutlet,
   updateOutlet,
@@ -479,6 +480,10 @@ app.whenReady().then(() => {
     } catch (error) {
       console.error("Factory reset failed:", error);
     }
+  });
+
+  ipcMain.handle("print:html", async (_event, payload) => {
+    return printHtml(payload);
   });
 
   // Check for updates

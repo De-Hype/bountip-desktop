@@ -455,6 +455,7 @@ export class SyncService {
             "bankDetails",
             "generalSettings",
           ],
+          orders: ["timeline"],
           payment_terms: ["paymentInInstallment"],
           system_default: ["data"],
         };
@@ -491,7 +492,7 @@ export class SyncService {
           updatedAt: item.created_at,
         };
       });
-      console.log("Recordss stuff", records[0].payload.taxSettings);
+      console.log("Recordss stuff", records[0].payload);
 
       const payload = { records: records };
       console.log(payload);

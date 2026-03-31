@@ -336,81 +336,119 @@ const BulkUploadInventoryItemsModal = ({
   }, [isOpen]);
 
   const downloadTemplate = async () => {
-    if (!outlet?.id) return;
-    const api = (window as any).electronAPI;
-    if (!api?.dbQuery) return;
-
     try {
-      const rows = await api.dbQuery(
-        `
-          SELECT
-            im.name as itemName,
-            im.itemCode as itemCode,
-            im.category as itemCategory,
-            im.itemType as itemType,
-            im.unitOfPurchase as unitOfPurchase,
-            im.unitOfTransfer as unitOfTransfer,
-            im.unitOfConsumption as unitOfConsumption,
-            im.displayedUnitOfMeasure as displayedUnitOfMeasure,
-            COALESCE(im.transferPerPurchase, 0) as transferPerPurchase,
-            COALESCE(im.consumptionPerTransfer, 0) as consumptionPerTransfer,
-            COALESCE(ii.minimumStockLevel, 0) as minimumStockLevel,
-            COALESCE(ii.reOrderLevel, 0) as reOrderLevel,
-            COALESCE(il.lotNumber, '') as lotNumber,
-            COALESCE(il.supplierSesrialNumber, '') as supplierBarcode,
-            COALESCE(il.quantityPurchased, 0) as quantityPurchased,
-            COALESCE(il.expiryDate, '') as expiryDate,
-            COALESCE(il.costPrice, 0) as costPrice,
-            COALESCE(il.supplierName, '') as suppliers,
-            COALESCE(im.isTrackable, 0) as trackInventory,
-            COALESCE(im.isTraceable, 1) as makeItemTraceable
-          FROM inventory_item ii
-          JOIN inventory i ON ii.inventoryId = i.id
-          JOIN item_master im ON ii.itemMasterId = im.id
-          LEFT JOIN item_lot il ON il.id = (
-            SELECT id FROM item_lot
-            WHERE itemId = ii.id
-            ORDER BY createdAt DESC
-            LIMIT 1
-          )
-          WHERE i.outletId = ? AND ii.isDeleted = 0
-          ORDER BY im.name ASC
-        `,
-        [outlet.id],
-      );
-
-      const data = (rows || []).map((r: any) => {
-        const transferPerPurchase = Number(r.transferPerPurchase || 0);
-        const consumptionPerTransfer = Number(r.consumptionPerTransfer || 0);
-        const noOfConsumptionUnitBasedOnPurchase =
-          transferPerPurchase > 0
-            ? consumptionPerTransfer * transferPerPurchase
-            : 0;
-        return {
-          itemName: r.itemName ?? "",
-          itemCode: r.itemCode ?? "",
-          itemCategory: r.itemCategory ?? "",
-          itemType: r.itemType ?? "",
-          unitOfPurchase: r.unitOfPurchase ?? "",
-          unitOfTransfer: r.unitOfTransfer ?? "",
-          unitOfConsumption: r.unitOfConsumption ?? "",
-          displayedUnitOfMeasure: r.displayedUnitOfMeasure ?? "",
-          noOfTransferBasedOnPurchase: transferPerPurchase,
-          noOfConsumptionUnitBasedOnPurchase,
-          minimumStockLevel: Number(r.minimumStockLevel || 0),
-          reOrderLevel: Number(r.reOrderLevel || 0),
-          lotNumber: r.lotNumber ?? "",
-          supplierBarcode: r.supplierBarcode ?? "",
-          quantityPurchased: Number(r.quantityPurchased || 0),
-          expiryDate: r.expiryDate ?? "",
-          costPrice: Number(r.costPrice || 0),
-          suppliers: r.suppliers ?? "",
-          trackInventory: Number(r.trackInventory || 0) ? "TRUE" : "FALSE",
-          makeItemTraceable: Number(r.makeItemTraceable || 0)
-            ? "TRUE"
-            : "FALSE",
-        };
-      });
+      const data = [
+        {
+          itemName: "Flour",
+          itemCode: "ITM0001",
+          itemCategory: "Baking",
+          itemType: "Ingredient",
+          unitOfPurchase: "Bag",
+          unitOfTransfer: "Kg",
+          unitOfConsumption: "g",
+          displayedUnitOfMeasure: "Kg",
+          noOfTransferBasedOnPurchase: 25,
+          noOfConsumptionUnitBasedOnPurchase: 25000,
+          minimumStockLevel: 1,
+          reOrderLevel: 2,
+          lotNumber: "LOT-001",
+          supplierBarcode: "SUP-0001",
+          quantityPurchased: 1,
+          expiryDate: "2026-12-31",
+          costPrice: 2500,
+          suppliers: "Supplier A",
+          trackInventory: "TRUE",
+          makeItemTraceable: "TRUE",
+        },
+        {
+          itemName: "Sugar",
+          itemCode: "ITM0002",
+          itemCategory: "Baking",
+          itemType: "Ingredient",
+          unitOfPurchase: "Bag",
+          unitOfTransfer: "Kg",
+          unitOfConsumption: "g",
+          displayedUnitOfMeasure: "Kg",
+          noOfTransferBasedOnPurchase: 25,
+          noOfConsumptionUnitBasedOnPurchase: 25000,
+          minimumStockLevel: 1,
+          reOrderLevel: 2,
+          lotNumber: "LOT-002",
+          supplierBarcode: "SUP-0002",
+          quantityPurchased: 1,
+          expiryDate: "2026-12-31",
+          costPrice: 2100,
+          suppliers: "Supplier A",
+          trackInventory: "TRUE",
+          makeItemTraceable: "TRUE",
+        },
+        {
+          itemName: "Eggs",
+          itemCode: "ITM0003",
+          itemCategory: "Dairy & Eggs",
+          itemType: "Ingredient",
+          unitOfPurchase: "Tray",
+          unitOfTransfer: "Each",
+          unitOfConsumption: "Each",
+          displayedUnitOfMeasure: "Each",
+          noOfTransferBasedOnPurchase: 30,
+          noOfConsumptionUnitBasedOnPurchase: 30,
+          minimumStockLevel: 10,
+          reOrderLevel: 20,
+          lotNumber: "LOT-003",
+          supplierBarcode: "SUP-0003",
+          quantityPurchased: 1,
+          expiryDate: "2026-06-30",
+          costPrice: 1800,
+          suppliers: "Supplier B",
+          trackInventory: "TRUE",
+          makeItemTraceable: "FALSE",
+        },
+        {
+          itemName: "Butter",
+          itemCode: "ITM0004",
+          itemCategory: "Dairy & Eggs",
+          itemType: "Ingredient",
+          unitOfPurchase: "Pack",
+          unitOfTransfer: "Kg",
+          unitOfConsumption: "g",
+          displayedUnitOfMeasure: "Kg",
+          noOfTransferBasedOnPurchase: 1,
+          noOfConsumptionUnitBasedOnPurchase: 1000,
+          minimumStockLevel: 1,
+          reOrderLevel: 2,
+          lotNumber: "LOT-004",
+          supplierBarcode: "SUP-0004",
+          quantityPurchased: 1,
+          expiryDate: "2026-09-30",
+          costPrice: 3200,
+          suppliers: "Supplier B",
+          trackInventory: "TRUE",
+          makeItemTraceable: "TRUE",
+        },
+        {
+          itemName: "Vanilla Extract",
+          itemCode: "ITM0005",
+          itemCategory: "Baking",
+          itemType: "Ingredient",
+          unitOfPurchase: "Bottle",
+          unitOfTransfer: "ml",
+          unitOfConsumption: "ml",
+          displayedUnitOfMeasure: "ml",
+          noOfTransferBasedOnPurchase: 1000,
+          noOfConsumptionUnitBasedOnPurchase: 1000,
+          minimumStockLevel: 1,
+          reOrderLevel: 2,
+          lotNumber: "LOT-005",
+          supplierBarcode: "SUP-0005",
+          quantityPurchased: 1,
+          expiryDate: "2027-01-31",
+          costPrice: 1500,
+          suppliers: "Supplier C",
+          trackInventory: "TRUE",
+          makeItemTraceable: "FALSE",
+        },
+      ];
 
       const ws = XLSX.utils.json_to_sheet(data, {
         header: [...INVENTORY_HEADERS],

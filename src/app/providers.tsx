@@ -57,7 +57,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const syncSplashMessages = useMemo(
     () => [
       {
-        title: "Getting your workspace ready...",
+        title: "Getting your application ready...",
         subtitle: "Syncing menus, inventory, and recipes — just a moment.",
       },
       {
