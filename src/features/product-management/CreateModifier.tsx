@@ -745,7 +745,7 @@ const CreateModifier = ({
       <div className="absolute inset-y-0 right-0 w-full max-w-[980px] bg-white shadow-2xl flex h-full flex-col">
         <div className="flex items-start justify-between px-10 py-8">
           <div>
-            <h2 className="text-[25px] font-bold text-[#111827]">
+            <h2 className="text-[22px] font-bold text-[#111827]">
               Create a new Modifier
             </h2>
           </div>

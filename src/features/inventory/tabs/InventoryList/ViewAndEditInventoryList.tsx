@@ -11,6 +11,7 @@ import {
   Clock,
   Calendar,
   AlertTriangle,
+  Search,
 } from "lucide-react";
 import { Dropdown } from "@/shared/AppDropdowns/CreateDropdown";
 import { useBusinessStore } from "@/stores/useBusinessStore";
@@ -25,8 +26,22 @@ import { SystemDefaultType } from "../../../../../electron/types/system-default"
 import SystemDefaultModal from "@/shared/SystemDefaultModal";
 import AddSupplierModal from "../Procurement/tabs/suppliers/AddSupplierModal";
 import useToastStore from "@/stores/toastStore";
+import { Pagination } from "@/shared/Pagination/pagination";
+import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 
 type TabKey = "basic" | "stock" | "cost" | "traceability";
+type LotRow = {
+  id: string;
+  lotNumber: string;
+  quantityPurchased: number;
+  costPrice: number;
+  supplierAddress: string | null;
+  supplierName: string | null;
+  initialStockLevel: number;
+  currentStockLevel: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
 
 interface ViewAndEditInventoryListProps {
   isOpen: boolean;
@@ -46,12 +61,22 @@ const ViewAndEditInventoryList = ({
   const { selectedOutlet } = useBusinessStore();
   const authUser = useAuthStore((s) => s.user);
   const { showToast } = useToastStore();
+  const currencySymbol = selectedOutlet?.currency
+    ? getCurrencySymbol(selectedOutlet.currency)
+    : "";
   const [activeTab, setActiveTab] = useState<TabKey>("basic");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdateConfirmOpen, setIsUpdateConfirmOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [lotRows, setLotRows] = useState<LotRow[]>([]);
+  const [lotSearch, setLotSearch] = useState("");
+  const [lotPage, setLotPage] = useState(1);
+  const [lotItemsPerPage, setLotItemsPerPage] = useState(10);
+  const [unitCostMode, setUnitCostMode] = useState<"purchase" | "displayed">(
+    "purchase",
+  );
 
   const [categories, setCategories] = useState<
     { value: string; label: string }[]
@@ -91,6 +116,7 @@ const ViewAndEditInventoryList = ({
     noOfTransferBasedOnPurchase: "0",
     noOfConsumptionUnitBasedOnPurchase: "0",
     displayedUnitOfMeasure: "",
+    currentStockLevel: "0",
     minimumStockLevel: "0",
     reOrderLevel: "0",
     costPrice: "0.00",
@@ -290,6 +316,8 @@ const ViewAndEditInventoryList = ({
     parseFloat(formData.noOfTransferBasedOnPurchase) > 0 &&
     parseFloat(formData.noOfConsumptionUnitBasedOnPurchase) > 0 &&
     formData.displayedUnitOfMeasure !== "" &&
+    formData.currentStockLevel.trim() !== "" &&
+    parseFloat(formData.currentStockLevel) >= 0 &&
     parseFloat(formData.minimumStockLevel) >= 0 &&
     parseFloat(formData.reOrderLevel) >= 0;
 
@@ -313,6 +341,80 @@ const ViewAndEditInventoryList = ({
     if (consumptionFactor <= 0) return "0.00";
     return (parseFloat(costPerUnitOfPurchase) / consumptionFactor).toFixed(2);
   }, [costPerUnitOfPurchase, formData.noOfConsumptionUnitBasedOnPurchase]);
+
+  const weightedAverageCostPerPurchaseUnit = useMemo(() => {
+    if (lotRows.length === 0) return parseFloat(costPerUnitOfPurchase) || 0;
+    const totals = lotRows.reduce(
+      (acc, r) => {
+        acc.totalCost += Number(r.costPrice || 0) || 0;
+        acc.totalQty += Number(r.quantityPurchased || 0) || 0;
+        return acc;
+      },
+      { totalCost: 0, totalQty: 0 },
+    );
+    if (totals.totalQty <= 0) return 0;
+    return totals.totalCost / totals.totalQty;
+  }, [costPerUnitOfPurchase, lotRows]);
+
+  const displayedUnitFactor = useMemo(() => {
+    const purchase = formData.unitOfPurchase;
+    const displayed = formData.displayedUnitOfMeasure;
+    if (!purchase || !displayed) return 1;
+    if (displayed === purchase) return 1;
+    if (displayed === formData.unitOfTransfer) {
+      return parseFloat(formData.noOfTransferBasedOnPurchase) || 1;
+    }
+    if (displayed === formData.unitOfConsumption) {
+      return parseFloat(formData.noOfConsumptionUnitBasedOnPurchase) || 1;
+    }
+    return 1;
+  }, [
+    formData.displayedUnitOfMeasure,
+    formData.noOfConsumptionUnitBasedOnPurchase,
+    formData.noOfTransferBasedOnPurchase,
+    formData.unitOfConsumption,
+    formData.unitOfPurchase,
+    formData.unitOfTransfer,
+  ]);
+
+  const weightedAverageCostDisplay = useMemo(() => {
+    if (unitCostMode === "purchase") return weightedAverageCostPerPurchaseUnit;
+    return (
+      weightedAverageCostPerPurchaseUnit / Math.max(1, displayedUnitFactor)
+    );
+  }, [displayedUnitFactor, unitCostMode, weightedAverageCostPerPurchaseUnit]);
+
+  const weightedAverageCostUnitLabel = useMemo(() => {
+    if (unitCostMode === "purchase") return formData.unitOfPurchase || "";
+    return formData.displayedUnitOfMeasure || "";
+  }, [formData.displayedUnitOfMeasure, formData.unitOfPurchase, unitCostMode]);
+
+  const totalStockValue = useMemo(() => {
+    const current = parseFloat(formData.currentStockLevel) || 0;
+    return current * (weightedAverageCostDisplay || 0);
+  }, [formData.currentStockLevel, weightedAverageCostDisplay]);
+
+  const filteredLots = useMemo(() => {
+    const q = lotSearch.trim().toLowerCase();
+    if (!q) return lotRows;
+    return lotRows.filter((r) => {
+      const lotNumber = String(r.lotNumber || "").toLowerCase();
+      const supplier = String(r.supplierName || "").toLowerCase();
+      const address = String(r.supplierAddress || "").toLowerCase();
+      return (
+        lotNumber.includes(q) || supplier.includes(q) || address.includes(q)
+      );
+    });
+  }, [lotRows, lotSearch]);
+
+  const lotTotalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filteredLots.length / lotItemsPerPage));
+  }, [filteredLots.length, lotItemsPerPage]);
+
+  const paginatedLots = useMemo(() => {
+    const start = (lotPage - 1) * lotItemsPerPage;
+    return filteredLots.slice(start, start + lotItemsPerPage);
+  }, [filteredLots, lotItemsPerPage, lotPage]);
 
   const loadItem = async () => {
     if (!inventoryItemId || !selectedOutlet?.id) return;
@@ -350,9 +452,48 @@ const ViewAndEditInventoryList = ({
       const row = rows?.[0];
       if (!row) return;
 
-      const latestLotSql =
-        "SELECT supplierName, quantityPurchased FROM item_lot WHERE itemId = ? ORDER BY createdAt DESC LIMIT 1";
-      const latestLot = await api.dbQuery(latestLotSql, [inventoryItemId]);
+      const [latestLot, allLots] = await Promise.all([
+        api.dbQuery(
+          "SELECT supplierName, quantityPurchased FROM item_lot WHERE itemId = ? ORDER BY createdAt DESC LIMIT 1",
+          [inventoryItemId],
+        ),
+        api.dbQuery(
+          `
+            SELECT
+              id,
+              lotNumber,
+              quantityPurchased,
+              costPrice,
+              supplierAddress,
+              supplierName,
+              initialStockLevel,
+              currentStockLevel,
+              createdAt,
+              updatedAt
+            FROM item_lot
+            WHERE itemId = ?
+            ORDER BY COALESCE(updatedAt, createdAt) DESC
+          `,
+          [inventoryItemId],
+        ),
+      ]);
+
+      setLotRows(
+        (allLots || []).map((r: any) => ({
+          id: String(r.id || ""),
+          lotNumber: String(r.lotNumber || ""),
+          quantityPurchased: Number(r.quantityPurchased || 0),
+          costPrice: Number(r.costPrice || 0),
+          supplierAddress:
+            r.supplierAddress != null ? String(r.supplierAddress) : null,
+          supplierName: r.supplierName != null ? String(r.supplierName) : null,
+          initialStockLevel: Number(r.initialStockLevel || 0),
+          currentStockLevel: Number(r.currentStockLevel || 0),
+          createdAt: r.createdAt != null ? String(r.createdAt) : null,
+          updatedAt: r.updatedAt != null ? String(r.updatedAt) : null,
+        })),
+      );
+
       const supplierRaw = latestLot?.[0]?.supplierName || "";
       const lotQty = latestLot?.[0]?.quantityPurchased;
       const supplierTokens = String(supplierRaw)
@@ -396,6 +537,7 @@ const ViewAndEditInventoryList = ({
         noOfTransferBasedOnPurchase: String(transferPerPurchase || 0),
         noOfConsumptionUnitBasedOnPurchase: String(consumptionPerPurchase || 0),
         displayedUnitOfMeasure: row.displayedUnitOfMeasure || "",
+        currentStockLevel: String(row.currentStockLevel ?? 0),
         minimumStockLevel: String(row.minimumStockLevel ?? 0),
         reOrderLevel: String(row.reOrderLevel ?? 0),
         costPrice: String(row.costPrice ?? "0.00"),
@@ -424,6 +566,14 @@ const ViewAndEditInventoryList = ({
     if (!inventoryItemId) return;
     loadItem();
   }, [isOpen, inventoryItemId, suppliers.length]);
+
+  useEffect(() => {
+    setLotPage(1);
+  }, [lotItemsPerPage, lotSearch]);
+
+  useEffect(() => {
+    setLotPage((p) => Math.min(p, lotTotalPages));
+  }, [lotTotalPages]);
 
   const handleUpdate = async () => {
     if (!inventoryItemId || !meta.itemMasterId) return;
@@ -480,6 +630,7 @@ const ViewAndEditInventoryList = ({
       const updateInventoryItemSql = `
         UPDATE inventory_item
         SET
+          currentStockLevel = ?,
           minimumStockLevel = ?,
           reOrderLevel = ?,
           costPrice = ?,
@@ -488,6 +639,7 @@ const ViewAndEditInventoryList = ({
         WHERE id = ?
       `;
       await api.dbQuery(updateInventoryItemSql, [
+        parseFloat(formData.currentStockLevel) || 0,
         parseFloat(formData.minimumStockLevel) || 0,
         parseFloat(formData.reOrderLevel) || 0,
         parseFloat(formData.costPrice) || 0,
@@ -677,7 +829,7 @@ const ViewAndEditInventoryList = ({
               { key: "basic", label: "Basic Information" },
               { key: "stock", label: "Stock level" },
               { key: "cost", label: "Cost" },
-              { key: "traceability", label: "Traceability" },
+              // { key: "traceability", label: "Traceability" },
             ].map((t) => (
               <button
                 key={t.key}
@@ -1089,6 +1241,87 @@ const ViewAndEditInventoryList = ({
                   </div>
                 </div>
               </div>
+              <div className="space-y-6">
+                <h3 className="text-[18px] font-bold text-[#1C1B20]">
+                  Tracking and Traceability
+                </h3>
+                <div className="flex items-center justify-between">
+                  <span className="text-[15px] text-[#1C1B20]">
+                    Activate Both
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !(
+                        formData.trackInventory && formData.makeItemTraceable
+                      );
+                      handleInputChange("trackInventory", next);
+                      handleInputChange("makeItemTraceable", next);
+                    }}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${
+                      formData.trackInventory && formData.makeItemTraceable
+                        ? "bg-[#15BA5C]"
+                        : "bg-gray-200"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                        formData.trackInventory && formData.makeItemTraceable
+                          ? "right-1"
+                          : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[15px] text-[#1C1B20]">
+                    Track Inventory for this Item
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleInputChange(
+                        "trackInventory",
+                        !formData.trackInventory,
+                      )
+                    }
+                    className={`w-12 h-6 rounded-full transition-colors relative ${
+                      formData.trackInventory ? "bg-[#15BA5C]" : "bg-gray-200"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                        formData.trackInventory ? "right-1" : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[15px] text-[#1C1B20]">
+                    Make this Item Traceable
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleInputChange(
+                        "makeItemTraceable",
+                        !formData.makeItemTraceable,
+                      )
+                    }
+                    className={`w-12 h-6 rounded-full transition-colors relative ${
+                      formData.makeItemTraceable
+                        ? "bg-[#15BA5C]"
+                        : "bg-gray-200"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                        formData.makeItemTraceable ? "right-1" : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
           ) : activeTab === "stock" ? (
             <div className="space-y-10">
@@ -1126,6 +1359,183 @@ const ViewAndEditInventoryList = ({
                       }
                       className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
                     />
+                  </div>
+                </div>
+                <div className="w-full gap-6">
+                  <div className="w-full space-y-2">
+                    <label className="text-sm font-semibold text-[#1C1B20]">
+                      Current Stock Level{" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.currentStockLevel}
+                      onChange={(e) =>
+                        handleNumericInputChange(
+                          "currentStockLevel",
+                          e.target.value,
+                          true,
+                        )
+                      }
+                      className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
+                    />
+                  </div>
+                  <div className="mt-10 space-y-8">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-[18px] font-bold text-[#1C1B20]">
+                          Stock Value and Weighted Average Cost
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setUnitCostMode((prev) =>
+                              prev === "purchase" ? "displayed" : "purchase",
+                            )
+                          }
+                          className="h-11 px-5 rounded-[10px] bg-[#15BA5C] text-white flex items-center gap-2 font-medium cursor-pointer hover:bg-[#119E4D] transition-colors"
+                        >
+                          Switch Unit Cost
+                        </button>
+                      </div>
+
+                      <div className="mt-4 rounded-[12px] border border-[#E5E7EB] overflow-hidden">
+                        <div className="grid grid-cols-2">
+                          <div className="px-5 py-4 text-[13px] font-medium text-[#1C1B20] bg-[#FAFAFA] border-b border-[#E5E7EB]">
+                            Weighted Average Cost
+                          </div>
+                          <div className="px-5 py-4 text-[13px] font-semibold text-[#1C1B20] bg-white border-b border-[#E5E7EB] text-center">
+                            {currencySymbol}
+                            {weightedAverageCostDisplay.toFixed(2)}{" "}
+                            {weightedAverageCostUnitLabel}
+                          </div>
+
+                          <div className="px-5 py-4 text-[13px] font-medium text-[#1C1B20] bg-[#FAFAFA]">
+                            Total Stock Value
+                          </div>
+                          <div className="px-5 py-4 bg-white flex items-center justify-center">
+                            <span className="inline-flex items-center justify-center rounded-[8px] bg-[#15BA5C] px-4 py-2 text-white text-[13px] font-semibold">
+                              {currencySymbol}
+                              {totalStockValue.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <h3 className="text-[18px] font-bold text-[#1C1B20]">
+                          Lot Details
+                        </h3>
+                        <div className="flex w-full max-w-[320px] items-stretch rounded-[10px] border border-[#E5E7EB] overflow-hidden h-11 bg-white">
+                          <div className="flex items-center px-3 text-[#9CA3AF]">
+                            <Search className="h-4 w-4" />
+                          </div>
+                          <input
+                            type="text"
+                            value={lotSearch}
+                            onChange={(e) => setLotSearch(e.target.value)}
+                            placeholder="Search"
+                            className="flex-1 px-2 text-sm outline-none placeholder-[#A6A6A6]"
+                          />
+                          <button
+                            type="button"
+                            title="Search lots"
+                            className="flex h-11 w-11 items-center justify-center bg-[#15BA5C] text-white"
+                          >
+                            <Search className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[12px] border border-[#E5E7EB] overflow-hidden bg-white">
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[980px]">
+                            <thead className="bg-white">
+                              <tr className="text-left text-[12px] text-gray-500">
+                                <th className="px-5 py-4 font-medium">
+                                  Lot Number
+                                </th>
+                                <th className="px-5 py-4 font-medium">
+                                  Lot Quantity
+                                </th>
+                                <th className="px-5 py-4 font-medium">
+                                  Unit Cost
+                                </th>
+                                <th className="px-5 py-4 font-medium">
+                                  Warehouse Location
+                                </th>
+                                <th className="px-5 py-4 font-medium">
+                                  Supplier
+                                </th>
+                                <th className="px-5 py-4 font-medium">
+                                  Initial Stock Level
+                                </th>
+                                <th className="px-5 py-4 font-medium">
+                                  Remaining Stock
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {paginatedLots.length === 0 ? (
+                                <tr>
+                                  <td
+                                    colSpan={7}
+                                    className="px-6 py-10 text-sm text-gray-500 text-center"
+                                  >
+                                    No lots found
+                                  </td>
+                                </tr>
+                              ) : (
+                                paginatedLots.map((lot) => {
+                                  const unitCost =
+                                    lot.quantityPurchased > 0
+                                      ? lot.costPrice / lot.quantityPurchased
+                                      : 0;
+                                  return (
+                                    <tr key={lot.id}>
+                                      <td className="px-5 py-4 text-[13px] font-bold text-[#15BA5C] whitespace-nowrap">
+                                        {lot.lotNumber || "—"}
+                                      </td>
+                                      <td className="px-5 py-4 text-[13px] text-[#1C1B20] whitespace-nowrap">
+                                        {lot.quantityPurchased.toFixed(4)}
+                                      </td>
+                                      <td className="px-5 py-4 text-[13px] text-[#1C1B20] whitespace-nowrap">
+                                        {unitCost.toFixed(4)}
+                                      </td>
+                                      <td className="px-5 py-4 text-[13px] text-[#1C1B20]">
+                                        {lot.supplierAddress || "---"}
+                                      </td>
+                                      <td className="px-5 py-4 text-[13px] text-[#1C1B20]">
+                                        {lot.supplierName || "---"}
+                                      </td>
+                                      <td className="px-5 py-4 text-[13px] text-[#1C1B20] whitespace-nowrap">
+                                        {lot.initialStockLevel.toFixed(4)}
+                                      </td>
+                                      <td className="px-5 py-4 text-[13px] text-[#1C1B20] whitespace-nowrap">
+                                        {lot.currentStockLevel.toFixed(4)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {filteredLots.length > 0 && (
+                          <Pagination
+                            currentPage={lotPage}
+                            totalPages={lotTotalPages}
+                            onPageChange={setLotPage}
+                            itemsPerPage={lotItemsPerPage}
+                            onItemsPerPageChange={setLotItemsPerPage}
+                            totalItems={filteredLots.length}
+                          />
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -264,7 +264,7 @@ const CreateInventoryItems = ({
     const costPerTransfer =
       transferFactor > 0 ? costPerPurchase / transferFactor : 0;
     const costPerConsumption =
-      consumptionFactor > 0 ? costPerPurchase / consumptionFactor : 0;
+      consumptionFactor > 0 ? costPerTransfer / consumptionFactor : 0;
 
     setFormData((prev) => ({
       ...prev,

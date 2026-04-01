@@ -182,7 +182,7 @@ export default function AppHeader() {
           )}
 
           <div className="flex items-center gap-4">
-            <button
+            {/* <button
               type="button"
               onClick={() => setIsFactoryResetOpen(true)}
               className="h-10 px-4 rounded-[12px] border border-[#EF4444] text-[#EF4444] font-semibold inline-flex items-center gap-2 hover:bg-[#EF4444] hover:text-white transition-colors"
@@ -190,7 +190,7 @@ export default function AppHeader() {
             >
               <Trash2 className="h-4 w-4" />
               Clear all data
-            </button>
+            </button> */}
             <Link
               to="/dashboard"
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative"
