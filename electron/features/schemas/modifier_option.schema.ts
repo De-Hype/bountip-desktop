@@ -84,4 +84,3 @@ export const modifierOptionSchema: TableSchema = {
     `CREATE INDEX IF NOT EXISTS idx_modifier_option_modifierId ON modifier_option(modifierId);`,
   ],
 };
-

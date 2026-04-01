@@ -19,6 +19,8 @@ import useToastStore from "@/stores/toastStore";
 import NotFound from "@/features/inventory/NotFound";
 import RecipeAssets from "@/assets/images/recipe-management";
 import CreateRecipe from "@/features/recipe-management/CreateRecipe";
+import ViewRecipe from "@/features/recipe-management/ViewRecipe";
+import BulkUploadRecipesModal from "@/features/recipe-management/BulkUploadRecipesModal";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 
 type RecipeRow = {
@@ -41,6 +43,12 @@ type IngredientRow = {
   proposedFoodCost: number;
 };
 
+type RecipeVariantRow = {
+  id: string;
+  modifierName: string;
+  quantity: number;
+};
+
 const formatPrepTime = (minutes: number) => {
   const n = Number(minutes || 0);
   const safe = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
@@ -61,6 +69,23 @@ const RecipeDetailsModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [recipe, setRecipe] = useState<RecipeRow | null>(null);
   const [ingredients, setIngredients] = useState<IngredientRow[]>([]);
+  const [recipeVariants, setRecipeVariants] = useState<RecipeVariantRow[]>([]);
+
+  const currencySymbol = selectedOutlet?.currency
+    ? getCurrencySymbol(selectedOutlet.currency)
+    : "";
+
+  const formatMoney = useCallback(
+    (amount: number) => {
+      const value = Number.isFinite(amount) ? amount : 0;
+      const formatted = new Intl.NumberFormat(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value);
+      return `${currencySymbol}${formatted}`;
+    },
+    [currencySymbol],
+  );
 
   const load = useCallback(async () => {
     if (!isOpen || !recipeId || !selectedOutlet?.id) return;
@@ -130,11 +155,32 @@ const RecipeDetailsModal = ({
           proposedFoodCost: Number(it.proposedFoodCost || 0),
         })),
       );
+      const varRows = await api.dbQuery(
+        `
+          SELECT
+            id,
+            COALESCE(modifierName, '') as modifierName,
+            COALESCE(quantity, 0) as quantity
+          FROM recipe_variants
+          WHERE recipeId = ? AND isDeleted = 0
+          ORDER BY COALESCE(updatedAt, createdAt) ASC
+        `,
+        [recipeId],
+      );
+
+      setRecipeVariants(
+        (varRows || []).map((v: any) => ({
+          id: String(v.id || ""),
+          modifierName: String(v.modifierName || ""),
+          quantity: Number(v.quantity || 0),
+        })),
+      );
     } catch (e) {
       console.error("Failed to load recipe:", e);
       showToast("error", "Error", "Could not load recipe");
       setRecipe(null);
       setIngredients([]);
+      setRecipeVariants([]);
     } finally {
       setIsLoading(false);
     }
@@ -153,6 +199,10 @@ const RecipeDetailsModal = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const visibleVariants = useMemo(() => {
+    return recipeVariants.filter((v) => (Number(v.quantity || 0) || 0) > 0);
+  }, [recipeVariants]);
 
   return (
     <div
@@ -262,6 +312,46 @@ const RecipeDetailsModal = ({
               </table>
             </div>
           </div>
+
+          {visibleVariants.length > 0 && (
+            <div className="mt-6 rounded-[16px] border border-gray-100 overflow-hidden bg-white">
+              <div className="px-6 py-4 bg-[#F9FAFB]">
+                <p className="text-[14px] font-semibold text-[#111827]">
+                  Variants
+                </p>
+              </div>
+              <div className="px-6 py-6 overflow-x-auto">
+                <table className="w-full min-w-[520px]">
+                  <thead className="bg-[#F9FAFB]">
+                    <tr className="text-left text-[12px] text-gray-500">
+                      <th className="px-4 py-3 font-medium">Variant</th>
+                      <th className="px-4 py-3 font-medium">Quantity</th>
+                      <th className="px-4 py-3 font-medium">Estimated Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {visibleVariants.map((v) => (
+                      <tr key={v.id}>
+                        <td className="px-4 py-4 text-[13px] text-[#111827] font-medium">
+                          {v.modifierName}
+                        </td>
+                        <td className="px-4 py-4 text-[13px] text-[#111827]">
+                          {v.quantity}
+                        </td>
+                        <td className="px-4 py-4 text-[13px] text-[#111827]">
+                          {formatMoney(
+                            (Number(recipe?.totalMixCost || 0) /
+                              Math.max(1, Number(recipe?.totalPortions || 0))) *
+                              Number(v.quantity || 0),
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -297,6 +387,7 @@ const RecipeManagementPage = () => {
   const [recentRecipes, setRecentRecipes] = useState<RecipeRow[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null);
   const cardRowRef = useRef<HTMLDivElement | null>(null);
 
@@ -461,17 +552,11 @@ const RecipeManagementPage = () => {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() =>
-              showToast(
-                "warning",
-                "Coming Soon",
-                "Bulk upload not available yet",
-              )
-            }
+            onClick={() => setIsBulkUploadOpen(true)}
             className="h-11 px-4 rounded-[10px] border border-[#15BA5C] text-[#15BA5C] bg-white flex items-center gap-2 font-medium cursor-pointer hover:bg-[#E9FBF0] transition-colors"
           >
             <UploadCloud className="size-5" />
-            Bulk Upload
+            <span className="text-[14px]">Bulk Upload</span>
           </button>
           <button
             type="button"
@@ -479,7 +564,7 @@ const RecipeManagementPage = () => {
             className="h-11 px-4 rounded-[10px] bg-[#15BA5C] text-white flex items-center gap-2 font-medium cursor-pointer hover:bg-[#119E4D] transition-colors"
           >
             <Plus className="size-5" />
-            Create Recipe
+            <span className="text-[14px]">Create Recipe</span>
           </button>
         </div>
       </div>
@@ -982,12 +1067,26 @@ const RecipeManagementPage = () => {
         </div>
       </div>
 
-      <RecipeDetailsModal
+      <ViewRecipe
         isOpen={isViewOpen}
         recipeId={activeRecipeId}
         onClose={() => {
           setIsViewOpen(false);
           setActiveRecipeId(null);
+        }}
+        onDeleted={() => {
+          fetchRecipes();
+          fetchRecentRecipes();
+        }}
+      />
+
+      <BulkUploadRecipesModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        onUploadSuccess={() => {
+          fetchRecipes();
+          fetchRecentRecipes();
+          setIsBulkUploadOpen(false);
         }}
       />
 

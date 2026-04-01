@@ -104,6 +104,10 @@ import {
   buildRecipeIngredientUpsertParams,
 } from "../features/schemas/recipe_ingredients.schema";
 import {
+  recipeVariantUpsertSql,
+  buildRecipeVariantUpsertParams,
+} from "../features/schemas/recipe_variants.schema";
+import {
   modifierUpsertSql,
   buildModifierUpsertParams,
 } from "../features/schemas/modifier.schema";
@@ -996,6 +1000,16 @@ export class DatabaseService {
         const stmt = this.prepare(recipeIngredientUpsertSql);
         for (const ri of data.recipeIngredients) {
           stmt.run(this.sanitize(buildRecipeIngredientUpsertParams(ri)));
+        }
+      }
+
+      if (
+        Array.isArray(data.recipeVariants) &&
+        data.recipeVariants.length > 0
+      ) {
+        const stmt = this.prepare(recipeVariantUpsertSql);
+        for (const rv of data.recipeVariants) {
+          stmt.run(this.sanitize(buildRecipeVariantUpsertParams(rv)));
         }
       }
 

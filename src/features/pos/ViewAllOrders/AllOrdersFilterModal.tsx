@@ -73,7 +73,10 @@ const AllOrdersFilterModal = ({
 
   if (!isOpen) return null;
 
-  const handleResetField = (field: keyof AllOrdersFilterState, defaultValue: any) => {
+  const handleResetField = (
+    field: keyof AllOrdersFilterState,
+    defaultValue: any,
+  ) => {
     setFilters((prev) => ({ ...prev, [field]: defaultValue }));
   };
 
@@ -240,7 +243,9 @@ const AllOrdersFilterModal = ({
                 type="button"
                 onClick={() => handleResetField("channel", "All")}
                 className={`text-sm font-medium hover:text-[#15BA5C] transition-colors ${
-                  filters.channel !== "All" ? "text-[#15BA5C]" : "text-[#D1D5DB]"
+                  filters.channel !== "All"
+                    ? "text-[#15BA5C]"
+                    : "text-[#D1D5DB]"
                 }`}
               >
                 Reset
@@ -278,4 +283,3 @@ const AllOrdersFilterModal = ({
 };
 
 export default AllOrdersFilterModal;
-

@@ -522,10 +522,10 @@ const ViewAndEditComponent = ({
         <div className="px-8 py-6 border-b border-gray-100">
           <div className="flex items-start justify-between gap-6">
             <div className="min-w-0">
-              <h2 className="text-[34px] leading-tight font-bold text-[#1C1B20] truncate">
+              <h2 className="text-[24px] leading-tight font-bold text-[#1C1B20] truncate">
                 {formData.name || "Component"}
               </h2>
-              <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-[16px] text-[#6B7280]">
+              <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-[14px] text-[#6B7280]">
                 {updatedAtText ? (
                   <div className="flex items-center gap-2">
                     <Clock className="size-5 text-[#15BA5C]" />

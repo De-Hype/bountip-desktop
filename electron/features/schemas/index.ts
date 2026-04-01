@@ -17,6 +17,7 @@ import { itemMasterSchema } from "./item_master.schema";
 import { itemLotSchema } from "./item_lot.schema";
 import { recipesSchema } from "./recipes.schema";
 import { recipeIngredientsSchema } from "./recipe_ingredients.schema";
+import { recipeVariantsSchema } from "./recipe_variants.schema";
 import { systemDefaultSchema } from "./system_default.schema";
 import { syncSessionSchema } from "./sync_session.schema";
 import { syncTableLogSchema } from "./sync_table_log.schema";
@@ -55,6 +56,7 @@ export const schemas: TableSchema[] = [
   itemLotSchema,
   recipesSchema,
   recipeIngredientsSchema,
+  recipeVariantsSchema,
   systemDefaultSchema,
   syncSessionSchema,
   syncTableLogSchema,

@@ -80,6 +80,10 @@ export interface ElectronAPI {
 
   printHtml: (payload: {
     html: string;
-    options?: { silent?: boolean; printBackground?: boolean; deviceName?: string };
+    options?: {
+      silent?: boolean;
+      printBackground?: boolean;
+      deviceName?: string;
+    };
   }) => Promise<{ success: boolean; error?: string }>;
 }
