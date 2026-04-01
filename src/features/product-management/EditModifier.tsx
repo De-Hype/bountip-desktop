@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import useToastStore from "@/stores/toastStore";
+import { useBusinessStore } from "@/stores/useBusinessStore";
+import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import { SYNC_ACTIONS } from "../../../electron/types/action.types";
 
 type EditModifierProps = {
@@ -83,12 +85,18 @@ const EditModifier = ({
   productId,
   onSaved,
 }: EditModifierProps) => {
+  const { selectedOutlet } = useBusinessStore();
   const { showToast } = useToastStore();
   const [isLoading, setIsLoading] = useState(false);
 
   const [modifierType, setModifierType] = useState<ModifierType>("VARIANCE");
   const [modifierMode, setModifierMode] =
     useState<ModifierMode>("SINGLE_CHOICE");
+  const currencySymbol = useMemo(() => {
+    return selectedOutlet?.currency
+      ? getCurrencySymbol(selectedOutlet.currency)
+      : "";
+  }, [selectedOutlet?.currency]);
 
   const [isSingleChoiceOpen, setIsSingleChoiceOpen] = useState(false);
   const [isMultiChoiceOpen, setIsMultiChoiceOpen] = useState(false);
@@ -324,14 +332,26 @@ const EditModifier = ({
     if (modifierMode === "SINGLE_CHOICE") {
       return variantGroups.some((g) => {
         const hasName = g.groupName.trim() !== "";
-        const hasOption = g.options.some((o) => o.name.trim() !== "");
-        return hasName && hasOption;
+        const named = g.options.filter((o) => o.name.trim() !== "");
+        if (!hasName || named.length === 0) return false;
+        return named.every(
+          (o) =>
+            o.amount.trim() !== "" && Number.isFinite(parseFloat(o.amount)),
+        );
       });
     }
     return multiChoiceGroups.some((g) => {
       const hasName = g.groupName.trim() !== "";
-      const hasOption = g.options.some((o) => o.name.trim() !== "");
-      if (!hasName || !hasOption) return false;
+      const named = g.options.filter((o) => o.name.trim() !== "");
+      if (!hasName || named.length === 0) return false;
+      if (
+        !named.every(
+          (o) =>
+            o.amount.trim() !== "" && Number.isFinite(parseFloat(o.amount)),
+        )
+      ) {
+        return false;
+      }
       const groupMax = parseFloat(g.maximumQuantity);
       if (!Number.isFinite(groupMax) || groupMax <= 0) return true;
       if (!g.limitQuantityPerOption) return true;
@@ -639,6 +659,54 @@ const EditModifier = ({
     if (!api?.dbQuery) {
       showToast("error", "Unavailable", "Database API not available");
       return;
+    }
+
+    if (modifierMode === "SINGLE_CHOICE") {
+      const group = variantGroups[0];
+      if (!group) return;
+      const name = group.groupName.trim();
+      const named = group.options
+        .map((o) => ({ name: o.name.trim(), amount: o.amount.trim() }))
+        .filter((o) => o.name !== "");
+      if (name && named.some((o) => o.amount === "")) {
+        showToast(
+          "error",
+          "Missing Amount",
+          "Please enter an amount for every option",
+        );
+        return;
+      }
+      if (name && named.some((o) => !Number.isFinite(parseFloat(o.amount)))) {
+        showToast(
+          "error",
+          "Invalid Amount",
+          "Please enter a valid amount for every option",
+        );
+        return;
+      }
+    } else {
+      const group = multiChoiceGroups[0];
+      if (!group) return;
+      const name = group.groupName.trim();
+      const named = group.options
+        .map((o) => ({ name: o.name.trim(), amount: o.amount.trim() }))
+        .filter((o) => o.name !== "");
+      if (name && named.some((o) => o.amount === "")) {
+        showToast(
+          "error",
+          "Missing Amount",
+          "Please enter an amount for every option",
+        );
+        return;
+      }
+      if (name && named.some((o) => !Number.isFinite(parseFloat(o.amount)))) {
+        showToast(
+          "error",
+          "Invalid Amount",
+          "Please enter a valid amount for every option",
+        );
+        return;
+      }
     }
 
     const now = new Date().toISOString();
@@ -1125,18 +1193,27 @@ const EditModifier = ({
 
                               <div>
                                 <div className="text-[18px] font-bold text-[#111827]">
-                                  Amount
+                                  Amount <span className="text-red-500">*</span>
                                 </div>
-                                <input
-                                  value={o.amount}
-                                  onChange={(e) =>
-                                    updateVariantOption(g.id, o.id, {
-                                      amount: sanitizeNumber(e.target.value),
-                                    })
-                                  }
-                                  placeholder="0"
-                                  className="mt-4 h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
-                                />
+                                <div className="mt-4 relative">
+                                  {currencySymbol && (
+                                    <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 text-[16px]">
+                                      {currencySymbol}
+                                    </span>
+                                  )}
+                                  <input
+                                    value={o.amount}
+                                    onChange={(e) =>
+                                      updateVariantOption(g.id, o.id, {
+                                        amount: sanitizeNumber(e.target.value),
+                                      })
+                                    }
+                                    placeholder="0"
+                                    className={`h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white ${
+                                      currencySymbol ? "pl-10" : "px-5"
+                                    } pr-5 text-[16px] outline-none`}
+                                  />
+                                </div>
                               </div>
 
                               <button
@@ -1295,7 +1372,7 @@ const EditModifier = ({
                             Option Name
                           </div>
                           <div className="text-[18px] font-bold text-[#111827]">
-                            Amount
+                            Amount <span className="text-red-500">*</span>
                           </div>
                           <div className="text-[18px] font-bold text-[#111827]">
                             Maximum Quantity
@@ -1322,16 +1399,25 @@ const EditModifier = ({
                                 }
                                 className="h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
                               />
-                              <input
-                                value={o.amount}
-                                onChange={(e) =>
-                                  updateMultiChoiceOption(g.id, o.id, {
-                                    amount: sanitizeNumber(e.target.value),
-                                  })
-                                }
-                                placeholder="0"
-                                className="h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
-                              />
+                              <div className="relative">
+                                {currencySymbol && (
+                                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 text-[16px]">
+                                    {currencySymbol}
+                                  </span>
+                                )}
+                                <input
+                                  value={o.amount}
+                                  onChange={(e) =>
+                                    updateMultiChoiceOption(g.id, o.id, {
+                                      amount: sanitizeNumber(e.target.value),
+                                    })
+                                  }
+                                  placeholder="0"
+                                  className={`h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white ${
+                                    currencySymbol ? "pl-10" : "px-5"
+                                  } pr-5 text-[16px] outline-none`}
+                                />
+                              </div>
                               <input
                                 value={o.maximumQuantity}
                                 onChange={(e) =>

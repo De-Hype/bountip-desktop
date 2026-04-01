@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import useToastStore from "@/stores/toastStore";
+import { useBusinessStore } from "@/stores/useBusinessStore";
+import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import { SYNC_ACTIONS } from "../../../electron/types/action.types";
 
 type CreateModifierProps = {
@@ -80,8 +82,14 @@ const CreateModifier = ({
   outletId,
   onCreated,
 }: CreateModifierProps) => {
+  const { selectedOutlet } = useBusinessStore();
   const [modifierType, setModifierType] = useState<ModifierType>("VARIANCE");
   const { showToast } = useToastStore();
+  const currencySymbol = useMemo(() => {
+    return selectedOutlet?.currency
+      ? getCurrencySymbol(selectedOutlet.currency)
+      : "";
+  }, [selectedOutlet?.currency]);
 
   const [isSingleChoiceOpen, setIsSingleChoiceOpen] = useState(false);
   const [isMultiChoiceOpen, setIsMultiChoiceOpen] = useState(false);
@@ -158,13 +166,24 @@ const CreateModifier = ({
     if (!isDirty) return false;
     const canCreateSingle = variantGroups.some((g) => {
       const hasName = g.groupName.trim() !== "";
-      const hasOption = g.options.some((o) => o.name.trim() !== "");
-      return hasName && hasOption;
+      const named = g.options.filter((o) => o.name.trim() !== "");
+      if (!hasName || named.length === 0) return false;
+      return named.every(
+        (o) => o.amount.trim() !== "" && Number.isFinite(parseFloat(o.amount)),
+      );
     });
     const canCreateMulti = multiChoiceGroups.some((g) => {
       const hasName = g.groupName.trim() !== "";
-      const hasOption = g.options.some((o) => o.name.trim() !== "");
-      if (!hasName || !hasOption) return false;
+      const named = g.options.filter((o) => o.name.trim() !== "");
+      if (!hasName || named.length === 0) return false;
+      if (
+        !named.every(
+          (o) =>
+            o.amount.trim() !== "" && Number.isFinite(parseFloat(o.amount)),
+        )
+      ) {
+        return false;
+      }
       const groupMax = parseFloat(g.maximumQuantity);
       if (!Number.isFinite(groupMax) || groupMax <= 0) return true;
       if (!g.limitQuantityPerOption) return true;
@@ -445,12 +464,29 @@ const CreateModifier = ({
     try {
       for (const group of variantGroups) {
         const name = group.groupName.trim();
-        const options = group.options
-          .map((o) => ({
-            name: o.name.trim(),
-            amount: parseFloat(o.amount) || 0,
-          }))
+        const named = group.options
+          .map((o) => ({ name: o.name.trim(), amount: o.amount.trim() }))
           .filter((o) => o.name !== "");
+        if (name && named.some((o) => o.amount === "")) {
+          showToast(
+            "error",
+            "Missing Amount",
+            "Please enter an amount for every option",
+          );
+          return;
+        }
+        if (name && named.some((o) => !Number.isFinite(parseFloat(o.amount)))) {
+          showToast(
+            "error",
+            "Invalid Amount",
+            "Please enter a valid amount for every option",
+          );
+          return;
+        }
+        const options = named.map((o) => ({
+          name: o.name,
+          amount: parseFloat(o.amount),
+        }));
 
         if (!name || options.length === 0) continue;
 
@@ -582,13 +618,34 @@ const CreateModifier = ({
         const groupMaxQty = Number.isFinite(parseFloat(group.maximumQuantity))
           ? parseFloat(group.maximumQuantity)
           : 0;
-        const options = group.options
+        const named = group.options
           .map((o) => ({
             name: o.name.trim(),
-            amount: parseFloat(o.amount) || 0,
-            maximumQuantity: parseFloat(o.maximumQuantity) || 0,
+            amount: o.amount.trim(),
+            maximumQuantity: o.maximumQuantity,
           }))
           .filter((o) => o.name !== "");
+        if (name && named.some((o) => o.amount === "")) {
+          showToast(
+            "error",
+            "Missing Amount",
+            "Please enter an amount for every option",
+          );
+          return;
+        }
+        if (name && named.some((o) => !Number.isFinite(parseFloat(o.amount)))) {
+          showToast(
+            "error",
+            "Invalid Amount",
+            "Please enter a valid amount for every option",
+          );
+          return;
+        }
+        const options = named.map((o) => ({
+          name: o.name,
+          amount: parseFloat(o.amount),
+          maximumQuantity: parseFloat(o.maximumQuantity) || 0,
+        }));
 
         if (!name || options.length === 0) continue;
 
@@ -874,18 +931,27 @@ const CreateModifier = ({
 
                             <div>
                               <div className="text-[18px] font-bold text-[#111827]">
-                                Amount
+                                Amount <span className="text-red-500">*</span>
                               </div>
-                              <input
-                                value={o.amount}
-                                onChange={(e) =>
-                                  updateVariantOption(g.id, o.id, {
-                                    amount: sanitizeNumber(e.target.value),
-                                  })
-                                }
-                                placeholder="0"
-                                className="mt-4 h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
-                              />
+                              <div className="mt-4 relative">
+                                {currencySymbol && (
+                                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 text-[16px]">
+                                    {currencySymbol}
+                                  </span>
+                                )}
+                                <input
+                                  value={o.amount}
+                                  onChange={(e) =>
+                                    updateVariantOption(g.id, o.id, {
+                                      amount: sanitizeNumber(e.target.value),
+                                    })
+                                  }
+                                  placeholder="0"
+                                  className={`h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white ${
+                                    currencySymbol ? "pl-10" : "px-5"
+                                  } pr-5 text-[16px] outline-none`}
+                                />
+                              </div>
                             </div>
 
                             <button
@@ -1052,7 +1118,7 @@ const CreateModifier = ({
                           Option Name
                         </div>
                         <div className="text-[18px] font-bold text-[#111827]">
-                          Amount
+                          Amount <span className="text-red-500">*</span>
                         </div>
                         <div className="text-[18px] font-bold text-[#111827]">
                           Maximum Quantity
@@ -1075,16 +1141,25 @@ const CreateModifier = ({
                               placeholder="Enter Name"
                               className="h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
                             />
-                            <input
-                              value={o.amount}
-                              onChange={(e) =>
-                                updateMultiChoiceOption(g.id, o.id, {
-                                  amount: sanitizeNumber(e.target.value),
-                                })
-                              }
-                              placeholder="0"
-                              className="h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
-                            />
+                            <div className="relative">
+                              {currencySymbol && (
+                                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 text-[16px]">
+                                  {currencySymbol}
+                                </span>
+                              )}
+                              <input
+                                value={o.amount}
+                                onChange={(e) =>
+                                  updateMultiChoiceOption(g.id, o.id, {
+                                    amount: sanitizeNumber(e.target.value),
+                                  })
+                                }
+                                placeholder="0"
+                                className={`h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white ${
+                                  currencySymbol ? "pl-10" : "px-5"
+                                } pr-5 text-[16px] outline-none`}
+                              />
+                            </div>
                             <input
                               value={o.maximumQuantity}
                               onChange={(e) =>
@@ -1223,18 +1298,27 @@ const CreateModifier = ({
 
                             <div>
                               <div className="text-[18px] font-bold text-[#111827]">
-                                Amount
+                                Amount <span className="text-red-500">*</span>
                               </div>
-                              <input
-                                value={o.amount}
-                                onChange={(e) =>
-                                  updateVariantOption(g.id, o.id, {
-                                    amount: sanitizeNumber(e.target.value),
-                                  })
-                                }
-                                placeholder="0"
-                                className="mt-4 h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
-                              />
+                              <div className="mt-4 relative">
+                                {currencySymbol && (
+                                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 text-[16px]">
+                                    {currencySymbol}
+                                  </span>
+                                )}
+                                <input
+                                  value={o.amount}
+                                  onChange={(e) =>
+                                    updateVariantOption(g.id, o.id, {
+                                      amount: sanitizeNumber(e.target.value),
+                                    })
+                                  }
+                                  placeholder="0"
+                                  className={`h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white ${
+                                    currencySymbol ? "pl-10" : "px-5"
+                                  } pr-5 text-[16px] outline-none`}
+                                />
+                              </div>
                             </div>
 
                             <button
@@ -1400,7 +1484,7 @@ const CreateModifier = ({
                           Select Menu Name
                         </div>
                         <div className="text-[18px] font-bold text-[#111827]">
-                          Amount
+                          Amount <span className="text-red-500">*</span>
                         </div>
                         <div className="text-[18px] font-bold text-[#111827]">
                           Maximum Quantity
@@ -1423,16 +1507,25 @@ const CreateModifier = ({
                               placeholder="Enter Menu Name"
                               className="h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
                             />
-                            <input
-                              value={o.amount}
-                              onChange={(e) =>
-                                updateMultiChoiceOption(g.id, o.id, {
-                                  amount: sanitizeNumber(e.target.value),
-                                })
-                              }
-                              placeholder="0"
-                              className="h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white px-5 text-[16px] outline-none"
-                            />
+                            <div className="relative">
+                              {currencySymbol && (
+                                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 text-[16px]">
+                                  {currencySymbol}
+                                </span>
+                              )}
+                              <input
+                                value={o.amount}
+                                onChange={(e) =>
+                                  updateMultiChoiceOption(g.id, o.id, {
+                                    amount: sanitizeNumber(e.target.value),
+                                  })
+                                }
+                                placeholder="0"
+                                className={`h-14 w-full rounded-[14px] border border-[#E5E7EB] bg-white ${
+                                  currencySymbol ? "pl-10" : "px-5"
+                                } pr-5 text-[16px] outline-none`}
+                              />
+                            </div>
                             <input
                               value={o.maximumQuantity}
                               onChange={(e) =>
