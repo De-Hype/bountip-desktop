@@ -1,1 +1,131 @@
-"use strict";const r=require("electron");console.log("🔥 PRELOAD LOADED!");r.contextBridge.exposeInMainWorld("electronAPI",{storeTokens:e=>r.ipcRenderer.send("auth:storeTokens",e),clearTokens:()=>r.ipcRenderer.send("auth:clearTokens"),getTokens:async()=>{try{return await r.ipcRenderer.invoke("auth:getTokens")}catch(e){return console.error("getTokens error:",e),null}},saveLoginHash:async(e,n)=>r.ipcRenderer.invoke("auth:saveLoginHash",e,n),verifyLoginHash:async(e,n)=>r.ipcRenderer.invoke("auth:verifyLoginHash",e,n),savePinHash:async e=>r.ipcRenderer.invoke("auth:savePinHash",e),verifyPinHash:async e=>r.ipcRenderer.invoke("auth:verifyPinHash",e),saveUser:async e=>{try{return await r.ipcRenderer.invoke("db:saveUser",e)}catch(n){console.error("saveUser error:",n)}},getUser:async()=>{try{return await r.ipcRenderer.invoke("db:getUser")}catch(e){return console.error("getUser error:",e),null}},saveOutletOnboarding:async e=>r.ipcRenderer.invoke("db:saveOutletOnboarding",e),getOutlets:async()=>r.ipcRenderer.invoke("db:getOutlets"),getCustomers:async()=>r.ipcRenderer.invoke("db:getCustomers"),getPaymentTerms:async e=>r.ipcRenderer.invoke("db:getPaymentTerms",e),savePaymentTerm:async e=>r.ipcRenderer.invoke("db:savePaymentTerm",e),deletePaymentTerm:async e=>r.ipcRenderer.invoke("db:deletePaymentTerm",e),getBusinesses:async()=>r.ipcRenderer.invoke("db:getBusinesses"),updateBusinessDetails:async e=>r.ipcRenderer.invoke("db:updateBusinessDetails",e),updatePaymentTier:async e=>r.ipcRenderer.invoke("db:updatePaymentTier",e),addPaymentTier:async e=>r.ipcRenderer.invoke("db:addPaymentTier",e),deletePaymentTier:async e=>r.ipcRenderer.invoke("db:deletePaymentTier",e),editPaymentTier:async e=>r.ipcRenderer.invoke("db:editPaymentTier",e),bulkAddPaymentTiers:async e=>r.ipcRenderer.invoke("db:bulkAddPaymentTiers",e),updateReceiptSettings:async e=>r.ipcRenderer.invoke("db:updateReceiptSettings",e),updateLabelSettings:async e=>r.ipcRenderer.invoke("db:updateLabelSettings",e),updateInvoiceSettings:async e=>r.ipcRenderer.invoke("db:updateInvoiceSettings",e),updatePaymentMethods:async e=>r.ipcRenderer.invoke("db:updatePaymentMethods",e),updateOperatingHours:async e=>r.ipcRenderer.invoke("db:updateOperatingHours",e),updateTaxSettings:async e=>r.ipcRenderer.invoke("db:updateTaxSettings",e),updateServiceCharges:async e=>r.ipcRenderer.invoke("db:updateServiceCharges",e),createOutlet:async e=>r.ipcRenderer.invoke("db:createOutlet",e),updateOutlet:async e=>r.ipcRenderer.invoke("db:updateOutlet",e),deleteOutlet:async e=>r.ipcRenderer.invoke("db:deleteOutlet",e),createProduct:async e=>r.ipcRenderer.invoke("db:createProduct",e),createInventoryItem:async e=>r.ipcRenderer.invoke("db:createInventoryItem",e),bulkCreateProducts:async e=>r.ipcRenderer.invoke("db:bulkCreateProducts",e),bulkCreateCustomers:async e=>r.ipcRenderer.invoke("db:bulkCreateCustomers",e),upsertCustomer:async e=>r.ipcRenderer.invoke("db:upsertCustomer",e),dbQuery:async(e,n)=>r.ipcRenderer.invoke("db:query",e,n),importAsset:async e=>r.ipcRenderer.invoke("assets:import",e),uploadImage:async e=>r.ipcRenderer.invoke("net:uploadImage",e),getNetworkStatus:async()=>{try{return await r.ipcRenderer.invoke("network:getStatus")}catch(e){return console.error("getNetworkStatus error:",e),{online:!0}}},setNetworkStatus:e=>r.ipcRenderer.send("network:setOnline",e),onNetworkStatus:e=>{const n=(a,t)=>e(t);return r.ipcRenderer.on("network:status",n),()=>r.ipcRenderer.removeListener("network:status",n)},cacheGet:async e=>r.ipcRenderer.invoke("cache:get",e),cachePut:async(e,n)=>r.ipcRenderer.invoke("cache:put",e,n),getSystemDefaults:async(e,n)=>r.ipcRenderer.invoke("db:getSystemDefaults",e,n),addSystemDefault:async(e,n,a)=>r.ipcRenderer.invoke("db:addSystemDefault",e,n,a),deleteSystemDefault:async e=>r.ipcRenderer.invoke("db:deleteSystemDefault",e),queueAdd:async e=>r.ipcRenderer.invoke("queue:add",e),triggerSync:async e=>r.ipcRenderer.invoke("sync:trigger",e),flushSync:async()=>r.ipcRenderer.invoke("sync:flush"),wipeData:async()=>r.ipcRenderer.invoke("db:wipeData"),queueList:async()=>r.ipcRenderer.invoke("queue:list"),queueClear:async()=>r.ipcRenderer.invoke("queue:clear"),queueSet:async e=>r.ipcRenderer.invoke("queue:set",e),getPeers:async()=>r.ipcRenderer.invoke("p2p:getPeers"),onPeers:e=>{const n=(a,t)=>e(t);return r.ipcRenderer.on("p2p:peers",n),()=>r.ipcRenderer.removeListener("p2p:peers",n)},broadcast:e=>r.ipcRenderer.send("p2p:broadcast",e),sendToPeer:(e,n)=>r.ipcRenderer.send("p2p:sendToPeer",e,n),onP2PMessage:e=>{const n=(a,t)=>e(t);return r.ipcRenderer.on("p2p:message",n),()=>r.ipcRenderer.removeListener("p2p:message",n)},checkForUpdates:()=>r.ipcRenderer.send("updater:check"),quitAndInstall:()=>r.ipcRenderer.send("updater:quitAndInstall"),onUpdateAvailable:e=>{const n=(a,t)=>e(t);return r.ipcRenderer.on("updater:update-available",n),()=>r.ipcRenderer.removeListener("updater:update-available",n)},onUpdateDownloaded:e=>{const n=(a,t)=>e(t);return r.ipcRenderer.on("updater:update-downloaded",n),()=>r.ipcRenderer.removeListener("updater:update-downloaded",n)},onUpdateStatus:e=>{const n=(a,t)=>e(t);return r.ipcRenderer.on("updater:status",n),()=>r.ipcRenderer.removeListener("updater:status",n)},onDownloadProgress:e=>{const n=(a,t)=>e(t);return r.ipcRenderer.on("updater:download-progress",n),()=>r.ipcRenderer.removeListener("updater:download-progress",n)},openExternal:async e=>r.ipcRenderer.invoke("shell:openExternal",e),printHtml:async e=>r.ipcRenderer.invoke("print:html",e),factoryReset:()=>r.ipcRenderer.send("system:factoryReset")});
+"use strict";
+const electron = require("electron");
+console.log("🔥 PRELOAD LOADED!");
+electron.contextBridge.exposeInMainWorld("electronAPI", {
+  storeTokens: (payload) => electron.ipcRenderer.send("auth:storeTokens", payload),
+  clearTokens: () => electron.ipcRenderer.send("auth:clearTokens"),
+  getTokens: async () => {
+    try {
+      return await electron.ipcRenderer.invoke("auth:getTokens");
+    } catch (error) {
+      console.error("getTokens error:", error);
+      return null;
+    }
+  },
+  saveLoginHash: async (email, password) => electron.ipcRenderer.invoke("auth:saveLoginHash", email, password),
+  verifyLoginHash: async (email, password) => electron.ipcRenderer.invoke("auth:verifyLoginHash", email, password),
+  savePinHash: async (pin) => electron.ipcRenderer.invoke("auth:savePinHash", pin),
+  verifyPinHash: async (pin) => electron.ipcRenderer.invoke("auth:verifyPinHash", pin),
+  saveUser: async (user) => {
+    try {
+      return await electron.ipcRenderer.invoke("db:saveUser", user);
+    } catch (error) {
+      console.error("saveUser error:", error);
+    }
+  },
+  getUser: async () => {
+    try {
+      return await electron.ipcRenderer.invoke("db:getUser");
+    } catch (error) {
+      console.error("getUser error:", error);
+      return null;
+    }
+  },
+  saveOutletOnboarding: async (payload) => electron.ipcRenderer.invoke("db:saveOutletOnboarding", payload),
+  getOutlets: async () => electron.ipcRenderer.invoke("db:getOutlets"),
+  getCustomers: async () => electron.ipcRenderer.invoke("db:getCustomers"),
+  getPaymentTerms: async (outletId) => electron.ipcRenderer.invoke("db:getPaymentTerms", outletId),
+  savePaymentTerm: async (payload) => electron.ipcRenderer.invoke("db:savePaymentTerm", payload),
+  deletePaymentTerm: async (id) => electron.ipcRenderer.invoke("db:deletePaymentTerm", id),
+  getBusinesses: async () => electron.ipcRenderer.invoke("db:getBusinesses"),
+  updateBusinessDetails: async (payload) => electron.ipcRenderer.invoke("db:updateBusinessDetails", payload),
+  updatePaymentTier: async (payload) => electron.ipcRenderer.invoke("db:updatePaymentTier", payload),
+  addPaymentTier: async (payload) => electron.ipcRenderer.invoke("db:addPaymentTier", payload),
+  deletePaymentTier: async (payload) => electron.ipcRenderer.invoke("db:deletePaymentTier", payload),
+  editPaymentTier: async (payload) => electron.ipcRenderer.invoke("db:editPaymentTier", payload),
+  bulkAddPaymentTiers: async (payload) => electron.ipcRenderer.invoke("db:bulkAddPaymentTiers", payload),
+  updateReceiptSettings: async (payload) => electron.ipcRenderer.invoke("db:updateReceiptSettings", payload),
+  updateLabelSettings: async (payload) => electron.ipcRenderer.invoke("db:updateLabelSettings", payload),
+  updateInvoiceSettings: async (payload) => electron.ipcRenderer.invoke("db:updateInvoiceSettings", payload),
+  updatePaymentMethods: async (payload) => electron.ipcRenderer.invoke("db:updatePaymentMethods", payload),
+  updateOperatingHours: async (payload) => electron.ipcRenderer.invoke("db:updateOperatingHours", payload),
+  updateTaxSettings: async (payload) => electron.ipcRenderer.invoke("db:updateTaxSettings", payload),
+  updateServiceCharges: async (payload) => electron.ipcRenderer.invoke("db:updateServiceCharges", payload),
+  createOutlet: async (payload) => electron.ipcRenderer.invoke("db:createOutlet", payload),
+  updateOutlet: async (payload) => electron.ipcRenderer.invoke("db:updateOutlet", payload),
+  deleteOutlet: async (payload) => electron.ipcRenderer.invoke("db:deleteOutlet", payload),
+  createProduct: async (payload) => electron.ipcRenderer.invoke("db:createProduct", payload),
+  createInventoryItem: async (payload) => electron.ipcRenderer.invoke("db:createInventoryItem", payload),
+  bulkCreateProducts: async (payload) => electron.ipcRenderer.invoke("db:bulkCreateProducts", payload),
+  bulkCreateCustomers: async (payload) => electron.ipcRenderer.invoke("db:bulkCreateCustomers", payload),
+  upsertCustomer: async (payload) => electron.ipcRenderer.invoke("db:upsertCustomer", payload),
+  dbQuery: async (sql, params) => electron.ipcRenderer.invoke("db:query", sql, params),
+  importAsset: async (filePath) => electron.ipcRenderer.invoke("assets:import", filePath),
+  uploadImage: async (payload) => electron.ipcRenderer.invoke("net:uploadImage", payload),
+  deleteImage: async (payload) => electron.ipcRenderer.invoke("net:deleteImage", payload),
+  getNetworkStatus: async () => {
+    try {
+      return await electron.ipcRenderer.invoke("network:getStatus");
+    } catch (error) {
+      console.error("getNetworkStatus error:", error);
+      return { online: true };
+    }
+  },
+  setNetworkStatus: (online) => electron.ipcRenderer.send("network:setOnline", online),
+  onNetworkStatus: (cb) => {
+    const handler = (_e, payload) => cb(payload);
+    electron.ipcRenderer.on("network:status", handler);
+    return () => electron.ipcRenderer.removeListener("network:status", handler);
+  },
+  cacheGet: async (key) => electron.ipcRenderer.invoke("cache:get", key),
+  cachePut: async (key, value) => electron.ipcRenderer.invoke("cache:put", key, value),
+  getSystemDefaults: async (key, outletId) => electron.ipcRenderer.invoke("db:getSystemDefaults", key, outletId),
+  addSystemDefault: async (key, data, outletId) => electron.ipcRenderer.invoke("db:addSystemDefault", key, data, outletId),
+  deleteSystemDefault: async (id) => electron.ipcRenderer.invoke("db:deleteSystemDefault", id),
+  queueAdd: async (op) => electron.ipcRenderer.invoke("queue:add", op),
+  triggerSync: async (forceFullPull) => electron.ipcRenderer.invoke("sync:trigger", forceFullPull),
+  flushSync: async () => electron.ipcRenderer.invoke("sync:flush"),
+  wipeData: async () => electron.ipcRenderer.invoke("db:wipeData"),
+  queueList: async () => electron.ipcRenderer.invoke("queue:list"),
+  queueClear: async () => electron.ipcRenderer.invoke("queue:clear"),
+  queueSet: async (list) => electron.ipcRenderer.invoke("queue:set", list),
+  getPeers: async () => electron.ipcRenderer.invoke("p2p:getPeers"),
+  onPeers: (cb) => {
+    const handler = (_e, list) => cb(list);
+    electron.ipcRenderer.on("p2p:peers", handler);
+    return () => electron.ipcRenderer.removeListener("p2p:peers", handler);
+  },
+  broadcast: (message) => electron.ipcRenderer.send("p2p:broadcast", message),
+  sendToPeer: (deviceId, message) => electron.ipcRenderer.send("p2p:sendToPeer", deviceId, message),
+  onP2PMessage: (cb) => {
+    const handler = (_e, payload) => cb(payload);
+    electron.ipcRenderer.on("p2p:message", handler);
+    return () => electron.ipcRenderer.removeListener("p2p:message", handler);
+  },
+  // Updater
+  checkForUpdates: () => electron.ipcRenderer.send("updater:check"),
+  quitAndInstall: () => electron.ipcRenderer.send("updater:quitAndInstall"),
+  onUpdateAvailable: (cb) => {
+    const handler = (_e, info) => cb(info);
+    electron.ipcRenderer.on("updater:update-available", handler);
+    return () => electron.ipcRenderer.removeListener("updater:update-available", handler);
+  },
+  onUpdateDownloaded: (cb) => {
+    const handler = (_e, info) => cb(info);
+    electron.ipcRenderer.on("updater:update-downloaded", handler);
+    return () => electron.ipcRenderer.removeListener("updater:update-downloaded", handler);
+  },
+  onUpdateStatus: (cb) => {
+    const handler = (_e, text) => cb(text);
+    electron.ipcRenderer.on("updater:status", handler);
+    return () => electron.ipcRenderer.removeListener("updater:status", handler);
+  },
+  onDownloadProgress: (cb) => {
+    const handler = (_e, progressObj) => cb(progressObj);
+    electron.ipcRenderer.on("updater:download-progress", handler);
+    return () => electron.ipcRenderer.removeListener("updater:download-progress", handler);
+  },
+  openExternal: async (url) => electron.ipcRenderer.invoke("shell:openExternal", url),
+  printHtml: async (payload) => electron.ipcRenderer.invoke("print:html", payload),
+  factoryReset: () => electron.ipcRenderer.send("system:factoryReset")
+});

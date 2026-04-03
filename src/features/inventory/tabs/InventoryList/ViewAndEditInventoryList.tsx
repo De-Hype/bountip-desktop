@@ -64,6 +64,11 @@ const ViewAndEditInventoryList = ({
   const currencySymbol = selectedOutlet?.currency
     ? getCurrencySymbol(selectedOutlet.currency)
     : "";
+  const formatAmount = (value: number) =>
+    new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number.isFinite(value) ? value : 0);
   const [activeTab, setActiveTab] = useState<TabKey>("basic");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -85,6 +90,13 @@ const ViewAndEditInventoryList = ({
   const [suppliers, setSuppliers] = useState<
     { value: string; label: string }[]
   >([]);
+  const [supplierLookup, setSupplierLookup] = useState<{
+    byId: Record<string, { name: string; address: string | null }>;
+    byName: Record<
+      string,
+      { id: string; name: string; address: string | null }
+    >;
+  }>({ byId: {}, byName: {} });
 
   const [isDefaultModalOpen, setIsDefaultModalOpen] = useState(false);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
@@ -124,6 +136,43 @@ const ViewAndEditInventoryList = ({
     trackInventory: false,
     makeItemTraceable: false,
   });
+  const [baselineFormKey, setBaselineFormKey] = useState("");
+
+  const normalizeNumberString = (value: string) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(n) : "";
+  };
+
+  const buildFormKey = (data: typeof formData) =>
+    JSON.stringify({
+      itemName: String(data.itemName || "").trim(),
+      itemCode: String(data.itemCode || "").trim(),
+      itemCategory: String(data.itemCategory || "").trim(),
+      itemType: String(data.itemType || "").trim(),
+      suppliers: [...(data.suppliers || [])].map(String).sort(),
+      unitOfPurchase: String(data.unitOfPurchase || "").trim(),
+      unitOfTransfer: String(data.unitOfTransfer || "").trim(),
+      unitOfConsumption: String(data.unitOfConsumption || "").trim(),
+      noOfTransferBasedOnPurchase: normalizeNumberString(
+        data.noOfTransferBasedOnPurchase,
+      ),
+      noOfConsumptionUnitBasedOnPurchase: normalizeNumberString(
+        data.noOfConsumptionUnitBasedOnPurchase,
+      ),
+      displayedUnitOfMeasure: String(data.displayedUnitOfMeasure || "").trim(),
+      currentStockLevel: normalizeNumberString(data.currentStockLevel),
+      minimumStockLevel: normalizeNumberString(data.minimumStockLevel),
+      reOrderLevel: normalizeNumberString(data.reOrderLevel),
+      costPrice: normalizeNumberString(data.costPrice),
+      quantityPurchased: normalizeNumberString(data.quantityPurchased),
+      trackInventory: Boolean(data.trackInventory),
+      makeItemTraceable: Boolean(data.makeItemTraceable),
+    });
+
+  const isDirty = useMemo(() => {
+    if (!baselineFormKey) return false;
+    return buildFormKey(formData) !== baselineFormKey;
+  }, [baselineFormKey, formData]);
 
   const openDefaultModal = (
     key: SystemDefaultType,
@@ -162,14 +211,76 @@ const ViewAndEditInventoryList = ({
       const api = (window as any).electronAPI;
       if (!api?.dbQuery || !selectedOutlet?.id) return;
       const supplierSql =
-        "SELECT id, name FROM suppliers WHERE outletId = ? AND deletedAt IS NULL ORDER BY name ASC";
+        "SELECT id, name, address FROM suppliers WHERE outletId = ? AND deletedAt IS NULL ORDER BY name ASC";
       const supplierRes = await api.dbQuery(supplierSql, [selectedOutlet.id]);
-      setSuppliers(
-        supplierRes.map((s: any) => ({ value: s.id, label: s.name })),
-      );
+      const options = (supplierRes || []).map((s: any) => ({
+        value: String(s.id),
+        label: String(s.name || ""),
+      }));
+      setSuppliers(options);
+
+      const byId: Record<string, { name: string; address: string | null }> = {};
+      const byName: Record<
+        string,
+        { id: string; name: string; address: string | null }
+      > = {};
+      (supplierRes || []).forEach((s: any) => {
+        const id = String(s.id || "").trim();
+        const name = String(s.name || "").trim();
+        const address =
+          s.address != null && String(s.address).trim() !== ""
+            ? String(s.address)
+            : null;
+        if (!id || !name) return;
+        byId[id] = { name, address };
+        byName[name.toLowerCase()] = { id, name, address };
+      });
+      setSupplierLookup({ byId, byName });
     } catch (err) {
       console.error("Failed to fetch suppliers:", err);
     }
+  };
+
+  const resolveSupplierName = (supplierNameOrId: string | null) => {
+    const raw = String(supplierNameOrId || "").trim();
+    if (!raw) return "---";
+    const tokens = raw
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const resolved = tokens.map((t) => {
+      const byId = supplierLookup.byId[t];
+      if (byId) return byId.name;
+      const byName = supplierLookup.byName[t.toLowerCase()];
+      if (byName) return byName.name;
+      return t;
+    });
+    return resolved.join(", ");
+  };
+
+  const resolveSupplierAddress = (lot: LotRow) => {
+    const rawAddress = String(lot.supplierAddress || "").trim();
+    if (rawAddress) return rawAddress;
+    const rawSupplier = String(lot.supplierName || "").trim();
+    if (!rawSupplier) return "---";
+    const tokens = rawSupplier
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const addresses = tokens
+      .map((t) => {
+        const byId = supplierLookup.byId[t];
+        if (byId?.address) return byId.address;
+        const byName = supplierLookup.byName[t.toLowerCase()];
+        if (byName?.address) return byName.address;
+        return null;
+      })
+      .filter(Boolean) as string[];
+    const unique = Array.from(new Set(addresses.map((a) => a.trim()))).filter(
+      Boolean,
+    );
+    if (unique.length === 0) return "---";
+    return unique.join(", ");
   };
 
   const fetchCategories = async () => {
@@ -545,6 +656,30 @@ const ViewAndEditInventoryList = ({
         trackInventory: Boolean(row.isTrackable),
         makeItemTraceable: Boolean(row.isTraceable),
       });
+      setBaselineFormKey(
+        buildFormKey({
+          itemName: row.itemName || "",
+          itemCode: row.itemCode || "",
+          itemCategory: row.itemCategory || "",
+          itemType: row.itemType || "",
+          suppliers: supplierIds,
+          unitOfPurchase: row.unitOfPurchase || "",
+          unitOfTransfer: row.unitOfTransfer || "",
+          unitOfConsumption: row.unitOfConsumption || "",
+          noOfTransferBasedOnPurchase: String(transferPerPurchase || 0),
+          noOfConsumptionUnitBasedOnPurchase: String(
+            consumptionPerPurchase || 0,
+          ),
+          displayedUnitOfMeasure: row.displayedUnitOfMeasure || "",
+          currentStockLevel: String(row.currentStockLevel ?? 0),
+          minimumStockLevel: String(row.minimumStockLevel ?? 0),
+          reOrderLevel: String(row.reOrderLevel ?? 0),
+          costPrice: String(row.costPrice ?? "0.00"),
+          quantityPurchased: String(lotQty ?? 0),
+          trackInventory: Boolean(row.isTrackable),
+          makeItemTraceable: Boolean(row.isTraceable),
+        }),
+      );
     } catch (err) {
       console.error("Failed to load inventory item:", err);
       showToast("error", "Error", "Failed to load inventory item");
@@ -564,6 +699,7 @@ const ViewAndEditInventoryList = ({
   useEffect(() => {
     if (!isOpen) return;
     if (!inventoryItemId) return;
+    setBaselineFormKey("");
     loadItem();
   }, [isOpen, inventoryItemId, suppliers.length]);
 
@@ -577,7 +713,7 @@ const ViewAndEditInventoryList = ({
 
   const handleUpdate = async () => {
     if (!inventoryItemId || !meta.itemMasterId) return;
-    if (!isFormValid || isSaving) return;
+    if (!isFormValid || !isDirty || isSaving) return;
     const api = (window as any).electronAPI;
     if (!api?.dbQuery || !api?.queueAdd) return;
 
@@ -708,6 +844,7 @@ const ViewAndEditInventoryList = ({
       }
 
       showToast("success", "Success", "Inventory item updated successfully");
+      setBaselineFormKey(buildFormKey(formData));
       onUpdated?.();
       onClose();
     } catch (err) {
@@ -1406,7 +1543,7 @@ const ViewAndEditInventoryList = ({
                           </div>
                           <div className="px-5 py-4 text-[13px] font-semibold text-[#1C1B20] bg-white border-b border-[#E5E7EB] text-center">
                             {currencySymbol}
-                            {weightedAverageCostDisplay.toFixed(2)}{" "}
+                            {formatAmount(weightedAverageCostDisplay)}{" "}
                             {weightedAverageCostUnitLabel}
                           </div>
 
@@ -1416,7 +1553,7 @@ const ViewAndEditInventoryList = ({
                           <div className="px-5 py-4 bg-white flex items-center justify-center">
                             <span className="inline-flex items-center justify-center rounded-[8px] bg-[#15BA5C] px-4 py-2 text-white text-[13px] font-semibold">
                               {currencySymbol}
-                              {totalStockValue.toFixed(2)}
+                              {formatAmount(totalStockValue)}
                             </span>
                           </div>
                         </div>
@@ -1505,10 +1642,10 @@ const ViewAndEditInventoryList = ({
                                         {unitCost.toFixed(4)}
                                       </td>
                                       <td className="px-5 py-4 text-[13px] text-[#1C1B20]">
-                                        {lot.supplierAddress || "---"}
+                                        {resolveSupplierAddress(lot)}
                                       </td>
                                       <td className="px-5 py-4 text-[13px] text-[#1C1B20]">
-                                        {lot.supplierName || "---"}
+                                        {resolveSupplierName(lot.supplierName)}
                                       </td>
                                       <td className="px-5 py-4 text-[13px] text-[#1C1B20] whitespace-nowrap">
                                         {lot.initialStockLevel.toFixed(4)}
@@ -1695,10 +1832,10 @@ const ViewAndEditInventoryList = ({
         <div className="p-8 border-t border-gray-100 grid grid-cols-2 gap-4">
           <button
             type="button"
-            disabled={!isFormValid || isSaving || isDeleting}
+            disabled={!isFormValid || !isDirty || isSaving || isDeleting}
             onClick={() => setIsUpdateConfirmOpen(true)}
             className={`w-full h-14 rounded-xl font-bold text-[16px] transition-colors flex items-center justify-center gap-2 ${
-              isFormValid && !isSaving && !isDeleting
+              isFormValid && isDirty && !isSaving && !isDeleting
                 ? "bg-[#15BA5C] text-white hover:bg-[#13A652] cursor-pointer"
                 : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}

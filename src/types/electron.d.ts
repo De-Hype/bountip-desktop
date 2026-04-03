@@ -17,6 +17,13 @@ export interface ElectronAPI {
   broadcast: (message: any) => void;
 
   importAsset: (filePath: string) => Promise<string>;
+  uploadImage: (payload: {
+    buffer: Uint8Array;
+    name: string;
+    type: string;
+    token: string;
+  }) => Promise<any>;
+  deleteImage: (payload: { publicId: string }) => Promise<any>;
   updateBusinessDetails: (payload: {
     outletId: string;
     data: any;

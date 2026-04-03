@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search, SlidersHorizontal, LayoutGrid, ChevronUp } from "lucide-react";
 import NotFound from "../../NotFound";
+import { useBusinessStore } from "@/stores/useBusinessStore";
+import useToastStore from "@/stores/toastStore";
 
 interface LotRecord {
   id: string;
@@ -13,65 +15,47 @@ interface LotRecord {
 }
 
 interface ReconciledItem {
+  inventoryItemId: string;
   name: string;
+  unitOfMeasure: string;
   lots: LotRecord[];
   totalStock: number;
 }
+
+type InventoryItemOption = {
+  inventoryItemId: string;
+  itemName: string;
+  itemCode: string | null;
+  displayedUnitOfMeasure: string | null;
+  unitOfPurchase: string | null;
+  unitOfTransfer: string | null;
+  unitOfConsumption: string | null;
+  currentStockLevel: number | null;
+};
 
 const ReconciliationTab = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ReconciledItem | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [items, setItems] = useState<InventoryItemOption[]>([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Simulated search results
-  const dummyOptions = [
-    { name: "Pepper", totalStock: 139494, unit: "Kg" },
-    { name: "Salt", totalStock: 50000, unit: "g" },
-    { name: "Sugar", totalStock: 25000, unit: "Kg" },
-  ];
+  const { selectedOutlet } = useBusinessStore();
+  const { showToast } = useToastStore();
 
-  // Simulated lots for Pepper
-  const pepperLots: LotRecord[] = [
-    {
-      id: "1",
-      lotNumber: "LOT23",
-      unitOfMeasure: "Kilogram",
-      recordedLevel: 4000,
-      countedQuantity: "",
-      variance: 0,
-      reason: "",
-    },
-    {
-      id: "2",
-      lotNumber: "LOT39",
-      unitOfMeasure: "Grams",
-      recordedLevel: 3449,
-      countedQuantity: "",
-      variance: 0,
-      reason: "",
-    },
-    {
-      id: "3",
-      lotNumber: "LOT94",
-      unitOfMeasure: "Ounce",
-      recordedLevel: 2283,
-      countedQuantity: "",
-      variance: 0,
-      reason: "",
-    },
-    {
-      id: "4",
-      lotNumber: "LOT12",
-      unitOfMeasure: "Each",
-      recordedLevel: 1823,
-      countedQuantity: "",
-      variance: 0,
-      reason: "",
-    },
-  ];
+  const roundNumber = (value: number, decimals = 3) => {
+    const factor = 10 ** decimals;
+    return Math.round((value + Number.EPSILON) * factor) / factor;
+  };
+
+  const formatNumber = (value: number) =>
+    new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(
+      Number.isFinite(value) ? value : 0,
+    );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -86,38 +70,274 @@ const ReconciliationTab = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSelectItem = (item: (typeof dummyOptions)[0]) => {
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.dbQuery || !selectedOutlet?.id) return;
+
+    let cancelled = false;
+    (async () => {
+      setIsLoadingItems(true);
+      try {
+        const sql = `
+          SELECT
+            ii.id as inventoryItemId,
+            im.name as itemName,
+            im.itemCode as itemCode,
+            im.displayedUnitOfMeasure as displayedUnitOfMeasure,
+            im.unitOfPurchase as unitOfPurchase,
+            im.unitOfTransfer as unitOfTransfer,
+            im.unitOfConsumption as unitOfConsumption,
+            ii.currentStockLevel as currentStockLevel
+          FROM inventory_item ii
+          JOIN inventory i ON ii.inventoryId = i.id
+          JOIN item_master im ON ii.itemMasterId = im.id
+          WHERE i.outletId = ? AND ii.isDeleted = 0
+          ORDER BY LOWER(im.name) ASC
+        `;
+        const res = await api.dbQuery(sql, [selectedOutlet.id]);
+        if (cancelled) return;
+        setItems(res || []);
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Failed to fetch inventory items:", err);
+        showToast("error", "Error", "Failed to fetch inventory items");
+      } finally {
+        if (!cancelled) setIsLoadingItems(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedOutlet?.id, showToast]);
+
+  const filteredItems = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const base = q
+      ? items.filter((it) => {
+          const name = String(it.itemName || "").toLowerCase();
+          const code = String(it.itemCode || "").toLowerCase();
+          return name.includes(q) || code.includes(q);
+        })
+      : items;
+    return base.slice(0, 200);
+  }, [items, searchTerm]);
+
+  const resolveDisplayedUnit = (item: InventoryItemOption) => {
+    const keyRaw = String(item.displayedUnitOfMeasure || "").trim();
+    const key = keyRaw.toLowerCase().replace(/\s+/g, "");
+    if (key === "unitofpurchase") return item.unitOfPurchase || "-";
+    if (key === "unitoftransfer") return item.unitOfTransfer || "-";
+    if (key === "unitofconsumption") return item.unitOfConsumption || "-";
+    return (
+      keyRaw ||
+      item.unitOfPurchase ||
+      item.unitOfTransfer ||
+      item.unitOfConsumption ||
+      "-"
+    );
+  };
+
+  const loadItemLots = async (inventoryItemId: string) => {
+    const api = (window as any).electronAPI;
+    if (!api?.dbQuery) return [];
+    const sql = `
+      SELECT id, lotNumber, currentStockLevel
+      FROM item_lot
+      WHERE itemId = ?
+      ORDER BY datetime(createdAt) DESC
+    `;
+    const rows = await api.dbQuery(sql, [inventoryItemId]);
+    return rows || [];
+  };
+
+  const handleSelectItem = async (item: InventoryItemOption) => {
+    if (!selectedOutlet?.id) return;
+    const api = (window as any).electronAPI;
+    if (!api?.dbQuery) return;
+
     setIsLoading(true);
-    // Simulate API delay
-    setTimeout(() => {
-      setSelectedItem({
-        name: item.name,
-        lots: item.name === "Pepper" ? pepperLots : [], // Only Pepper has dummy lots for now
-        totalStock: item.totalStock,
+    try {
+      const lotsRows = await loadItemLots(item.inventoryItemId);
+      const unitOfMeasure = resolveDisplayedUnit(item);
+      const lots: LotRecord[] = lotsRows.map((r: any) => {
+        const recordedLevel = Number(r?.currentStockLevel ?? 0) || 0;
+        return {
+          id: String(r?.id),
+          lotNumber: String(r?.lotNumber || "-"),
+          unitOfMeasure,
+          recordedLevel,
+          countedQuantity: "",
+          variance: 0,
+          reason: "",
+        };
       });
+
+      const totalFromLots = roundNumber(
+        lots.reduce((sum, l) => sum + l.recordedLevel, 0),
+      );
+      const totalStock =
+        lots.length > 0
+          ? totalFromLots
+          : roundNumber(Number(item.currentStockLevel ?? 0) || 0);
+
+      setSelectedItem({
+        inventoryItemId: item.inventoryItemId,
+        name: item.itemName,
+        unitOfMeasure,
+        lots,
+        totalStock,
+      });
+
       setShowSearchResults(false);
       setSearchTerm("");
+    } catch (err) {
+      console.error("Failed to load item lots:", err);
+      showToast("error", "Error", "Failed to load item lots");
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
   };
 
   const updateLot = (id: string, field: keyof LotRecord, value: string) => {
     if (!selectedItem) return;
+    const nextLots = selectedItem.lots.map((lot) => {
+      if (lot.id !== id) return lot;
+      const updatedLot = { ...lot, [field]: value };
+      if (field === "countedQuantity") {
+        const counted = parseFloat(value) || 0;
+        updatedLot.variance = roundNumber(counted - lot.recordedLevel);
+      }
+      return updatedLot;
+    });
+
+    const nextTotalStock = roundNumber(
+      nextLots.reduce((sum, lot) => {
+        const counted = parseFloat(lot.countedQuantity);
+        const v = Number.isFinite(counted) ? counted : lot.recordedLevel;
+        return sum + v;
+      }, 0),
+    );
+
     setSelectedItem({
       ...selectedItem,
-      lots: selectedItem.lots.map((lot) => {
-        if (lot.id === id) {
-          const updatedLot = { ...lot, [field]: value };
-          // Calculate variance if countedQuantity changes
-          if (field === "countedQuantity") {
-            const counted = parseFloat(value) || 0;
-            updatedLot.variance = counted - lot.recordedLevel;
-          }
-          return updatedLot;
-        }
-        return lot;
-      }),
+      lots: nextLots,
+      totalStock: nextTotalStock,
     });
+  };
+
+  const handleSave = async () => {
+    if (!selectedItem) return;
+    const api = (window as any).electronAPI;
+    if (!api?.dbQuery) return;
+    if (isSaving) return;
+
+    const now = new Date().toISOString();
+    const updates = selectedItem.lots
+      .map((l) => {
+        const counted = parseFloat(l.countedQuantity);
+        if (!Number.isFinite(counted)) return null;
+        return { lotId: l.id, counted };
+      })
+      .filter(Boolean) as Array<{ lotId: string; counted: number }>;
+
+    if (updates.length === 0) {
+      showToast("error", "Error", "Enter counted quantities before saving");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      for (const u of updates) {
+        await api.dbQuery(
+          `
+            UPDATE item_lot
+            SET currentStockLevel = ?,
+                updatedAt = ?,
+                version = COALESCE(version, 0) + 1
+            WHERE id = ?
+          `,
+          [u.counted, now, u.lotId],
+        );
+
+        if (api.queueAdd) {
+          const row = await api.dbQuery("SELECT * FROM item_lot WHERE id = ?", [
+            u.lotId,
+          ]);
+          if (row?.[0]) {
+            await api.queueAdd({
+              table: "item_lot",
+              action: "UPDATE",
+              data: row[0],
+              id: u.lotId,
+            });
+          }
+        }
+      }
+
+      const nextTotalStock = roundNumber(
+        selectedItem.lots.reduce((sum, l) => {
+          const counted = parseFloat(l.countedQuantity);
+          const v = Number.isFinite(counted) ? counted : l.recordedLevel;
+          return sum + v;
+        }, 0),
+      );
+
+      await api.dbQuery(
+        `
+          UPDATE inventory_item
+          SET currentStockLevel = ?,
+              updatedAt = ?,
+              version = COALESCE(version, 0) + 1
+          WHERE id = ?
+        `,
+        [nextTotalStock, now, selectedItem.inventoryItemId],
+      );
+
+      if (api.queueAdd) {
+        const row = await api.dbQuery(
+          "SELECT * FROM inventory_item WHERE id = ?",
+          [selectedItem.inventoryItemId],
+        );
+        if (row?.[0]) {
+          await api.queueAdd({
+            table: "inventory_item",
+            action: "UPDATE",
+            data: row[0],
+            id: selectedItem.inventoryItemId,
+          });
+        }
+      }
+
+      const lotsRows = await loadItemLots(selectedItem.inventoryItemId);
+      const lots: LotRecord[] = lotsRows.map((r: any) => {
+        const recordedLevel = Number(r?.currentStockLevel ?? 0) || 0;
+        return {
+          id: String(r?.id),
+          lotNumber: String(r?.lotNumber || "-"),
+          unitOfMeasure: selectedItem.unitOfMeasure,
+          recordedLevel,
+          countedQuantity: "",
+          variance: 0,
+          reason: "",
+        };
+      });
+      const totalFromLots = roundNumber(
+        lots.reduce((sum, l) => sum + l.recordedLevel, 0),
+      );
+      setSelectedItem({
+        ...selectedItem,
+        lots,
+        totalStock: lots.length > 0 ? totalFromLots : nextTotalStock,
+      });
+
+      showToast("success", "Success", "Reconciliation saved");
+    } catch (err) {
+      console.error("Failed to save reconciliation:", err);
+      showToast("error", "Error", "Failed to save reconciliation");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -131,11 +351,9 @@ const ReconciliationTab = () => {
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
-                setShowSearchResults(e.target.value.length > 0);
+                setShowSearchResults(true);
               }}
-              onFocus={() =>
-                searchTerm.length > 0 && setShowSearchResults(true)
-              }
+              onFocus={() => setShowSearchResults(true)}
               placeholder="Search"
               className="w-full h-11 px-4 bg-white border border-gray-200 rounded-l-[10px] outline-none focus:border-[#15BA5C] transition-all text-sm placeholder:text-gray-400"
             />
@@ -147,27 +365,28 @@ const ReconciliationTab = () => {
           {/* Search Results Dropdown */}
           {showSearchResults && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-[10px] shadow-xl z-[100] py-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-              {dummyOptions
-                .filter((opt) =>
-                  opt.name.toLowerCase().includes(searchTerm.toLowerCase()),
-                )
-                .map((opt, idx) => (
+              {isLoadingItems && (
+                <div className="px-4 py-3 text-sm text-gray-400 italic text-center">
+                  Loading items...
+                </div>
+              )}
+              {!isLoadingItems &&
+                filteredItems.map((opt, idx) => (
                   <button
-                    key={idx}
+                    key={opt.inventoryItemId || idx}
                     onClick={() => handleSelectItem(opt)}
                     className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center justify-between group"
                   >
                     <span className="text-sm font-medium text-gray-700 group-hover:text-[#15BA5C]">
-                      {opt.name}
+                      {opt.itemName}
                     </span>
                     <span className="text-xs text-gray-400">
-                      {opt.totalStock} {opt.unit}
+                      {formatNumber(Number(opt.currentStockLevel ?? 0) || 0)}{" "}
+                      {resolveDisplayedUnit(opt)}
                     </span>
                   </button>
                 ))}
-              {dummyOptions.filter((opt) =>
-                opt.name.toLowerCase().includes(searchTerm.toLowerCase()),
-              ).length === 0 && (
+              {!isLoadingItems && filteredItems.length === 0 && (
                 <div className="px-4 py-3 text-sm text-gray-400 italic text-center">
                   No items found
                 </div>
@@ -196,90 +415,104 @@ const ReconciliationTab = () => {
               {selectedItem.name}
             </h2>
 
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[900px]">
-                <thead className="bg-[#F9FAFB]">
-                  <tr>
-                    <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
-                        Lot Number
-                        <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
-                      </div>
-                    </th>
-                    <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
-                        Unit of Measure
-                        <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
-                      </div>
-                    </th>
-                    <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
-                        Recorded Level
-                        <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
-                      </div>
-                    </th>
-                    <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                      Counted Quantity
-                    </th>
-                    <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
-                        Variance
-                        <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
-                      </div>
-                    </th>
-                    <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
-                        Reason for Discrepancy
-                        <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 bg-white">
-                  {selectedItem.lots.map((lot) => (
-                    <tr
-                      key={lot.id}
-                      className="hover:bg-gray-50/50 transition-colors group"
-                    >
-                      <td className="px-4 py-5 text-sm font-medium text-gray-700">
-                        {lot.lotNumber}
-                      </td>
-                      <td className="px-4 py-5 text-sm text-gray-600">
-                        {lot.unitOfMeasure}
-                      </td>
-                      <td className="px-4 py-5 text-sm text-gray-600">
-                        {lot.recordedLevel}
-                      </td>
-                      <td className="px-4 py-5">
-                        <input
-                          type="text"
-                          value={lot.countedQuantity}
-                          onChange={(e) =>
-                            updateLot(lot.id, "countedQuantity", e.target.value)
-                          }
-                          className="w-[120px] h-10 px-3 border border-gray-200 rounded-[8px] outline-none focus:border-[#15BA5C] transition-all text-sm text-center"
-                        />
-                      </td>
-                      <td
-                        className={`px-4 py-5 text-sm font-medium ${lot.variance < 0 ? "text-red-500" : lot.variance > 0 ? "text-[#15BA5C]" : "text-gray-600"}`}
-                      >
-                        {lot.variance > 0 ? `+${lot.variance}` : lot.variance}
-                      </td>
-                      <td className="px-4 py-5">
-                        <input
-                          type="text"
-                          value={lot.reason}
-                          onChange={(e) =>
-                            updateLot(lot.id, "reason", e.target.value)
-                          }
-                          className="w-full min-w-[200px] h-10 px-3 border border-gray-200 rounded-[8px] outline-none focus:border-[#15BA5C] transition-all text-sm"
-                        />
-                      </td>
+            {isLoading ? (
+              <div className="px-4 py-12 text-sm text-gray-400 italic text-center">
+                Loading lots...
+              </div>
+            ) : selectedItem.lots.length === 0 ? (
+              <div className="px-4 py-12 text-sm text-gray-400 italic text-center">
+                No lots found for this item.
+              </div>
+            ) : (
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead className="bg-[#F9FAFB]">
+                    <tr>
+                      <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
+                          Lot Number
+                          <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
+                        </div>
+                      </th>
+                      <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
+                          Unit of Measure
+                          <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
+                        </div>
+                      </th>
+                      <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
+                          Recorded Level
+                          <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
+                        </div>
+                      </th>
+                      <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                        Counted Quantity
+                      </th>
+                      <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
+                          Variance
+                          <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
+                        </div>
+                      </th>
+                      <th className="px-4 py-4 text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-600 transition-colors group">
+                          Reason for Discrepancy
+                          <ChevronUp className="size-3.5 text-gray-300 group-hover:text-gray-400" />
+                        </div>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 bg-white">
+                    {selectedItem.lots.map((lot) => (
+                      <tr
+                        key={lot.id}
+                        className="hover:bg-gray-50/50 transition-colors group"
+                      >
+                        <td className="px-4 py-5 text-sm font-medium text-gray-700">
+                          {lot.lotNumber}
+                        </td>
+                        <td className="px-4 py-5 text-sm text-gray-600">
+                          {lot.unitOfMeasure}
+                        </td>
+                        <td className="px-4 py-5 text-sm text-gray-600">
+                          {lot.recordedLevel}
+                        </td>
+                        <td className="px-4 py-5">
+                          <input
+                            type="text"
+                            value={lot.countedQuantity}
+                            onChange={(e) =>
+                              updateLot(
+                                lot.id,
+                                "countedQuantity",
+                                e.target.value,
+                              )
+                            }
+                            className="w-[120px] h-10 px-3 border border-gray-200 rounded-[8px] outline-none focus:border-[#15BA5C] transition-all text-sm text-center"
+                          />
+                        </td>
+                        <td
+                          className={`px-4 py-5 text-sm font-medium ${lot.variance < 0 ? "text-red-500" : lot.variance > 0 ? "text-[#15BA5C]" : "text-gray-600"}`}
+                        >
+                          {lot.variance > 0 ? `+${lot.variance}` : lot.variance}
+                        </td>
+                        <td className="px-4 py-5">
+                          <input
+                            type="text"
+                            value={lot.reason}
+                            onChange={(e) =>
+                              updateLot(lot.id, "reason", e.target.value)
+                            }
+                            className="w-full min-w-[200px] h-10 px-3 border border-gray-200 rounded-[8px] outline-none focus:border-[#15BA5C] transition-all text-sm"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Total Summary Section */}
             <div className="flex items-center justify-between py-6 px-4 border-t border-gray-100">
@@ -287,17 +520,23 @@ const ReconciliationTab = () => {
                 Total Stock
               </span>
               <span className="text-[18px] font-bold text-gray-900 uppercase">
-                139494 Kg
+                {formatNumber(selectedItem.totalStock)}{" "}
+                {selectedItem.unitOfMeasure}
               </span>
             </div>
 
             {/* Action Buttons Footer */}
             <div className="grid grid-cols-2 gap-4 pt-6">
-              <button className="h-12 bg-[#15BA5C] text-white font-bold rounded-[8px] hover:bg-[#119E4D] transition-all active:scale-[0.99] cursor-pointer">
+              <button
+                onClick={handleSave}
+                disabled={isSaving || isLoading}
+                className="h-12 bg-[#15BA5C] text-white font-bold rounded-[8px] hover:bg-[#119E4D] transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
                 Save
               </button>
               <button
                 onClick={() => setSelectedItem(null)}
+                disabled={isSaving || isLoading}
                 className="h-12 bg-[#F3F4F6] text-[#4B5563] font-bold rounded-[8px] hover:bg-gray-200 transition-all active:scale-[0.99] cursor-pointer"
               >
                 Cancel

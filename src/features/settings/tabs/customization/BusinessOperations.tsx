@@ -1,8 +1,14 @@
 import { Clock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Switch } from "../../ui/Switch";
 import { TimeDropdownSplit } from "../../ui/TimeDropdownSplit";
 import { useBusinessStore } from "@/stores/useBusinessStore";
+import useToastStore from "@/stores/toastStore";
+import { useNetworkStore } from "@/stores/useNetworkStore";
+import storeFrontService from "@/services/storefrontService";
+import { BankDetails, OperatingHours } from "@/types/storefront";
+import { getBanksByCountry } from "@/utils/banks";
+import { Dropdown } from "@/shared/AppDropdowns/CreateDropdown";
 
 interface DayHours {
   day: string;
@@ -30,55 +36,212 @@ const getDefaultOperatingHours = (): DayHours[] => {
   }));
 };
 
-type BankAccount = {
-  id: number;
-  bank: string;
-  accountNumber: string;
-  accountName: string;
+type BusinessOperationsProps = {
+  outletId?: string | null;
+  country?: string | null;
+  storeCode?: string | null;
+  initialOperatingHours?: OperatingHours | null;
+  initialLeadTime?: number | null;
+  initialBankDetails?: BankDetails | null;
+  initialBusinessOperation?: {
+    delivery: boolean;
+    pickup: boolean;
+    both: boolean;
+  } | null;
+  onSaved?: () => void | Promise<void>;
 };
 
-const bankOptions = [
-  { value: "", label: "Select Bank" },
-  { value: "access", label: "Access Bank" },
-  { value: "first", label: "First Bank" },
-  { value: "gt", label: "GTBank" },
-];
-
-const BusinessOperations = () => {
+const BusinessOperations = ({
+  outletId,
+  country,
+  storeCode,
+  initialOperatingHours,
+  initialLeadTime,
+  initialBankDetails,
+  initialBusinessOperation,
+  onSaved,
+}: BusinessOperationsProps) => {
   const { selectedOutlet: outlet } = useBusinessStore();
+  const { showToast } = useToastStore();
+  const { isOnline } = useNetworkStore();
   const [operatingHours, setOperatingHours] = useState<DayHours[]>(
     getDefaultOperatingHours(),
   );
-  const [isEditingLocation, setIsEditingLocation] = useState(false);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([
-    { id: 1, bank: "", accountNumber: "", accountName: "" },
+  const [isEditingLocation, setIsEditingLocation] = useState(true);
+  const [applyToAll, setApplyToAll] = useState(false);
+  const [deliveryEnabled, setDeliveryEnabled] = useState(true);
+  const [pickupEnabled, setPickupEnabled] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [bankNameMode, setBankNameMode] = useState<"select" | "other">(
+    "select",
+  );
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [iban, setIban] = useState("");
+  const [swiftCode, setSwiftCode] = useState("");
+  const [sortCode, setSortCode] = useState("");
+  const [showAdditionalBankDetails, setShowAdditionalBankDetails] =
+    useState(false);
+
+  const [leadDays, setLeadDays] = useState("0");
+  const [leadHours, setLeadHours] = useState("0");
+  const [leadMinutes, setLeadMinutes] = useState("0");
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  const effectiveOutletId = outletId ?? outlet?.id ?? null;
+  const effectiveCountry = country ?? (outlet as any)?.country ?? null;
+  const effectiveStoreCode = storeCode ?? "";
+
+  const bankOptions = useMemo(() => {
+    const banks = getBanksByCountry(String(effectiveCountry || "")).slice();
+    banks.sort((a, b) => a.localeCompare(b));
+    return banks;
+  }, [effectiveCountry]);
+  const bankDropdownOptions = useMemo(
+    () => [
+      ...bankOptions.map((b) => ({ value: b, label: b })),
+      { value: "__OTHER__", label: "Other" },
+    ],
+    [bankOptions],
+  );
+
+  const leadTimeTotalSeconds = useMemo(() => {
+    const d = Number(leadDays) || 0;
+    const h = Number(leadHours) || 0;
+    const m = Number(leadMinutes) || 0;
+    return Math.max(0, d * 24 * 60 * 60 + h * 60 * 60 + m * 60);
+  }, [leadDays, leadHours, leadMinutes]);
+
+  const baselineKey = useMemo(() => {
+    const normalize = (v: any) => String(v ?? "").trim();
+    const hoursKey = JSON.stringify(
+      operatingHours.map((d) => ({
+        day: d.day.toLowerCase(),
+        enabled: Boolean(d.enabled),
+        open: d.openTime,
+        close: d.closeTime,
+      })),
+    );
+    return JSON.stringify({
+      deliveryEnabled,
+      pickupEnabled,
+      bankName: normalize(bankName),
+      accountNumber: normalize(accountNumber),
+      accountName: normalize(accountName),
+      iban: normalize(iban),
+      swiftCode: normalize(swiftCode),
+      sortCode: normalize(sortCode),
+      leadTime: leadTimeTotalSeconds,
+      operatingHours: hoursKey,
+    });
+  }, [
+    accountName,
+    accountNumber,
+    bankName,
+    deliveryEnabled,
+    iban,
+    leadTimeTotalSeconds,
+    operatingHours,
+    pickupEnabled,
+    sortCode,
+    swiftCode,
   ]);
+  const [savedBaselineKey, setSavedBaselineKey] = useState("");
+
+  const isDirty = useMemo(() => {
+    if (!savedBaselineKey) return false;
+    return baselineKey !== savedBaselineKey;
+  }, [baselineKey, savedBaselineKey]);
+
+  const canSave = useMemo(() => {
+    return Boolean(effectiveOutletId) && isDirty && !isSaving;
+  }, [effectiveOutletId, isDirty, isSaving]);
 
   useEffect(() => {
+    setSavedBaselineKey("");
     let hoursToSet = getDefaultOperatingHours();
 
-    if (outlet?.operatingHours) {
-      const rawHours = outlet.operatingHours;
+    const rawHours = initialOperatingHours ?? outlet?.operatingHours ?? null;
+    if (rawHours) {
+      const h = rawHours;
 
       hoursToSet = DAYS_OF_WEEK.map((day) => ({
         day: day.charAt(0).toUpperCase() + day.slice(1),
-        enabled: rawHours[day as keyof typeof rawHours]?.isActive ?? false,
-        openTime: rawHours[day as keyof typeof rawHours]?.open ?? "09:00",
-        closeTime: rawHours[day as keyof typeof rawHours]?.close ?? "17:00",
+        enabled: h[day as keyof typeof h]?.isActive ?? false,
+        openTime: h[day as keyof typeof h]?.open ?? "09:00",
+        closeTime: h[day as keyof typeof h]?.close ?? "17:00",
       }));
     }
 
     setOperatingHours(hoursToSet);
-  }, [outlet]);
+  }, [initialOperatingHours, outlet]);
+
+  useEffect(() => {
+    setSavedBaselineKey("");
+    const op = initialBusinessOperation ?? null;
+    const delivery = Boolean((op as any)?.delivery);
+    const pickup = Boolean((op as any)?.pickup);
+    const both = Boolean((op as any)?.both);
+    if (both) {
+      setDeliveryEnabled(true);
+      setPickupEnabled(true);
+      return;
+    }
+    setDeliveryEnabled(delivery);
+    setPickupEnabled(pickup);
+  }, [initialBusinessOperation]);
+
+  useEffect(() => {
+    setSavedBaselineKey("");
+    const bd = initialBankDetails ?? null;
+    const nextBankName = String(bd?.bankName || "").trim();
+    setBankName(nextBankName);
+    setAccountName(String(bd?.accountName || "").trim());
+    setAccountNumber(String(bd?.accountNumber || "").trim());
+    setIban(String(bd?.iban || "").trim());
+    setSwiftCode(String(bd?.swiftCode || "").trim());
+    setSortCode(String(bd?.sortCode || "").trim());
+
+    const hasOptional =
+      String(bd?.iban || "").trim().length > 0 ||
+      String(bd?.swiftCode || "").trim().length > 0 ||
+      String(bd?.sortCode || "").trim().length > 0;
+    setShowAdditionalBankDetails(hasOptional);
+
+    const inList = nextBankName
+      ? bankOptions.some((b) => b.toLowerCase() === nextBankName.toLowerCase())
+      : true;
+    setBankNameMode(inList ? "select" : "other");
+  }, [bankOptions, initialBankDetails]);
+
+  useEffect(() => {
+    setSavedBaselineKey("");
+    const totalSeconds = Number(initialLeadTime ?? 0) || 0;
+    const d = Math.floor(totalSeconds / (24 * 60 * 60));
+    const h = Math.floor((totalSeconds % (24 * 60 * 60)) / (60 * 60));
+    const m = Math.floor((totalSeconds % (60 * 60)) / 60);
+    setLeadDays(String(d));
+    setLeadHours(String(h));
+    setLeadMinutes(String(m));
+  }, [initialLeadTime]);
+
+  useEffect(() => {
+    if (savedBaselineKey) return;
+    setSavedBaselineKey(baselineKey);
+  }, [baselineKey, savedBaselineKey]);
 
   const handleDayToggle = (dayIndex: number) => {
-    if (!isEditingLocation) return;
-
-    setOperatingHours((prev) =>
-      prev.map((day, index) =>
-        index === dayIndex ? { ...day, enabled: !day.enabled } : day,
-      ),
-    );
+    if (isSaving) return;
+    setOperatingHours((prev) => {
+      const nextEnabled = !prev[dayIndex]?.enabled;
+      if (!applyToAll) {
+        return prev.map((d, i) =>
+          i === dayIndex ? { ...d, enabled: nextEnabled } : d,
+        );
+      }
+      return prev.map((d) => ({ ...d, enabled: nextEnabled }));
+    });
   };
 
   const handleTimeChange = (
@@ -86,37 +249,78 @@ const BusinessOperations = () => {
     field: "openTime" | "closeTime",
     value: string,
   ) => {
-    if (!isEditingLocation) return;
-
-    setOperatingHours((prev) =>
-      prev.map((day, index) =>
-        index === dayIndex ? { ...day, [field]: value } : day,
-      ),
-    );
+    if (isSaving) return;
+    setOperatingHours((prev) => {
+      if (!applyToAll) {
+        return prev.map((d, i) =>
+          i === dayIndex ? { ...d, [field]: value } : d,
+        );
+      }
+      return prev.map((d) => ({ ...d, [field]: value }));
+    });
   };
 
-  const handleBankAccountChange = (
-    id: number,
-    field: keyof Omit<BankAccount, "id">,
-    value: string,
-  ) => {
-    setBankAccounts((prev) =>
-      prev.map((account) =>
-        account.id === id ? { ...account, [field]: value } : account,
-      ),
-    );
-  };
+  const handleSave = async () => {
+    if (!effectiveOutletId) return;
+    if (!isOnline) {
+      showToast(
+        "error",
+        "You’re offline",
+        "Connect to the internet to save business operations.",
+      );
+      return;
+    }
+    if (!isDirty || isSaving) return;
 
-  const handleAddBankAccount = () => {
-    setBankAccounts((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        bank: "",
-        accountNumber: "",
-        accountName: "",
-      },
-    ]);
+    setIsSaving(true);
+    try {
+      const normalizedBankName =
+        bankNameMode === "other" ? bankName.trim() : bankName.trim();
+
+      const opHours: OperatingHours = DAYS_OF_WEEK.reduce((acc, day) => {
+        const found =
+          operatingHours.find(
+            (d) => d.day.toLowerCase() === day.toLowerCase(),
+          ) || null;
+        (acc as any)[day] = {
+          open: found?.openTime || "09:00",
+          close: found?.closeTime || "17:00",
+          isActive: Boolean(found?.enabled),
+        };
+        return acc;
+      }, {} as OperatingHours);
+
+      await storeFrontService.updateStoreOperations(effectiveOutletId, {
+        storeCode: effectiveStoreCode,
+        delivery: deliveryEnabled,
+        pickup: pickupEnabled,
+        bankName: normalizedBankName,
+        accountName: accountName.trim(),
+        accountNumber: accountNumber.trim(),
+        iban: iban.trim() || undefined,
+        swiftCode: swiftCode.trim() || undefined,
+        sortCode: sortCode.trim() || undefined,
+        operatingHours: opHours,
+        leadTime: leadTimeTotalSeconds,
+      });
+
+      setSavedBaselineKey(baselineKey);
+
+      if (onSaved) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        await onSaved();
+      }
+
+      showToast("success", "Saved", "Business operations updated.");
+    } catch {
+      showToast(
+        "error",
+        "Save failed",
+        "We couldn’t save business operations. Please try again.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -137,7 +341,8 @@ const BusinessOperations = () => {
             <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
-                defaultChecked
+                checked={deliveryEnabled}
+                onChange={(e) => setDeliveryEnabled(e.target.checked)}
                 className="h-4 w-4 rounded border-[#D1D5DB] text-[#15BA5C] focus:ring-[#15BA5C]"
               />
               <span className="text-[#111827]">Delivery</span>
@@ -145,6 +350,8 @@ const BusinessOperations = () => {
             <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
+                checked={pickupEnabled}
+                onChange={(e) => setPickupEnabled(e.target.checked)}
                 className="h-4 w-4 rounded border-[#D1D5DB] text-[#15BA5C] focus:ring-[#15BA5C]"
               />
               <span className="text-[#111827]">Pickup</span>
@@ -152,6 +359,12 @@ const BusinessOperations = () => {
             <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
+                checked={deliveryEnabled && pickupEnabled}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setDeliveryEnabled(next);
+                  setPickupEnabled(next);
+                }}
                 className="h-4 w-4 rounded border-[#D1D5DB] text-[#15BA5C] focus:ring-[#15BA5C]"
               />
               <span className="text-[#111827]">Both</span>
@@ -159,8 +372,7 @@ const BusinessOperations = () => {
           </div>
 
           <p className="text-xs text-[#6B7280]">
-            You can select one or both. Depends on how you want your business to
-            run
+            Select one option based on how you want your business to run.
           </p>
         </div>
 
@@ -240,40 +452,71 @@ const BusinessOperations = () => {
               </button>
             </div>
 
-            <div className="mt-6 space-y-3">
-              {operatingHours.map((dayHours, index) => (
+            <div className="px-4 pb-4 flex flex-col gap-10">
+              {operatingHours.map((dayHours, dayIndex) => (
                 <div
-                  key={`${dayHours.day}-${index}`}
-                  className="flex items-center gap-4 rounded-[10px] bg-white px-4 py-3 text-sm text-[#111827]"
+                  key={`${dayHours.day}-${dayIndex}`}
+                  className="flex items-center justify-between gap-4 relative mt-2.5"
                 >
-                  <div className="w-28">
+                  <div className="w-32">
                     <Switch
                       checked={dayHours.enabled}
-                      onChange={() => handleDayToggle(index)}
+                      onChange={() => handleDayToggle(dayIndex)}
                       label={dayHours.day}
                     />
                   </div>
-                  <div className="flex flex-1 items-center gap-3">
-                    <div className="flex flex-1 items-center justify-between rounded-[10px] bg-[#F9FAFB] px-3 py-2 text-xs text-[#9CA3AF]">
-                      <span className="text-xs text-[#9CA3AF]">From</span>
+
+                  <div className="flex items-center gap-2 flex-1 relative">
+                    <div className="flex flex-1/2 items-center justify-between gap-2 border border-[#E6E6E6] px-2 rounded-xl">
+                      <span className="text-sm text-gray-600">From</span>
                       <TimeDropdownSplit
                         value={dayHours.openTime}
                         onChange={(value) =>
-                          handleTimeChange(index, "openTime", value)
+                          handleTimeChange(dayIndex, "openTime", value)
                         }
-                        disabled={!dayHours.enabled || !isEditingLocation}
+                        disabled={!dayHours.enabled || isSaving}
                       />
                     </div>
-                    <div className="flex flex-1 items-center justify-between rounded-[10px] bg-[#F9FAFB] px-3 py-2 text-xs text-[#9CA3AF]">
-                      <span className="text-xs text-[#9CA3AF]">To</span>
+
+                    <div className="flex flex-1/2 items-center justify-between gap-2 border border-[#E6E6E6] px-2 rounded-xl">
+                      <span className="text-sm text-gray-600">To</span>
                       <TimeDropdownSplit
                         value={dayHours.closeTime}
                         onChange={(value) =>
-                          handleTimeChange(index, "closeTime", value)
+                          handleTimeChange(dayIndex, "closeTime", value)
                         }
-                        disabled={!dayHours.enabled || !isEditingLocation}
+                        disabled={!dayHours.enabled || isSaving}
                       />
                     </div>
+
+                    {dayIndex === 0 && (
+                      <div className="flex items-center gap-2.5 absolute -bottom-6 left-0">
+                        <input
+                          type="checkbox"
+                          className="accent-green-600"
+                          checked={applyToAll}
+                          onChange={(e) => {
+                            const next = e.target.checked;
+                            setApplyToAll(next);
+                            if (next) {
+                              setOperatingHours((prev) =>
+                                prev.map((d) => ({
+                                  ...d,
+                                  openTime: dayHours.openTime,
+                                  closeTime: dayHours.closeTime,
+                                })),
+                              );
+                            }
+                          }}
+                          disabled={isSaving}
+                        />
+                        <p
+                          className={`text-[#1C1B20] text-sm ${isSaving ? "opacity-50" : ""}`}
+                        >
+                          Apply to all
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -293,6 +536,8 @@ const BusinessOperations = () => {
                   type="number"
                   className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#9CA3AF]"
                   placeholder="Days"
+                  value={leadDays}
+                  onChange={(e) => setLeadDays(e.target.value)}
                 />
                 <Clock className="h-4 w-4 text-[#9CA3AF]" />
               </div>
@@ -304,6 +549,8 @@ const BusinessOperations = () => {
                   type="number"
                   className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#9CA3AF]"
                   placeholder="Hours"
+                  value={leadHours}
+                  onChange={(e) => setLeadHours(e.target.value)}
                 />
                 <Clock className="h-4 w-4 text-[#9CA3AF]" />
               </div>
@@ -315,6 +562,8 @@ const BusinessOperations = () => {
                   type="number"
                   className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#9CA3AF]"
                   placeholder="Minutes"
+                  value={leadMinutes}
+                  onChange={(e) => setLeadMinutes(e.target.value)}
                 />
                 <Clock className="h-4 w-4 text-[#9CA3AF]" />
               </div>
@@ -325,90 +574,125 @@ const BusinessOperations = () => {
         <div className="space-y-4">
           <p className="text-[18px] font-bold text-[#000000]">Bank Details</p>
 
-          {bankAccounts.map((account) => (
-            <div key={account.id} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1">
-                  <p className="text-xs text-[#6B7280]">Bank</p>
-                  <div className="relative">
-                    <select
-                      className="w-full appearance-none rounded-[10px] bg-[#FAFAFC] border border-[#D1D1D1] px-3 py-2.5 pr-10 text-sm text-[#111827] placeholder-[#A6A6A6] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C]"
-                      value={account.bank}
-                      onChange={(e) =>
-                        handleBankAccountChange(
-                          account.id,
-                          "bank",
-                          e.target.value,
-                        )
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs text-[#6B7280]">Bank Name</p>
+                {bankNameMode === "select" ? (
+                  <Dropdown
+                    options={bankDropdownOptions}
+                    selectedValue={bankName || undefined}
+                    onChange={(value) => {
+                      if (value === "__OTHER__") {
+                        setBankNameMode("other");
+                        setBankName("");
+                        return;
                       }
-                    >
-                      {bankOptions.map((option) => (
-                        <option
-                          key={option.value || "placeholder"}
-                          value={option.value}
-                          disabled={option.value === ""}
-                        >
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[#9CA3AF] text-xs">
-                      ▼
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-[#6B7280]">Account Number</p>
-                  <input
-                    type="text"
-                    placeholder="Enter Account number"
-                    className="w-full rounded-[12px] bg-[#F9FAFB] px-3 py-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF]"
-                    value={account.accountNumber}
-                    onChange={(e) =>
-                      handleBankAccountChange(
-                        account.id,
-                        "accountNumber",
-                        e.target.value,
-                      )
-                    }
+                      setBankName(value);
+                    }}
+                    placeholder="Select Bank"
+                    searchPlaceholder="Search banks..."
+                    className="w-full"
                   />
-                </div>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Enter bank name"
+                      className="w-full rounded-[12px] bg-[#F9FAFB] px-3 py-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF]"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setBankNameMode("select")}
+                      className="text-xs font-medium text-[#15BA5C]"
+                    >
+                      Select from list
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-1 md:w-1/2">
-                <p className="text-xs text-[#6B7280]">Account Name</p>
+              <div className="space-y-1">
+                <p className="text-xs text-[#6B7280]">Account Number</p>
                 <input
                   type="text"
-                  placeholder="account name"
+                  placeholder="Enter Account number"
                   className="w-full rounded-[12px] bg-[#F9FAFB] px-3 py-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF]"
-                  value={account.accountName}
-                  onChange={(e) =>
-                    handleBankAccountChange(
-                      account.id,
-                      "accountName",
-                      e.target.value,
-                    )
-                  }
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
                 />
               </div>
             </div>
-          ))}
 
-          <button
-            type="button"
-            onClick={handleAddBankAccount}
-            className="text-sm font-medium text-[#15BA5C]"
-          >
-            + Add new bank account
-          </button>
+            <div className="space-y-1 md:w-1/2">
+              <p className="text-xs text-[#6B7280]">Account Name</p>
+              <input
+                type="text"
+                placeholder="Account name"
+                className="w-full rounded-[12px] bg-[#F9FAFB] px-3 py-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF]"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowAdditionalBankDetails((p) => !p)}
+              className="flex items-center gap-2 text-sm font-medium text-[#15BA5C]"
+            >
+              <span>{showAdditionalBankDetails ? "▼" : "▶"}</span>
+              <span>Additional Bank Details (Optional)</span>
+            </button>
+
+            {showAdditionalBankDetails && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-xs text-[#6B7280]">IBAN (Optional)</p>
+                  <input
+                    type="text"
+                    placeholder="Enter IBAN"
+                    className="w-full rounded-[12px] bg-[#F9FAFB] px-3 py-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF]"
+                    value={iban}
+                    onChange={(e) => setIban(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-[#6B7280]">
+                    SWIFT Code (Optional)
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="Enter SWIFT code"
+                    className="w-full rounded-[12px] bg-[#F9FAFB] px-3 py-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF]"
+                    value={swiftCode}
+                    onChange={(e) => setSwiftCode(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1 md:col-span-1">
+                  <p className="text-xs text-[#6B7280]">Sort Code (Optional)</p>
+                  <input
+                    type="text"
+                    placeholder="Enter sort code"
+                    className="w-full rounded-[12px] bg-[#F9FAFB] px-3 py-3 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF]"
+                    value={sortCode}
+                    onChange={(e) => setSortCode(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <button
         type="button"
-        className="mt-2 w-full cursor-pointer rounded-[12px] bg-[#15BA5C] py-3 text-center text-sm font-medium text-white transition-colors hover:bg-[#13A652]"
+        onClick={handleSave}
+        disabled={!canSave}
+        className="mt-2 w-full cursor-pointer rounded-[12px] bg-[#15BA5C] py-3 text-center text-sm font-medium text-white transition-colors hover:bg-[#13A652] disabled:bg-gray-400 disabled:cursor-not-allowed"
       >
-        Save and Continue
+        {isSaving ? "Saving..." : "Save and Continue"}
       </button>
     </section>
   );

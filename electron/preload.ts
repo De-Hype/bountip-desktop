@@ -103,6 +103,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     type: string;
     token: string;
   }) => ipcRenderer.invoke("net:uploadImage", payload),
+  deleteImage: async (payload: { publicId: string }) =>
+    ipcRenderer.invoke("net:deleteImage", payload),
   getNetworkStatus: async () => {
     try {
       return await ipcRenderer.invoke("network:getStatus");

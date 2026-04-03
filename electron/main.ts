@@ -405,6 +405,76 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle("net:deleteImage", async (_event, { publicId }) => {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_KEY_SECRET;
+    if (!cloudName || !apiKey || !apiSecret) {
+      console.error("[Main] Cloudinary credentials missing in environment");
+      return {
+        ok: false,
+        status: 500,
+        error: "Cloudinary credentials not configured",
+      };
+    }
+
+    const pid = String(publicId || "").trim();
+    if (!pid) {
+      return { ok: false, status: 400, error: "publicId is required" };
+    }
+
+    const timestamp = Math.round(new Date().getTime() / 1000).toString();
+    const signatureStr = `public_id=${pid}&timestamp=${timestamp}${apiSecret}`;
+    const signature = crypto
+      .createHash("sha1")
+      .update(signatureStr)
+      .digest("hex");
+
+    const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`;
+    const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
+
+    const chunks = [];
+    chunks.push(Buffer.from(`--${boundary}\r\n`));
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="public_id"\r\n\r\n${pid}\r\n--${boundary}\r\n`,
+      ),
+    );
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="api_key"\r\n\r\n${apiKey}\r\n--${boundary}\r\n`,
+      ),
+    );
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="timestamp"\r\n\r\n${timestamp}\r\n--${boundary}\r\n`,
+      ),
+    );
+    chunks.push(
+      Buffer.from(
+        `Content-Disposition: form-data; name="signature"\r\n\r\n${signature}\r\n--${boundary}--\r\n`,
+      ),
+    );
+
+    const body = Buffer.concat(chunks);
+
+    try {
+      const response = await net.fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        },
+        body,
+      });
+
+      const data = await response.json().catch(() => null);
+      return { ok: response.ok, status: response.status, data };
+    } catch (error: any) {
+      console.error("[Main] Cloudinary delete error:", error);
+      return { ok: false, status: 500, error: error.message };
+    }
+  });
+
   ipcMain.handle("sync:flush", () => syncService.flushQueue());
   ipcMain.handle("sync:trigger", (_event, forceFullPull?: boolean) =>
     syncService.triggerSync(forceFullPull),

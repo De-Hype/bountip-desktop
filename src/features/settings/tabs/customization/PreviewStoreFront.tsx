@@ -1,42 +1,17 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import AssetsFiles from "@/assets";
 import SettingsAssets from "@/assets/images/settings";
-import { Star, Clock, Truck, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Star,
 
-const categories = [
-  "All",
-  "Doughnuts",
-  "Croissant",
-  "Bread",
-  "Cake",
-  "Chocolate",
-  "Cookie",
-  "Coffee",
-
-  // New ones
-  "Pastries",
-  "Muffins",
-  "Cupcakes",
-  "Brownies",
-  "Cheesecake",
-  "Sandwiches",
-  "Bagels",
-  "Pies",
-  "Tarts",
-  "Ice Cream",
-  "Milkshakes",
-  "Smoothies",
-  "Tea",
-  "Hot Drinks",
-  "Cold Drinks",
-  "Breakfast",
-  "Snacks",
-  "Desserts",
-  "Vegan",
-  "Gluten-Free",
-  "Specials",
-];
+  ChevronLeft,
+  ChevronRight,
+  
+} from "lucide-react";
+import { GoDotFill } from "react-icons/go";
+import { BusinessOutlet } from "@/types/storefront";
+import storeFrontService from "@/services/storefrontService";
 
 const categorySliderVariants = {
   enter: (direction: 1 | -1) => ({
@@ -144,10 +119,143 @@ const previewProducts: PreviewProduct[] = [
   },
 ];
 
-const PreviewStoreFront = () => {
-  const [activeCategory, setActiveCategory] = useState<string>(categories[0]);
+type PreviewStoreFrontType = {
+  storeInfo: BusinessOutlet | null;
+};
+
+const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
+  console.log(storeInfo);
+  if (!storeInfo) {
+    return null;
+  }
+  const [categories, setCategories] = useState<string[]>(["All"]);
+  const [activeCategory, setActiveCategory] = useState<string>("All");
   const [categoryStartIndex, setCategoryStartIndex] = useState(0);
   const [categoryDirection, setCategoryDirection] = useState<1 | -1>(1);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let cancelled = false;
+    const code = String(storeInfo?.storeCode || "").trim();
+
+    if (!code) {
+      setCategories(["All"]);
+      setActiveCategory("All");
+      setCategoryStartIndex(0);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      try {
+        const res = await storeFrontService.loadCategories(code);
+        const names = (res?.data?.data || [])
+          .map((item) => String(item?.name || "").trim())
+          .filter(Boolean);
+
+        const unique: string[] = [];
+        const seen = new Set<string>();
+
+        for (const name of names) {
+          const key = name.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          unique.push(name);
+        }
+
+        const next = ["All", ...unique];
+        if (!cancelled) {
+          setCategories(next.length ? next : ["All"]);
+          setActiveCategory((prev) =>
+            (next.length ? next : ["All"]).includes(prev)
+              ? prev
+              : (next.length ? next : ["All"])[0],
+          );
+          setCategoryStartIndex(0);
+        }
+      } catch {
+        if (!cancelled) {
+          setCategories(["All"]);
+          setActiveCategory("All");
+          setCategoryStartIndex(0);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storeInfo?.storeCode]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const operatingDisplay = useMemo(() => {
+    const dayKeys = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ] as const;
+
+    const parseTimeToMinutes = (value: string) => {
+      const [h, m] = String(value || "")
+        .split(":")
+        .map((v) => Number(v));
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+      return h * 60 + m;
+    };
+
+    const formatTime = (value: string) => {
+      const minutes = parseTimeToMinutes(value);
+      if (minutes === null) return "";
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      const d = new Date(now);
+      d.setHours(h, m, 0, 0);
+      return d.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    };
+
+    const key = dayKeys[now.getDay()];
+    const hours = (storeInfo as any)?.operatingHours?.[key];
+
+    const open = String(hours?.open || "");
+    const close = String(hours?.close || "");
+    const isActive = Boolean(hours?.isActive);
+
+    const openMin = parseTimeToMinutes(open);
+    const closeMin = parseTimeToMinutes(close);
+
+    const label =
+      openMin !== null && closeMin !== null
+        ? `${formatTime(open)} - ${formatTime(close)}`
+        : "-";
+
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    let openNow = false;
+    if (isActive && openMin !== null && closeMin !== null) {
+      if (closeMin === openMin) {
+        openNow = false;
+      } else if (closeMin > openMin) {
+        openNow = nowMin >= openMin && nowMin < closeMin;
+      } else {
+        openNow = nowMin >= openMin || nowMin < closeMin;
+      }
+    }
+
+    return { label, openNow };
+  }, [now, storeInfo]);
 
   const CATEGORIES_PER_PAGE = 7;
   const CATEGORY_STEP = CATEGORIES_PER_PAGE - 1;
@@ -201,7 +309,7 @@ const PreviewStoreFront = () => {
         <div className="relative">
           <div className="relative h-56 w-full">
             <img
-              src={AssetsFiles.AuthBgImage}
+              src={storeInfo.coverUrl || SettingsAssets.DefaultCover}
               alt="Storefront cover"
               className="max-h-full w-full object-cover"
             />
@@ -209,7 +317,7 @@ const PreviewStoreFront = () => {
 
           <div className="absolute -bottom-10 left-8 h-20 w-20 rounded-full border-4 border-white overflow-hidden bg-white">
             <img
-              src={SettingsAssets.CustomizeTab}
+              src={storeInfo.logoUrl || SettingsAssets.CustomizeTab}
               alt="Bakery avatar"
               className="h-full w-full object-cover"
             />
@@ -220,7 +328,7 @@ const PreviewStoreFront = () => {
           <div className="flex flex-col gap-4">
             <div>
               <h3 className="text-[23px] font-bold text-[#000000]">
-                Bob&apos;s Bakery
+                {storeInfo.name}
               </h3>
               <div className="mt-1 flex items-center gap-1 text-sm text-[#4B5563]">
                 <Star className="h-4 w-4 text-[#FACC15]" fill="#FACC15" />
@@ -250,53 +358,139 @@ const PreviewStoreFront = () => {
                     stroke-linejoin="round"
                   />
                 </svg>
-
                 <div className="flex flex-col gap-1">
                   <p className="text-sm font-medium text-[#111827]">
                     Opening/Closing Hours
                   </p>
-                  <p className="text-xs text-[#6B7280]">8:00 AM - 6:00 PM</p>
+                  <p className="text-xs text-[#6B7280]">
+                    {operatingDisplay.label}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <GoDotFill
+                      className={
+                        operatingDisplay.openNow
+                          ? "text-[#15BA5C]"
+                          : "text-[#ee2323]"
+                      }
+                    />
+                    <span
+                      className={`text-[14px] font-light ${
+                        operatingDisplay.openNow
+                          ? "text-[#15BA5C]"
+                          : "text-[#ee2323]"
+                      }`}
+                    >
+                      {operatingDisplay.openNow ? "Open now" : "Closed"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 26 26"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M15.4744 18.6764H10.1386H15.4744ZM16.008 18.6764H21.6248C21.8594 18.6764 21.9768 18.6764 22.0754 18.6641C22.8026 18.5735 23.3753 18.0007 23.4659 17.2736C23.4782 17.175 23.4782 17.0576 23.4782 16.8229V13.8741C23.4782 10.0431 20.3726 6.93746 16.5416 6.93746M15.6099 18.0104L16.008 7.47105C16.008 5.96184 16.008 5.20723 15.5392 4.73838C15.0703 4.26953 14.3157 4.26953 12.8065 4.26953H5.33628C3.82708 4.26953 3.07247 4.26953 2.60362 4.73838C2.13477 5.20723 2.13477 5.96184 2.13477 7.47105V16.0084C2.13477 17.0058 2.13477 17.5045 2.34922 17.876C2.48972 18.1193 2.6918 18.3214 2.93515 18.4619C3.30661 18.6764 3.8053 18.6764 4.8027 18.6764"
-                    fill="#15BA5C"
-                  />
-                  <path
-                    d="M15.4744 18.6764H10.1386M16.008 18.6764H21.6248C21.8594 18.6764 21.9768 18.6764 22.0754 18.6641C22.8026 18.5735 23.3753 18.0007 23.4659 17.2736C23.4782 17.175 23.4782 17.0576 23.4782 16.8229V13.8741C23.4782 10.0431 20.3726 6.93746 16.5416 6.93746M15.6099 18.0104L16.008 7.47105C16.008 5.96184 16.008 5.20723 15.5392 4.73838C15.0703 4.26953 14.3157 4.26953 12.8065 4.26953H5.33628C3.82708 4.26953 3.07247 4.26953 2.60362 4.73838C2.13477 5.20723 2.13477 5.96184 2.13477 7.47105V16.0084C2.13477 17.0058 2.13477 17.5045 2.34922 17.876C2.48972 18.1193 2.6918 18.3214 2.93515 18.4619C3.30661 18.6764 3.8053 18.6764 4.8027 18.6764"
-                    stroke="white"
-                    stroke-width="1.20057"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M20.8124 18.6757C20.8124 20.1492 19.6179 21.3437 18.1445 21.3437C16.671 21.3437 15.4766 20.1492 15.4766 18.6757C15.4766 17.2023 16.671 16.0078 18.1445 16.0078C19.6179 16.0078 20.8124 17.2023 20.8124 18.6757Z"
-                    fill="#15BA5C"
-                    stroke="white"
-                    stroke-width="1.20057"
-                  />
-                  <path
-                    d="M10.1386 18.6757C10.1386 20.1492 8.94412 21.3437 7.47067 21.3437C5.99721 21.3437 4.80273 20.1492 4.80273 18.6757C4.80273 17.2023 5.99721 16.0078 7.47067 16.0078C8.94412 16.0078 10.1386 17.2023 10.1386 18.6757Z"
-                    fill="#15BA5C"
-                    stroke="white"
-                    stroke-width="1.20057"
-                  />
-                </svg>
+              {(storeInfo.businessOperation.delivery ||
+                storeInfo.businessOperation.both) && (
+                <div className="flex items-center gap-2">
+                  <svg
+                    width="26"
+                    height="26"
+                    viewBox="0 0 26 26"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M15.4744 18.6764H10.1386H15.4744ZM16.008 18.6764H21.6248C21.8594 18.6764 21.9768 18.6764 22.0754 18.6641C22.8026 18.5735 23.3753 18.0007 23.4659 17.2736C23.4782 17.175 23.4782 17.0576 23.4782 16.8229V13.8741C23.4782 10.0431 20.3726 6.93746 16.5416 6.93746M15.6099 18.0104L16.008 7.47105C16.008 5.96184 16.008 5.20723 15.5392 4.73838C15.0703 4.26953 14.3157 4.26953 12.8065 4.26953H5.33628C3.82708 4.26953 3.07247 4.26953 2.60362 4.73838C2.13477 5.20723 2.13477 5.96184 2.13477 7.47105V16.0084C2.13477 17.0058 2.13477 17.5045 2.34922 17.876C2.48972 18.1193 2.6918 18.3214 2.93515 18.4619C3.30661 18.6764 3.8053 18.6764 4.8027 18.6764"
+                      fill="#15BA5C"
+                    />
+                    <path
+                      d="M15.4744 18.6764H10.1386M16.008 18.6764H21.6248C21.8594 18.6764 21.9768 18.6764 22.0754 18.6641C22.8026 18.5735 23.3753 18.0007 23.4659 17.2736C23.4782 17.175 23.4782 17.0576 23.4782 16.8229V13.8741C23.4782 10.0431 20.3726 6.93746 16.5416 6.93746M15.6099 18.0104L16.008 7.47105C16.008 5.96184 16.008 5.20723 15.5392 4.73838C15.0703 4.26953 14.3157 4.26953 12.8065 4.26953H5.33628C3.82708 4.26953 3.07247 4.26953 2.60362 4.73838C2.13477 5.20723 2.13477 5.96184 2.13477 7.47105V16.0084C2.13477 17.0058 2.13477 17.5045 2.34922 17.876C2.48972 18.1193 2.6918 18.3214 2.93515 18.4619C3.30661 18.6764 3.8053 18.6764 4.8027 18.6764"
+                      stroke="white"
+                      stroke-width="1.20057"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M20.8124 18.6757C20.8124 20.1492 19.6179 21.3437 18.1445 21.3437C16.671 21.3437 15.4766 20.1492 15.4766 18.6757C15.4766 17.2023 16.671 16.0078 18.1445 16.0078C19.6179 16.0078 20.8124 17.2023 20.8124 18.6757Z"
+                      fill="#15BA5C"
+                      stroke="white"
+                      stroke-width="1.20057"
+                    />
+                    <path
+                      d="M10.1386 18.6757C10.1386 20.1492 8.94412 21.3437 7.47067 21.3437C5.99721 21.3437 4.80273 20.1492 4.80273 18.6757C4.80273 17.2023 5.99721 16.0078 7.47067 16.0078C8.94412 16.0078 10.1386 17.2023 10.1386 18.6757Z"
+                      fill="#15BA5C"
+                      stroke="white"
+                      stroke-width="1.20057"
+                    />
+                  </svg>
 
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-[#1E1E1E]">Delivery</p>
-                  <p className="text-xs text-[#15BA5C]">Available</p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm font-medium text-[#1E1E1E]">
+                      Delivery
+                    </p>
+                    <p className="text-xs text-[#15BA5C]">Available</p>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {(storeInfo.businessOperation.pickup ||
+                storeInfo.businessOperation.both) && (
+                <div className="flex items-center gap-2">
+                  <svg
+                    width="26"
+                    height="26"
+                    viewBox="0 0 24 28"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M2 10L12 4L22 10"
+                      fill="#15BA5C"
+                      stroke="white"
+                      strokeWidth="1.4"
+                      strokeLinejoin="round"
+                    />
+
+                    <rect
+                      x="4"
+                      y="10"
+                      width="16"
+                      height="12"
+                      rx="2"
+                      fill="#15BA5C"
+                      stroke="white"
+                      strokeWidth="1.4"
+                    />
+
+                    <rect
+                      x="10"
+                      y="15"
+                      width="4"
+                      height="7"
+                      rx="1"
+                      fill="white"
+                    />
+
+                    <path
+                      d="M12 2V8"
+                      stroke="white"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M9.5 4.5L12 2L14.5 4.5"
+                      stroke="white"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm font-medium text-[#1E1E1E]">
+                      Pick Up
+                    </p>
+                    <p className="text-xs text-[#15BA5C]">Available</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

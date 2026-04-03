@@ -1,13 +1,29 @@
 import NotFoundAssests from "@/assets/images/not-found";
 import { useState } from "react";
+import storeFrontService from "@/services/storefrontService";
+import useToastStore from "@/stores/toastStore";
+import { useNetworkStore } from "@/stores/useNetworkStore";
 
-const NotFound = () => {
+type NotFoundProps = {
+  outletId?: string | null;
+  onActivated?: () => void | Promise<void>;
+};
+
+const NotFound = ({ outletId, onActivated }: NotFoundProps) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const { showToast } = useToastStore();
+  const {isOnline}=useNetworkStore()
   const handleActivate = async () => {
+    if(!isOnline) return showToast("error", "You're offline", "You need to have internet connection before you can activate storefront")
+    if (!outletId) return;
     try {
       setIsLoading(true);
+      await storeFrontService.activateStoreFront(outletId);
+      if (onActivated) await onActivated();
+      showToast("success", "Success", "Storefront activated");
     } catch (error) {
       console.log(error);
+      showToast("error", "Error", "Failed to activate storefront");
     } finally {
       setIsLoading(false);
     }
@@ -35,7 +51,7 @@ const NotFound = () => {
 
       <button
         onClick={handleActivate}
-        disabled={isLoading}
+        disabled={isLoading || !outletId}
         className=" cursor-pointer w-[447px] py-3 px-6 bg-[#15BA5C] hover:bg-[#13A652] text-white font-medium rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
       >
         {isLoading ? "Activating..." : "Activate Storefront"}
