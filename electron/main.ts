@@ -493,8 +493,8 @@ app.whenReady().then(() => {
     dbService.addSystemDefault(key, data, outletId),
   );
 
-  ipcMain.handle("db:deleteSystemDefault", (_event, id) =>
-    dbService.deleteSystemDefault(id),
+  ipcMain.handle("db:deleteSystemDefault", (_event, id, itemValue) =>
+    dbService.deleteSystemDefault(id, itemValue),
   );
 
   ipcMain.handle("network:getStatus", () => networkService.getStatus());

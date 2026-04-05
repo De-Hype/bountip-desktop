@@ -118,6 +118,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { LocalUserProfile } from "../types/user.types";
 import { SYNC_ACTIONS } from "../types/action.types";
+import { SystemDefaultType } from "../types/system-default";
 
 export class DatabaseService {
   private db: Database.Database;
@@ -789,11 +790,68 @@ export class DatabaseService {
   }
 
   addSystemDefault(key: string, data: any, outletId: string) {
+    const keysRequiringArray: readonly string[] = [
+      SystemDefaultType.ITEM_CATEGORY,
+      SystemDefaultType.INVENTORY_UNIT,
+    ];
+
+    const isArrayKey = keysRequiringArray.includes(key);
+
+    // 1. Check if a row already exists for this key and outlet
+    const existing = this.prepare(
+      "SELECT * FROM system_default WHERE key = ? AND outletId = ?",
+    ).get(key, outletId) as any;
+
+    if (existing && isArrayKey) {
+      // APPEND LOGIC
+      let currentData: any[] = [];
+      try {
+        currentData = JSON.parse(existing.data);
+        if (!Array.isArray(currentData)) currentData = [currentData];
+      } catch {
+        currentData = [];
+      }
+
+      // Check for duplicates (by name)
+      const exists = currentData.some(
+        (item) => item.name?.toLowerCase() === data.name?.toLowerCase(),
+      );
+      if (exists) return existing;
+
+      const updatedData = [...currentData, data];
+      const nextVersion = (existing.version || 0) + 1;
+
+      this.prepare(
+        "UPDATE system_default SET data = ?, version = ? WHERE id = ?",
+      ).run(JSON.stringify(updatedData), nextVersion, existing.id);
+
+      const record = {
+        ...existing,
+        data: JSON.stringify(updatedData),
+        version: nextVersion,
+      };
+
+      // Queue Sync (UPDATE)
+      this.addToQueue({
+        table: "system_default",
+        action: SYNC_ACTIONS.UPDATE,
+        data: {
+          ...record,
+          data: updatedData,
+        },
+        id: existing.id,
+      });
+
+      return record;
+    }
+
+    // CREATE LOGIC (New row)
     const id = uuidv4();
+    const finalData = isArrayKey ? [data] : data;
     const record = {
       id,
       key,
-      data: JSON.stringify(data),
+      data: JSON.stringify(finalData),
       outletId,
       recordId: null,
       version: 0,
@@ -803,14 +861,14 @@ export class DatabaseService {
       "INSERT INTO system_default (id, key, data, outletId, recordId, version) VALUES (@id, @key, @data, @outletId, @recordId, @version)",
     ).run(record);
 
-    // 2. Queue Sync
+    // 2. Queue Sync (CREATE)
     console.log(`[DatabaseService] Queuing sync for system_default: ${key}`);
     this.addToQueue({
       table: "system_default",
       action: SYNC_ACTIONS.CREATE,
       data: {
         ...record,
-        data: data, // Send parsed data to sync
+        data: finalData,
       },
       id: id,
     });
@@ -818,24 +876,71 @@ export class DatabaseService {
     return record;
   }
 
-  deleteSystemDefault(id: string) {
+  deleteSystemDefault(id: string, itemValue?: string) {
     const record = this.prepare(
       "SELECT * FROM system_default WHERE id = ?",
     ).get(id) as any;
 
-    this.prepare("DELETE FROM system_default WHERE id = ?").run(id);
+    if (!record) return;
 
-    if (record) {
-      console.log(
-        `[DatabaseService] Queuing sync for system_default delete: ${id}`,
+    const keysRequiringArray: readonly string[] = [
+      SystemDefaultType.ITEM_CATEGORY,
+      SystemDefaultType.INVENTORY_UNIT,
+    ];
+    const isArrayKey = keysRequiringArray.includes(record.key);
+
+    if (isArrayKey && itemValue) {
+      // SUBTRACT LOGIC (Update existing row by removing one item from array)
+      let currentData: any[] = [];
+      try {
+        currentData = JSON.parse(record.data);
+        if (!Array.isArray(currentData)) currentData = [currentData];
+      } catch {
+        currentData = [];
+      }
+
+      const updatedData = currentData.filter(
+        (item) => (item.name || item).toLowerCase() !== itemValue.toLowerCase(),
       );
+
+      // If array is now empty, we might want to delete the whole row or just keep empty array
+      // Requirements suggest sending back "other data without it", implying row remains.
+      const nextVersion = (record.version || 0) + 1;
+
+      this.prepare(
+        "UPDATE system_default SET data = ?, version = ? WHERE id = ?",
+      ).run(JSON.stringify(updatedData), nextVersion, id);
+
+      const updatedRecord = {
+        ...record,
+        data: JSON.stringify(updatedData),
+        version: nextVersion,
+      };
+
       this.addToQueue({
         table: "system_default",
-        action: SYNC_ACTIONS.DELETE,
-        data: record,
+        action: SYNC_ACTIONS.UPDATE,
+        data: {
+          ...updatedRecord,
+          data: updatedData,
+        },
         id: id,
       });
+      return;
     }
+
+    // FULL DELETE LOGIC
+    this.prepare("DELETE FROM system_default WHERE id = ?").run(id);
+
+    console.log(
+      `[DatabaseService] Queuing sync for system_default delete: ${id}`,
+    );
+    this.addToQueue({
+      table: "system_default",
+      action: SYNC_ACTIONS.DELETE,
+      data: record,
+      id: id,
+    });
   }
 
   getPendingQueue() {

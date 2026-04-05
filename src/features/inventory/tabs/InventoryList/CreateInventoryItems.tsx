@@ -114,7 +114,8 @@ const CreateInventoryItems = ({
 
       const allCategories = results.flatMap((row: any) => {
         try {
-          const data = JSON.parse(row.data);
+          const data =
+            typeof row.data === "string" ? JSON.parse(row.data) : row.data;
           return Array.isArray(data) ? data : [data];
         } catch (e) {
           return [];
@@ -125,6 +126,7 @@ const CreateInventoryItems = ({
         allCategories.map((c: any) => ({
           value: c.name || c,
           label: c.name || c,
+          id: results[0]?.id, // Store the row ID for deletion if needed
         })),
       );
     } catch (err) {
@@ -144,7 +146,8 @@ const CreateInventoryItems = ({
 
       const allUnits = results.flatMap((row: any) => {
         try {
-          const data = JSON.parse(row.data);
+          const data =
+            typeof row.data === "string" ? JSON.parse(row.data) : row.data;
           return Array.isArray(data) ? data : [data];
         } catch (e) {
           return [];
@@ -155,10 +158,28 @@ const CreateInventoryItems = ({
         allUnits.map((u: any) => ({
           value: u.name || u,
           label: u.name || u,
+          id: results[0]?.id, // Store the row ID for deletion if needed
         })),
       );
     } catch (err) {
       console.error("Failed to fetch units:", err);
+    }
+  };
+
+  const handleDeleteDefault = async (option: any) => {
+    try {
+      const api = (window as any).electronAPI;
+      if (!api?.deleteSystemDefault || !option.id) return;
+
+      await api.deleteSystemDefault(option.id, option.value);
+      showToast("success", "Success", "Item removed successfully");
+
+      // Refetch the appropriate list
+      await fetchCategories();
+      await fetchUnits();
+    } catch (err) {
+      console.error("Failed to delete system default:", err);
+      showToast("error", "Error", "Failed to remove item");
     }
   };
 
@@ -168,11 +189,16 @@ const CreateInventoryItems = ({
       if (!api?.addSystemDefault || !selectedOutlet?.id || !modalConfig.key)
         return;
 
-      await api.addSystemDefault(
-        modalConfig.key,
-        { name: newValue },
-        selectedOutlet.id,
-      );
+      const typesWithKey = [
+        SystemDefaultType.ITEM_CATEGORY,
+        SystemDefaultType.INVENTORY_UNIT,
+      ];
+
+      const payload = typesWithKey.includes(modalConfig.key)
+        ? { key: modalConfig.key, name: newValue }
+        : { name: newValue };
+
+      await api.addSystemDefault(modalConfig.key, payload, selectedOutlet.id);
 
       showToast(
         "success",
@@ -223,8 +249,8 @@ const CreateInventoryItems = ({
           supplierData.emails.filter((e: string) => e.trim() !== ""),
         ),
         supplierData.address,
-        supplierData.notes,
-        null,
+        null, // supplierCode
+        supplierData.notes, // notes
         supplierData.taxNumber,
         now,
         now,
@@ -468,10 +494,11 @@ const CreateInventoryItems = ({
                     </button>
                     <Dropdown
                       mode="select"
-                      placeholder="Select a category"
+                      placeholder="Click to select item category"
                       options={categories}
                       selectedValue={formData.itemCategory}
                       onChange={(val) => handleInputChange("itemCategory", val)}
+                      onDeleteOption={handleDeleteDefault}
                       className="flex-1"
                     />
                   </div>
@@ -573,6 +600,7 @@ const CreateInventoryItems = ({
                       onChange={(val) =>
                         handleInputChange("unitOfPurchase", val)
                       }
+                      onDeleteOption={handleDeleteDefault}
                       className="flex-1 border-red-100" // Red border as per screenshot
                     />
                   </div>
@@ -615,6 +643,7 @@ const CreateInventoryItems = ({
                       onChange={(val) =>
                         handleInputChange("unitOfTransfer", val)
                       }
+                      onDeleteOption={handleDeleteDefault}
                       className="flex-1 border-red-100"
                     />
                   </div>
@@ -661,6 +690,7 @@ const CreateInventoryItems = ({
                       onChange={(val) =>
                         handleInputChange("unitOfConsumption", val)
                       }
+                      onDeleteOption={handleDeleteDefault}
                       className="flex-1 border-red-100"
                     />
                   </div>

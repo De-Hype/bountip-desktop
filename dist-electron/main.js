@@ -744,7 +744,7 @@ const businessOutletUpsertSql = `
     whatsappChannel = excluded.whatsappChannel,
     emailChannel = excluded.emailChannel,
     isDeleted = excluded.isDeleted,
-    isOnboarded = excluded.isOnboarded,
+    isOnboarded = CASE WHEN business_outlet.isOnboarded = 1 THEN 1 ELSE excluded.isOnboarded END,
     operatingHours = excluded.operatingHours,
     logoUrl = excluded.logoUrl,
     taxSettings = excluded.taxSettings,
@@ -3458,6 +3458,17 @@ var SYNC_ACTIONS = /* @__PURE__ */ ((SYNC_ACTIONS2) => {
   SYNC_ACTIONS2["DELETE"] = "DELETE";
   return SYNC_ACTIONS2;
 })(SYNC_ACTIONS || {});
+var SystemDefaultType = /* @__PURE__ */ ((SystemDefaultType2) => {
+  SystemDefaultType2["CATEGORY"] = "category";
+  SystemDefaultType2["ALLERGENS"] = "allergens";
+  SystemDefaultType2["PREPARATION_AREA"] = "preparation-area";
+  SystemDefaultType2["PACKAGING_METHOD"] = "packaging-method";
+  SystemDefaultType2["WEIGHT_SCALE"] = "weight-scale";
+  SystemDefaultType2["ITEM_CATEGORY"] = "item-category";
+  SystemDefaultType2["INVENTORY_UNIT"] = "inventory-unit";
+  SystemDefaultType2["RECIPE_MIX"] = "recipe-mix";
+  return SystemDefaultType2;
+})(SystemDefaultType || {});
 class DatabaseService {
   constructor() {
     const userDataPath = app.getPath("userData");
@@ -3965,11 +3976,53 @@ class DatabaseService {
     );
   }
   addSystemDefault(key, data, outletId) {
+    const keysRequiringArray = [
+      SystemDefaultType.ITEM_CATEGORY,
+      SystemDefaultType.INVENTORY_UNIT
+    ];
+    const isArrayKey = keysRequiringArray.includes(key);
+    const existing = this.prepare(
+      "SELECT * FROM system_default WHERE key = ? AND outletId = ?"
+    ).get(key, outletId);
+    if (existing && isArrayKey) {
+      let currentData = [];
+      try {
+        currentData = JSON.parse(existing.data);
+        if (!Array.isArray(currentData)) currentData = [currentData];
+      } catch {
+        currentData = [];
+      }
+      const exists = currentData.some(
+        (item) => item.name?.toLowerCase() === data.name?.toLowerCase()
+      );
+      if (exists) return existing;
+      const updatedData = [...currentData, data];
+      const nextVersion = (existing.version || 0) + 1;
+      this.prepare(
+        "UPDATE system_default SET data = ?, version = ? WHERE id = ?"
+      ).run(JSON.stringify(updatedData), nextVersion, existing.id);
+      const record2 = {
+        ...existing,
+        data: JSON.stringify(updatedData),
+        version: nextVersion
+      };
+      this.addToQueue({
+        table: "system_default",
+        action: SYNC_ACTIONS.UPDATE,
+        data: {
+          ...record2,
+          data: updatedData
+        },
+        id: existing.id
+      });
+      return record2;
+    }
     const id = uuidExports.v4();
+    const finalData = isArrayKey ? [data] : data;
     const record = {
       id,
       key,
-      data: JSON.stringify(data),
+      data: JSON.stringify(finalData),
       outletId,
       recordId: null,
       version: 0
@@ -3983,29 +4036,63 @@ class DatabaseService {
       action: SYNC_ACTIONS.CREATE,
       data: {
         ...record,
-        data
-        // Send parsed data to sync
+        data: finalData
       },
       id
     });
     return record;
   }
-  deleteSystemDefault(id) {
+  deleteSystemDefault(id, itemValue) {
     const record = this.prepare(
       "SELECT * FROM system_default WHERE id = ?"
     ).get(id);
-    this.prepare("DELETE FROM system_default WHERE id = ?").run(id);
-    if (record) {
-      console.log(
-        `[DatabaseService] Queuing sync for system_default delete: ${id}`
+    if (!record) return;
+    const keysRequiringArray = [
+      SystemDefaultType.ITEM_CATEGORY,
+      SystemDefaultType.INVENTORY_UNIT
+    ];
+    const isArrayKey = keysRequiringArray.includes(record.key);
+    if (isArrayKey && itemValue) {
+      let currentData = [];
+      try {
+        currentData = JSON.parse(record.data);
+        if (!Array.isArray(currentData)) currentData = [currentData];
+      } catch {
+        currentData = [];
+      }
+      const updatedData = currentData.filter(
+        (item) => (item.name || item).toLowerCase() !== itemValue.toLowerCase()
       );
+      const nextVersion = (record.version || 0) + 1;
+      this.prepare(
+        "UPDATE system_default SET data = ?, version = ? WHERE id = ?"
+      ).run(JSON.stringify(updatedData), nextVersion, id);
+      const updatedRecord = {
+        ...record,
+        data: JSON.stringify(updatedData),
+        version: nextVersion
+      };
       this.addToQueue({
         table: "system_default",
-        action: SYNC_ACTIONS.DELETE,
-        data: record,
+        action: SYNC_ACTIONS.UPDATE,
+        data: {
+          ...updatedRecord,
+          data: updatedData
+        },
         id
       });
+      return;
     }
+    this.prepare("DELETE FROM system_default WHERE id = ?").run(id);
+    console.log(
+      `[DatabaseService] Queuing sync for system_default delete: ${id}`
+    );
+    this.addToQueue({
+      table: "system_default",
+      action: SYNC_ACTIONS.DELETE,
+      data: record,
+      id
+    });
   }
   getPendingQueue() {
     const rows = this.prepare(
@@ -22225,12 +22312,15 @@ class SyncService {
       return;
     }
     await this.processOfflineImages();
-    await this.performPull();
-    this.lastPullAt = Date.now();
     const pending = this.db.getPendingQueueItems();
     if (pending.length > 0) {
+      console.log(
+        `[SyncService] Pushing ${pending.length} pending items before pull...`
+      );
       await this.attemptSync(pending);
     }
+    await this.performPull();
+    this.lastPullAt = Date.now();
     console.log("[SyncService] Manual sync trigger complete.");
   }
   /**
@@ -22531,6 +22621,8 @@ ${signature}\r
           }
         }
         const jsonFieldsMap = {
+          product: ["packagingMethod", "priceTierId", "allergenList"],
+          customers: ["otherEmails", "otherPhoneNumbers", "otherNames"],
           business_outlet: [
             "operatingHours",
             "taxSettings",
@@ -22558,6 +22650,37 @@ ${signature}\r
               }
             } catch (e) {
             }
+          }
+        }
+        if (tableName === "product" && Array.isArray(sanitizedPayload.allergenList)) {
+          sanitizedPayload.allergenList = {
+            allergies: sanitizedPayload.allergenList
+          };
+        }
+        if (tableName === "customers") {
+          const toStringArray = (val) => {
+            if (Array.isArray(val)) {
+              return val.map((v) => String(v || "").trim()).filter(Boolean);
+            }
+            if (typeof val !== "string") return [];
+            const trimmed = val.trim();
+            if (!trimmed) return [];
+            return trimmed.split(",").map((v) => String(v || "").trim()).filter(Boolean);
+          };
+          if (typeof sanitizedPayload.otherEmails === "string") {
+            sanitizedPayload.otherEmails = toStringArray(
+              sanitizedPayload.otherEmails
+            );
+          }
+          if (typeof sanitizedPayload.otherPhoneNumbers === "string") {
+            sanitizedPayload.otherPhoneNumbers = toStringArray(
+              sanitizedPayload.otherPhoneNumbers
+            );
+          }
+          if (typeof sanitizedPayload.otherNames === "string") {
+            sanitizedPayload.otherNames = toStringArray(
+              sanitizedPayload.otherNames
+            );
           }
         }
         return {
@@ -22649,38 +22772,61 @@ const saveOutletOnboarding = async (db, payload) => {
       data: fullOutlet,
       id: payload.outletId
     });
+  } else {
+    console.warn(
+      `[OutletFeature] Outlet ${payload.outletId} not found in DB after update. Attempting to queue with provided data.`
+    );
+    db.addToQueue({
+      table: "business_outlet",
+      action: SYNC_ACTIONS.UPDATE,
+      data: {
+        id: payload.outletId,
+        ...payload.data,
+        isOnboarded: 1,
+        updatedAt: now
+      },
+      id: payload.outletId
+    });
   }
 };
 const updateBusinessDetails = async (db, payload) => {
-  const { businessId, outletId, business, location } = payload;
+  const outletId = payload?.outletId ?? payload?.data?.outletId ?? "";
+  const data = payload?.data ?? {
+    ...payload?.business,
+    ...payload?.location
+  };
+  const outletRow = outletId ? await getOutlet(db, outletId) : null;
+  const businessId = payload?.businessId ?? outletRow?.businessId ?? "";
+  const business = data ?? {};
+  const location = data ?? {};
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const businessFields = [];
   const businessParams = { businessId, updatedAt: now };
-  if (business.name !== void 0) {
+  if (businessId && business?.name !== void 0) {
     businessFields.push("name = @name");
     businessParams.name = business.name;
   }
-  if (business.email !== void 0) {
-    businessFields.push("email = @email");
-    businessParams.email = business.email;
-  }
-  if (business.phoneNumber !== void 0) {
-    businessFields.push("phoneNumber = @phoneNumber");
-    businessParams.phoneNumber = business.phoneNumber;
-  }
-  if (business.address !== void 0) {
+  if (businessId && business?.address !== void 0) {
     businessFields.push("address = @address");
     businessParams.address = business.address;
   }
-  if (business.description !== void 0) {
-    businessFields.push("description = @description");
-    businessParams.description = business.description;
+  if (businessId && business?.country !== void 0) {
+    businessFields.push("country = @country");
+    businessParams.country = business.country;
   }
-  if (business.website !== void 0) {
-    businessFields.push("website = @website");
-    businessParams.website = business.website;
+  if (businessId && business?.businessType !== void 0) {
+    businessFields.push("businessType = @businessType");
+    businessParams.businessType = business.businessType;
   }
-  if (businessFields.length > 0) {
+  if (businessId && business?.currency !== void 0) {
+    businessFields.push("currency = @currency");
+    businessParams.currency = business.currency;
+  }
+  if (businessId && business?.logoUrl !== void 0) {
+    businessFields.push("logoUrl = @logoUrl");
+    businessParams.logoUrl = business.logoUrl;
+  }
+  if (businessId && businessFields.length > 0) {
     const businessSql = `
       UPDATE business
       SET ${businessFields.join(", ")}, updatedAt = @updatedAt
@@ -22701,19 +22847,47 @@ const updateBusinessDetails = async (db, payload) => {
   }
   const locationFields = [];
   const locationParams = { outletId, updatedAt: now };
-  if (location.name !== void 0) {
+  if (location?.name !== void 0) {
     locationFields.push("name = @name");
     locationParams.name = location.name;
   }
-  if (location.address !== void 0) {
+  if (location?.address !== void 0) {
     locationFields.push("address = @address");
     locationParams.address = location.address;
   }
-  if (location.phoneNumber !== void 0) {
+  if (location?.phoneNumber !== void 0) {
     locationFields.push("phoneNumber = @phoneNumber");
     locationParams.phoneNumber = location.phoneNumber;
   }
-  if (locationFields.length > 0) {
+  if (location?.state !== void 0) {
+    locationFields.push("state = @state");
+    locationParams.state = location.state;
+  }
+  if (location?.country !== void 0) {
+    locationFields.push("country = @country");
+    locationParams.country = location.country;
+  }
+  if (location?.postalCode !== void 0) {
+    locationFields.push("postalCode = @postalCode");
+    locationParams.postalCode = location.postalCode;
+  }
+  if (location?.businessType !== void 0) {
+    locationFields.push("businessType = @businessType");
+    locationParams.businessType = location.businessType;
+  }
+  if (location?.currency !== void 0) {
+    locationFields.push("currency = @currency");
+    locationParams.currency = location.currency;
+  }
+  if (location?.email !== void 0) {
+    locationFields.push("email = @email");
+    locationParams.email = location.email;
+  }
+  if (location?.logoUrl !== void 0) {
+    locationFields.push("logoUrl = @logoUrl");
+    locationParams.logoUrl = location.logoUrl;
+  }
+  if (outletId && locationFields.length > 0) {
     const locationSql = `
       UPDATE business_outlet
       SET ${locationFields.join(", ")}, updatedAt = @updatedAt
@@ -22985,19 +23159,20 @@ const updateTaxSettings = async (db, payload) => {
   return { success: true, settings };
 };
 const updateServiceCharges = async (db, payload) => {
-  const { outletId, settings } = payload;
+  const { outletId } = payload;
+  const charges = payload.charges ?? payload.settings;
   const now = (/* @__PURE__ */ new Date()).toISOString();
   db.run(
     `
     UPDATE business_outlet
     SET
-      serviceChargeSettings = @serviceChargeSettings,
+      serviceCharges = @serviceCharges,
       updatedAt = @updatedAt
     WHERE id = @outletId
   `,
     {
       outletId,
-      serviceChargeSettings: JSON.stringify(settings),
+      serviceCharges: JSON.stringify(charges ?? null),
       updatedAt: now
     }
   );
@@ -23010,7 +23185,7 @@ const updateServiceCharges = async (db, payload) => {
       id: outletId
     });
   }
-  return { success: true, settings };
+  return { success: true, charges };
 };
 const printHtml = async (payload) => {
   const html = String(payload?.html || "");
@@ -23072,7 +23247,6 @@ const createOutlet = async (db, payload) => {
   const newOutletId = randomUUID();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const newOutlet = {
-    id: newOutletId,
     businessId,
     name: location.name,
     address: location.address,
@@ -23080,11 +23254,39 @@ const createOutlet = async (db, payload) => {
     isMainLocation: location.isMainLocation ? 1 : 0,
     isActive: 1,
     isOnboarded: 0,
-    // Assuming created via settings is onboarded
     isDeleted: 0,
     createdAt: now,
-    updatedAt: now
-    // Default values for other fields to match schema expectations or avoid nulls if strict
+    updatedAt: now,
+    // ✅ Added missing fields
+    recordId: null,
+    version: 0,
+    description: null,
+    state: null,
+    email: null,
+    postalCode: null,
+    whatsappNumber: null,
+    currency: "CAD",
+    revenueRange: null,
+    country: "Canada",
+    storeCode: null,
+    localInventoryRef: null,
+    centralInventoryRef: null,
+    outletRef: "OUT-9DA642BB48E784",
+    businessType: null,
+    whatsappChannel: true,
+    emailChannel: true,
+    operatingHours: null,
+    logoUrl: null,
+    taxSettings: null,
+    serviceCharges: null,
+    paymentMethods: null,
+    bankDetails: null,
+    priceTier: null,
+    receiptSettings: null,
+    labelSettings: null,
+    invoiceSettings: null,
+    generalSettings: null,
+    lastSyncedAt: null
   };
   const params = buildBusinessOutletUpsertParams(newOutlet);
   db.run(businessOutletUpsertSql, params);
@@ -23945,7 +24147,7 @@ ${signature}\r
   );
   ipcMain.handle(
     "db:deleteSystemDefault",
-    (_event, id) => dbService.deleteSystemDefault(id)
+    (_event, id, itemValue) => dbService.deleteSystemDefault(id, itemValue)
   );
   ipcMain.handle("network:getStatus", () => networkService.getStatus());
   ipcMain.on(

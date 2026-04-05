@@ -23,19 +23,61 @@ export const createOutlet = async (
   const now = new Date().toISOString();
 
   const newOutlet = {
-    id: newOutletId,
     businessId,
     name: location.name,
     address: location.address,
     phoneNumber: location.phoneNumber,
     isMainLocation: location.isMainLocation ? 1 : 0,
     isActive: 1,
-    isOnboarded: 0, // Assuming created via settings is onboarded
+    isOnboarded: 0,
     isDeleted: 0,
     createdAt: now,
     updatedAt: now,
-    // Default values for other fields to match schema expectations or avoid nulls if strict
+
+    // ✅ Added missing fields
+    recordId: null,
+    version: 0,
+    description: null,
+    state: null,
+    email: null,
+    postalCode: null,
+    whatsappNumber: null,
+    currency: "CAD",
+    revenueRange: null,
+    country: "Canada",
+    storeCode: null,
+    localInventoryRef: null,
+    centralInventoryRef: null,
+    outletRef: "OUT-9DA642BB48E784",
+    businessType: null,
+    whatsappChannel: true,
+    emailChannel: true,
+    operatingHours: null,
+    logoUrl: null,
+    taxSettings: null,
+    serviceCharges: null,
+    paymentMethods: null,
+    bankDetails: null,
+    priceTier: null,
+    receiptSettings: null,
+    labelSettings: null,
+    invoiceSettings: null,
+    generalSettings: null,
+    lastSyncedAt: null,
   };
+  // const newOutlet = {
+  //   id: newOutletId,
+  //   businessId,
+  //   name: location.name,
+  //   address: location.address,
+  //   phoneNumber: location.phoneNumber,
+  //   isMainLocation: location.isMainLocation ? 1 : 0,
+  //   isActive: 1,
+  //   isOnboarded: 0, // Assuming created via settings is onboarded
+  //   isDeleted: 0,
+  //   createdAt: now,
+  //   updatedAt: now,
+  // };
 
   const params = buildBusinessOutletUpsertParams(newOutlet);
 

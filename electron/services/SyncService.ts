@@ -55,15 +55,19 @@ export class SyncService {
     // 1. Process offline images
     await this.processOfflineImages();
 
-    // 2. Perform pull (bypass interval and leader check)
+    // 2. Process pending queue (PUSH)
+    const pending = this.db.getPendingQueueItems();
+    if (pending.length > 0) {
+      console.log(
+        `[SyncService] Pushing ${pending.length} pending items before pull...`,
+      );
+      await this.attemptSync(pending);
+    }
+
+    // 3. Perform pull (PULL)
     await this.performPull();
     this.lastPullAt = Date.now();
 
-    // 3. Process pending queue
-    const pending = this.db.getPendingQueueItems();
-    if (pending.length > 0) {
-      await this.attemptSync(pending);
-    }
     console.log("[SyncService] Manual sync trigger complete.");
   }
 
@@ -443,6 +447,8 @@ export class SyncService {
 
         // Auto-parse JSON strings for business_outlet and other tables
         const jsonFieldsMap: Record<string, string[]> = {
+          product: ["packagingMethod", "priceTierId", "allergenList"],
+          customers: ["otherEmails", "otherPhoneNumbers", "otherNames"],
           business_outlet: [
             "operatingHours",
             "taxSettings",
@@ -474,6 +480,45 @@ export class SyncService {
             } catch (e) {
               // Not valid JSON or already parsed, skip
             }
+          }
+        }
+
+        if (
+          tableName === "product" &&
+          Array.isArray((sanitizedPayload as any).allergenList)
+        ) {
+          (sanitizedPayload as any).allergenList = {
+            allergies: (sanitizedPayload as any).allergenList,
+          };
+        }
+        if (tableName === "customers") {
+          const toStringArray = (val: any) => {
+            if (Array.isArray(val)) {
+              return val.map((v) => String(v || "").trim()).filter(Boolean);
+            }
+            if (typeof val !== "string") return [];
+            const trimmed = val.trim();
+            if (!trimmed) return [];
+            return trimmed
+              .split(",")
+              .map((v) => String(v || "").trim())
+              .filter(Boolean);
+          };
+
+          if (typeof (sanitizedPayload as any).otherEmails === "string") {
+            (sanitizedPayload as any).otherEmails = toStringArray(
+              (sanitizedPayload as any).otherEmails,
+            );
+          }
+          if (typeof (sanitizedPayload as any).otherPhoneNumbers === "string") {
+            (sanitizedPayload as any).otherPhoneNumbers = toStringArray(
+              (sanitizedPayload as any).otherPhoneNumbers,
+            );
+          }
+          if (typeof (sanitizedPayload as any).otherNames === "string") {
+            (sanitizedPayload as any).otherNames = toStringArray(
+              (sanitizedPayload as any).otherNames,
+            );
           }
         }
 

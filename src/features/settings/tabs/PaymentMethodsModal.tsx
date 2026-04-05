@@ -221,10 +221,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
           paymentMethods: { methods: paymentMethodsData },
         });
 
-        const status = await api.getNetworkStatus();
-        if (status.online) {
-          api.syncTrigger();
-        }
+        
 
         updateOutletLocal(outlet.id, {
           paymentMethods: JSON.stringify({ methods: paymentMethodsData }),
@@ -283,10 +280,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
           paymentMethods: { methods: paymentMethodsData },
         });
 
-        const status = await api.getNetworkStatus();
-        if (status.online) {
-          api.syncTrigger();
-        }
+        
 
         updateOutletLocal(outlet.id, {
           paymentMethods: JSON.stringify({ methods: paymentMethodsData }),

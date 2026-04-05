@@ -43,6 +43,7 @@ const CatalogueProductList = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const { selectedOutlet } = useBusinessStore();
 
@@ -62,6 +63,20 @@ const CatalogueProductList = ({
     minPrice: 0,
     maxPrice: 1000,
   });
+
+  useEffect(() => {
+    const handler = () => setRefreshNonce((n) => n + 1);
+    window.addEventListener("products:changed", handler);
+    return () => {
+      window.removeEventListener("products:changed", handler);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (lastUpdated) {
+      setCurrentPage(1);
+    }
+  }, [lastUpdated]);
 
   // Fetch filter stats (bounds)
   useEffect(() => {
@@ -107,7 +122,7 @@ const CatalogueProductList = ({
       }
     };
     fetchStats();
-  }, [selectedOutlet?.id, lastUpdated]);
+  }, [selectedOutlet?.id, lastUpdated, refreshNonce]);
 
   // Debounce search term
   useEffect(() => {
@@ -193,7 +208,7 @@ const CatalogueProductList = ({
     const fetchProducts = async () => {
       if (!selectedOutlet?.id) return;
 
-      setLoading(true);
+      setLoading(products.length === 0);
       try {
         const api = window.electronAPI;
         if (api && api.dbQuery) {
@@ -276,6 +291,7 @@ const CatalogueProductList = ({
     selectedOutlet?.id,
     debouncedSearchTerm,
     lastUpdated,
+    refreshNonce,
     filtersInitialized,
     activeFilters,
   ]);

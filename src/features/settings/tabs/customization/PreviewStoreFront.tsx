@@ -4,10 +4,8 @@ import AssetsFiles from "@/assets";
 import SettingsAssets from "@/assets/images/settings";
 import {
   Star,
-
   ChevronLeft,
   ChevronRight,
-  
 } from "lucide-react";
 import { GoDotFill } from "react-icons/go";
 import { BusinessOutlet } from "@/types/storefront";
@@ -386,8 +384,8 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
                 </div>
               </div>
 
-              {(storeInfo.businessOperation.delivery ||
-                storeInfo.businessOperation.both) && (
+              {(storeInfo.businessOperation?.delivery ||
+                storeInfo.businessOperation?.both) && (
                 <div className="flex items-center gap-2">
                   <svg
                     width="26"
@@ -430,8 +428,8 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
                 </div>
               )}
 
-              {(storeInfo.businessOperation.pickup ||
-                storeInfo.businessOperation.both) && (
+              {(storeInfo.businessOperation?.pickup ||
+                storeInfo.businessOperation?.both) && (
                 <div className="flex items-center gap-2">
                   <svg
                     width="26"

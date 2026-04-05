@@ -15,7 +15,7 @@ type ProductCreatePayload = {
   price: number | null;
   priceTierId: string[] | null;
   allergens: string[];
-  allergenList: string[];
+  allergenList: { allergies: string[] };
   weight: number | null;
   weightScale: string | null;
   packagingMethod: string[];
@@ -504,7 +504,9 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
       (area) => area.id === selectedPreparationAreaId,
     );
 
-    const selectedPriceTier = priceTiers.find((tier) => tier.active);
+    const selectedPriceTierIds = priceTiers
+      .filter((tier) => tier.active)
+      .map((tier) => String(tier.id));
 
     const activePackagingMethods = packagingMethods
       .filter((method) => selectedPackagingMethods[String(method.id)])
@@ -514,10 +516,11 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
       .filter((allergen) => allergen.selected)
       .map((allergen) => allergen.name);
 
-    const leadTimeTotalMinutes =
-      (Number(leadTimeDays) || 0) * 24 * 60 +
-      (Number(leadTimeHours) || 0) * 60 +
-      (Number(leadTimeMinutes) || 0);
+    const leadTimeTotalSeconds =
+      ((Number(leadTimeDays) || 0) * 24 * 60 +
+        (Number(leadTimeHours) || 0) * 60 +
+        (Number(leadTimeMinutes) || 0)) *
+      60;
 
     const selectedWeightUnit = weightUnits.find(
       (unit) => unit.id === selectedWeightUnitId,
@@ -529,13 +532,13 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
       category: selectedCategory?.name ?? null,
       preparationArea: selectedPreparationArea?.name ?? null,
       price: defaultPrice ? Number(defaultPrice) : null,
-      priceTierId: selectedPriceTier ? [selectedPriceTier.name] : null,
+      priceTierId: priceTierEnabled ? selectedPriceTierIds : [],
       allergens: activeAllergens,
-      allergenList: activeAllergens,
+      allergenList: { allergies: activeAllergens },
       weight: weight ? Number(weight) : null,
       weightScale: selectedWeightUnit?.name ?? null,
       packagingMethod: activePackagingMethods,
-      leadTime: leadTimeTotalMinutes || null,
+      leadTime: leadTimeTotalSeconds || null,
       availableAtStorefront: 1 as 1,
       createdAtStorefront: 1 as 1,
       isDeleted: 0 as 0,
@@ -559,8 +562,13 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
         "Product Created",
         `${productName} has been created successfully.`,
       );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("products:changed"));
+      }
       onSuccess?.();
-      onClose();
+      setTimeout(() => {
+        onClose();
+      }, 0);
     } catch (error) {
       console.error("Failed to create product:", error);
       showToast(

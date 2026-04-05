@@ -6,10 +6,12 @@ export const updateServiceCharges = async (
   db: DatabaseService,
   payload: {
     outletId: string;
-    settings: any;
+    charges?: any;
+    settings?: any;
   },
 ) => {
-  const { outletId, settings } = payload;
+  const { outletId } = payload;
+  const charges = payload.charges ?? payload.settings;
 
   // 1. Update local DB
   const now = new Date().toISOString();
@@ -17,13 +19,13 @@ export const updateServiceCharges = async (
     `
     UPDATE business_outlet
     SET
-      serviceChargeSettings = @serviceChargeSettings,
+      serviceCharges = @serviceCharges,
       updatedAt = @updatedAt
     WHERE id = @outletId
   `,
     {
       outletId,
-      serviceChargeSettings: JSON.stringify(settings),
+      serviceCharges: JSON.stringify(charges ?? null),
       updatedAt: now,
     },
   );
@@ -40,5 +42,5 @@ export const updateServiceCharges = async (
     });
   }
 
-  return { success: true, settings };
+  return { success: true, charges };
 };

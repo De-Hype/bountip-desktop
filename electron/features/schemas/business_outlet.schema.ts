@@ -195,7 +195,7 @@ export const businessOutletUpsertSql = `
     whatsappChannel = excluded.whatsappChannel,
     emailChannel = excluded.emailChannel,
     isDeleted = excluded.isDeleted,
-    isOnboarded = excluded.isOnboarded,
+    isOnboarded = CASE WHEN business_outlet.isOnboarded = 1 THEN 1 ELSE excluded.isOnboarded END,
     operatingHours = excluded.operatingHours,
     logoUrl = excluded.logoUrl,
     taxSettings = excluded.taxSettings,

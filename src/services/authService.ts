@@ -61,6 +61,11 @@ type ResetPasswordPayload = {
   newPassword: string;
 };
 
+type ChangePasswordPayload = {
+  oldPassword: string;
+  newPassword: string;
+};
+
 class AuthService {
   private async verifyLocalLogin(email: string, password: string) {
     if (typeof window === "undefined") return false;
@@ -197,6 +202,14 @@ class AuthService {
   async resetPassword(payload: ResetPasswordPayload) {
     return httpService.post<{ status: boolean; message: string }>(
       "/auth/reset-password",
+      payload,
+      false,
+    );
+  }
+
+  async changePassword(payload: ChangePasswordPayload) {
+    return httpService.post<{ status: boolean; message: string }>(
+      "/auth/change-password",
       payload,
       false,
     );

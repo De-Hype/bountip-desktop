@@ -27,10 +27,15 @@ const OnboardingClient = () => {
 
     // If we are onboarding a specific outlet (outletId present), skip the PIN step
     if (outletId) {
+      // If we are already onboarded locally, we can just go to dashboard.
+      // We trigger a background sync instead of a full pull to be faster.
       if (api?.triggerSync) {
-        await api.triggerSync(true);
+        console.log("[OnboardingClient] Triggering background sync before dashboard navigation...");
+        api.triggerSync(false); 
       }
-      navigate("/dashboard");
+      
+      console.log("[OnboardingClient] Navigating to dashboard for outlet:", outletId);
+      navigate("/dashboard", { replace: true });
       return;
     }
 

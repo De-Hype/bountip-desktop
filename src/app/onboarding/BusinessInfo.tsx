@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 //@ts-nocheck
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import BusinessRevenueComponent from "./BusinessRevenueComponent";
@@ -92,13 +92,20 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [currencySearchTerm, setCurrencySearchTerm] = useState("");
-
   const [logoUrl, setLogoUrl] = useState("");
-  const [searchParams] = useSearchParams();
+
   const { outlets, updateOutletLocal, selectOutlet, selectedOutletId } =
     useBusinessStore();
   const { isOnline } = useNetworkStore();
+  const [searchParams] = useSearchParams();
   const outletIdParam = searchParams.get("outletId") || "";
+
+  useEffect(() => {
+    if (outletIdParam && selectedOutletId !== outletIdParam) {
+      selectOutlet(outletIdParam);
+    }
+  }, [outletIdParam, selectedOutletId, selectOutlet]);
+
   const showBackButton = Boolean(outletIdParam);
   const outlet = outlets.find((o) => o.id === outletIdParam) as unknown as
     | {
@@ -180,17 +187,72 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
         revenueRange,
         logoUrl: logoUrl || "",
         logoHash: logoUrl ? "updated" : undefined,
-        ...(outlet && !outlet.isOnboarded && outletIdParam
-          ? { outletId: outletIdParam }
-          : {}),
+        ...(outletIdParam ? { outletId: outletIdParam } : {}),
       };
 
       const api = getElectronAPI();
-      const needsOutletOnboarding =
-        outlet && !outlet.isOnboarded && outletIdParam;
+      // If we have an outletId in URL, it's an outlet onboarding.
+      const isOutletOnboarding = Boolean(outletIdParam);
 
-      // If we have an outlet to onboard, we must do so locally.
-      if (needsOutletOnboarding && outletIdParam && api) {
+      // For general business onboarding or if online, call the API
+      if (isOnline) {
+        const res = await onboardBusiness(payload).unwrap();
+        if (res?.status) {
+          // If it was an outlet onboarding, ensure local DB is also updated
+          if (isOutletOnboarding && api) {
+            const isOfflineImage =
+              logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
+                ? 1
+                : 0;
+            const localLogoPath =
+              logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
+                ? logoUrl
+                : null;
+
+            await api.saveOutletOnboarding({
+              outletId: outletIdParam,
+              data: {
+                country: payload.country,
+                address: payload.address,
+                businessType: payload.businessType,
+                currency: payload.currency,
+                revenueRange: payload.revenueRange,
+                logoUrl: payload.logoUrl,
+                isOfflineImage,
+                localLogoPath: localLogoPath || undefined,
+              },
+            });
+            updateOutletLocal(outletIdParam, {
+              country: payload.country,
+              address: payload.address,
+              businessType: payload.businessType,
+              currency: payload.currency,
+              revenueRange: payload.revenueRange,
+              logoUrl: payload.logoUrl,
+              isOnboarded: true,
+              isOfflineImage,
+              localLogoPath: localLogoPath || undefined,
+            });
+
+            // 🚀 Flush sync queue just in case
+            if (api.triggerSync) {
+              console.log(
+                "[BusinessInfo] Triggering immediate sync flush after online onboarding...",
+              );
+              api.triggerSync(false);
+            }
+          }
+          showToast("success", "Setup complete", "Business details saved.");
+          onNext();
+          return;
+        } else {
+          throw new Error(res?.message || "Failed to onboard business");
+        }
+      }
+
+      // If we reach here, we are OFFLINE.
+      // If we have an outlet to onboard, we must do so locally and queue for later sync.
+      if (isOutletOnboarding && api) {
         const isOfflineImage =
           logoUrl.startsWith("file://") || logoUrl.startsWith("asset://")
             ? 1
@@ -242,14 +304,6 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
         );
         setIsSubmitting(false);
         return;
-      }
-
-      const res = await onboardBusiness(payload).unwrap();
-      if (res?.status) {
-        showToast("success", "Setup complete", "Business details saved.");
-        onNext();
-      } else {
-        throw new Error(res?.message || "Failed to onboard business");
       }
     } catch (error) {
       console.error("[BusinessInfo] ❌ Business onboarding error:", error);

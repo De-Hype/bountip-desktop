@@ -186,10 +186,7 @@ const InventoryList = () => {
       `;
       const [catResult, systemDefaultRows] = await Promise.all([
         api.dbQuery(catSql, [selectedOutlet.id]),
-        api.dbQuery(
-          "SELECT data FROM system_default WHERE key = ? AND outletId = ?",
-          ["item-category", selectedOutlet.id],
-        ),
+        api.getSystemDefaults("item-category", selectedOutlet.id),
       ]);
 
       const categorySet = new Set<string>();
@@ -198,7 +195,7 @@ const InventoryList = () => {
       });
       (systemDefaultRows || []).forEach((r: any) => {
         try {
-          const parsed = JSON.parse(r.data);
+          const parsed = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
           const arr = Array.isArray(parsed) ? parsed : [parsed];
           arr.forEach((x: any) => {
             const name = x?.name ?? x;

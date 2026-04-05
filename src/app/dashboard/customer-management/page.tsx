@@ -124,6 +124,10 @@ const CustomerManagement = () => {
     ];
   }, [allCustomers]);
 
+  const handleRefreshCustomer = () => {
+    fetchCustomers(selectedOutlet?.id);
+  };
+
   return (
     <section className="">
       <div className="w-full">
@@ -253,6 +257,7 @@ const CustomerManagement = () => {
       <CreateCustomer
         isOpen={isCustomerCreationOpen}
         onClose={() => setIsCustomerCreationOpen(false)}
+        fetchCustomers={() => handleRefreshCustomer()}
       />
 
       <CreatePaymentTerm

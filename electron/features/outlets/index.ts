@@ -68,5 +68,22 @@ export const saveOutletOnboarding = async (
       data: fullOutlet,
       id: payload.outletId,
     });
+  } else {
+    // If it doesn't exist, it might be a new outlet that wasn't pulled yet.
+    // We should probably still queue it or handle this case.
+    console.warn(
+      `[OutletFeature] Outlet ${payload.outletId} not found in DB after update. Attempting to queue with provided data.`,
+    );
+    db.addToQueue({
+      table: "business_outlet",
+      action: SYNC_ACTIONS.UPDATE,
+      data: {
+        id: payload.outletId,
+        ...payload.data,
+        isOnboarded: 1,
+        updatedAt: now,
+      },
+      id: payload.outletId,
+    });
   }
 };

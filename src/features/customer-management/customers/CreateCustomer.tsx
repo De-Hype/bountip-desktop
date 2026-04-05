@@ -13,21 +13,21 @@ import { PhoneInput } from "../../settings/ui/PhoneInput";
 import { getPhoneCountries, PhoneCountry } from "@/utils/getPhoneCountries";
 import useBusinessStore from "@/stores/useBusinessStore";
 import useToastStore from "@/stores/toastStore";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import useCustomerStore from "@/stores/useCustomerStore";
 
 interface CreateCustomerProps {
   isOpen: boolean;
   onClose: () => void;
+  fetchCustomers?: () => void;
 }
 
-const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
+const CreateCustomer = ({
+  isOpen,
+  onClose,
+  fetchCustomers,
+}: CreateCustomerProps) => {
   const { selectedOutlet } = useBusinessStore();
+  const { fetchCustomers: refreshCustomers } = useCustomerStore();
   const [customerType, setCustomerType] = useState<
     "Individual" | "Organization"
   >("Individual");
@@ -161,6 +161,39 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
     paymentTerm,
   ]);
 
+  const normalizeDialCode = (dialCode: string) => {
+    const trimmed = String(dialCode || "").trim();
+    if (!trimmed) return "";
+    return trimmed.startsWith("+") ? trimmed : `+${trimmed}`;
+  };
+
+  const normalizePhoneForStorage = (
+    country: PhoneCountry,
+    rawNumber: string,
+  ) => {
+    const input = String(rawNumber || "").trim();
+    if (!input) return "";
+
+    const compact = input.replace(/[^\d+]/g, "");
+    if (compact.startsWith("+")) {
+      return `+${compact.slice(1).replace(/\D/g, "")}`;
+    }
+
+    const dial = normalizeDialCode(country?.dialCode || "");
+    const dialDigits = dial.replace(/\D/g, "");
+    let digits = compact.replace(/\D/g, "");
+
+    if (dialDigits && digits.startsWith(dialDigits)) {
+      return `+${digits}`;
+    }
+
+    if (digits.startsWith("0")) {
+      digits = digits.replace(/^0+/, "");
+    }
+
+    return dial ? `${dial}${digits}` : digits;
+  };
+
   const handleCreateCustomer = async () => {
     if (!isFormValid) {
       showToast("error", "Validation Error", "Please fill in all fields.");
@@ -175,13 +208,21 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
 
       // Check for existing email or phone number
       const emailList = emails.map((e) => e.trim()).filter(Boolean);
-      const phoneList = phoneNumbers
-        .map((p) => p.number.trim())
+      const formattedPhoneList = phoneNumbers
+        .map((p) => normalizePhoneForStorage(p.country, p.number))
         .filter(Boolean);
+      const phoneQueryList = Array.from(
+        new Set(
+          [
+            ...formattedPhoneList,
+            ...phoneNumbers.map((p) => String(p.number || "").trim()),
+          ].filter(Boolean),
+        ),
+      );
 
-      if (emailList.length > 0 || phoneList.length > 0) {
+      if (emailList.length > 0 || phoneQueryList.length > 0) {
         const emailPlaceholders = emailList.map(() => "?").join(",");
-        const phonePlaceholders = phoneList.map(() => "?").join(",");
+        const phonePlaceholders = phoneQueryList.map(() => "?").join(",");
 
         let checkQuery = `SELECT email, phoneNumber FROM customers WHERE outletId = ? AND (deletedAt IS NULL OR deletedAt = '') AND (`;
         const queryParts = [];
@@ -192,9 +233,9 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
           params.push(...emailList);
         }
 
-        if (phoneList.length > 0) {
+        if (phoneQueryList.length > 0) {
           queryParts.push(`phoneNumber IN (${phonePlaceholders})`);
-          params.push(...phoneList);
+          params.push(...phoneQueryList);
         }
 
         checkQuery += queryParts.join(" OR ") + ")";
@@ -213,16 +254,16 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
       }
 
       // Proceed with creation
+      const emailValues = emails.map((e) => e.trim()).filter(Boolean);
+      const phoneValues = formattedPhoneList;
+
       const payload = {
         id: crypto.randomUUID(),
         name: customerName,
-        email: emails[0],
-        otherEmails: emails.slice(1).join(","),
-        phoneNumber: phoneNumbers[0].number,
-        otherPhoneNumbers: phoneNumbers
-          .slice(1)
-          .map((p) => p.number)
-          .join(","),
+        email: emailValues[0] || "",
+        otherEmails: emailValues.slice(1),
+        phoneNumber: phoneValues[0] || "",
+        otherPhoneNumbers: phoneValues.slice(1),
         customerType: customerType.toLowerCase(),
         organizationName: customerType === "Organization" ? customerName : null,
         representativeNames:
@@ -243,6 +284,11 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
 
       showToast("success", "Success", "Customer created successfully.");
       onClose();
+      if (typeof fetchCustomers === "function") {
+        fetchCustomers();
+      } else if (selectedOutlet?.id) {
+        refreshCustomers(selectedOutlet.id);
+      }
     } catch (error) {
       console.error("Failed to create customer:", error);
       showToast("error", "Error", "Failed to create customer.");
@@ -270,7 +316,35 @@ const CreateCustomer = ({ isOpen, onClose }: CreateCustomerProps) => {
   ) => {
     setPhoneNumbers((prev) => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], ...updates };
+      const next = { ...updated[index], ...updates };
+
+      if (typeof updates.number === "string") {
+        const raw = updates.number.trim();
+        if (raw.startsWith("+")) {
+          const normalized = `+${raw.slice(1).replace(/[^\d]/g, "")}`;
+          let best: PhoneCountry | undefined;
+          for (const c of phoneCountries) {
+            const dial = normalizeDialCode(c?.dialCode || "");
+            if (!dial) continue;
+            if (normalized.startsWith(dial)) {
+              if (
+                !best ||
+                dial.length > normalizeDialCode(best.dialCode).length
+              ) {
+                best = c;
+              }
+            }
+          }
+          if (best) {
+            const dial = normalizeDialCode(best.dialCode);
+            const remainder = normalized.slice(dial.length).replace(/^0+/, "");
+            next.country = best;
+            next.number = remainder;
+          }
+        }
+      }
+
+      updated[index] = next;
       return updated;
     });
   };

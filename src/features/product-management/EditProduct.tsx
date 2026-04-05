@@ -28,7 +28,7 @@ type ProductUpdatePayload = {
   price: number | null;
   priceTierId: string[] | null;
   allergens: string[];
-  allergenList: string[];
+  allergenList: { allergies: string[] };
   weight: number | null;
   weightScale: string | null;
   packagingMethod: string[];
@@ -1110,9 +1110,12 @@ const EditProduct = ({
       setWeight(product.weight?.toString() || "");
 
       if (product.leadTime) {
-        const days = Math.floor(product.leadTime / (24 * 60));
-        const hours = Math.floor((product.leadTime % (24 * 60)) / 60);
-        const minutes = product.leadTime % 60;
+        const leadTimeSeconds = Number(product.leadTime) || 0;
+        const days = Math.floor(leadTimeSeconds / (24 * 60 * 60));
+        const hours = Math.floor(
+          (leadTimeSeconds % (24 * 60 * 60)) / (60 * 60),
+        );
+        const minutes = Math.floor((leadTimeSeconds % (60 * 60)) / 60);
         setLeadTimeDays(days > 0 ? days.toString() : "");
         setLeadTimeHours(hours > 0 ? hours.toString() : "");
         setLeadTimeMinutes(minutes > 0 ? minutes.toString() : "");
@@ -1194,7 +1197,9 @@ const EditProduct = ({
               id: t.id,
               name: t.name,
               value: "",
-              active: productTiers.includes(t.name),
+              active:
+                productTiers.includes(String(t.id)) ||
+                productTiers.includes(t.name),
               pricingRules: t.pricingRules,
             }),
           );
@@ -1422,17 +1427,20 @@ const EditProduct = ({
     const selectedPreparationArea = preparationAreas.find(
       (a) => a.id === selectedPreparationAreaId,
     );
-    const selectedPriceTier = priceTiers.find((tier) => tier.active);
+    const selectedPriceTierIds = priceTiers
+      .filter((tier) => tier.active)
+      .map((tier) => String(tier.id));
     const activePackagingMethods = packagingMethods
       .filter((m) => selectedPackagingMethods[String(m.id)])
       .map((m) => m.name);
     const activeAllergens = allergens
       .filter((a) => a.selected)
       .map((a) => a.name);
-    const leadTimeTotalMinutes =
-      (Number(leadTimeDays) || 0) * 24 * 60 +
-      (Number(leadTimeHours) || 0) * 60 +
-      (Number(leadTimeMinutes) || 0);
+    const leadTimeTotalSeconds =
+      ((Number(leadTimeDays) || 0) * 24 * 60 +
+        (Number(leadTimeHours) || 0) * 60 +
+        (Number(leadTimeMinutes) || 0)) *
+      60;
     const selectedWeightUnit = weightUnits.find(
       (u) => u.id === selectedWeightUnitId,
     );
@@ -1444,13 +1452,13 @@ const EditProduct = ({
       category: selectedCategory?.name ?? null,
       preparationArea: selectedPreparationArea?.name ?? null,
       price: defaultPrice ? Number(defaultPrice) : null,
-      priceTierId: selectedPriceTier ? [selectedPriceTier.name] : null,
+      priceTierId: priceTierEnabled ? selectedPriceTierIds : [],
       allergens: activeAllergens,
-      allergenList: activeAllergens,
+      allergenList: { allergies: activeAllergens },
       weight: weight ? Number(weight) : null,
       weightScale: selectedWeightUnit?.name ?? null,
       packagingMethod: activePackagingMethods,
-      leadTime: leadTimeTotalMinutes || null,
+      leadTime: leadTimeTotalSeconds || null,
       availableAtStorefront: product.availableAtStorefront as 0 | 1,
       createdAtStorefront: 1 as 1,
       isDeleted: 0 as 0,
@@ -1469,6 +1477,9 @@ const EditProduct = ({
         "Product Updated",
         `${productName} has been updated successfully.`,
       );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("products:changed"));
+      }
       onSuccess?.();
       onClose();
     } catch (error) {
@@ -1496,17 +1507,20 @@ const EditProduct = ({
     const selectedPreparationArea = preparationAreas.find(
       (a) => a.id === selectedPreparationAreaId,
     );
-    const selectedPriceTier = priceTiers.find((tier) => tier.active);
+    const selectedPriceTierIds = priceTiers
+      .filter((tier) => tier.active)
+      .map((tier) => String(tier.id));
     const activePackagingMethods = packagingMethods
       .filter((m) => selectedPackagingMethods[String(m.id)])
       .map((m) => m.name);
     const activeAllergens = allergens
       .filter((a) => a.selected)
       .map((a) => a.name);
-    const leadTimeTotalMinutes =
-      (Number(leadTimeDays) || 0) * 24 * 60 +
-      (Number(leadTimeHours) || 0) * 60 +
-      (Number(leadTimeMinutes) || 0);
+    const leadTimeTotalSeconds =
+      ((Number(leadTimeDays) || 0) * 24 * 60 +
+        (Number(leadTimeHours) || 0) * 60 +
+        (Number(leadTimeMinutes) || 0)) *
+      60;
     const selectedWeightUnit = weightUnits.find(
       (u) => u.id === selectedWeightUnitId,
     );
@@ -1518,13 +1532,13 @@ const EditProduct = ({
       category: selectedCategory?.name ?? null,
       preparationArea: selectedPreparationArea?.name ?? null,
       price: defaultPrice ? Number(defaultPrice) : null,
-      priceTierId: selectedPriceTier ? [selectedPriceTier.name] : null,
+      priceTierId: priceTierEnabled ? selectedPriceTierIds : [],
       allergens: activeAllergens,
-      allergenList: activeAllergens,
+      allergenList: { allergies: activeAllergens },
       weight: weight ? Number(weight) : null,
       weightScale: selectedWeightUnit?.name ?? null,
       packagingMethod: activePackagingMethods,
-      leadTime: leadTimeTotalMinutes || null,
+      leadTime: leadTimeTotalSeconds || null,
       availableAtStorefront: product.availableAtStorefront as 0 | 1,
       createdAtStorefront: 1 as 1,
       isDeleted: 1 as 1, // SET TO DELETED
@@ -1543,6 +1557,9 @@ const EditProduct = ({
         "Product Deleted",
         `${productName} has been deleted successfully.`,
       );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("products:changed"));
+      }
       onSuccess?.();
       onClose();
     } catch (error) {

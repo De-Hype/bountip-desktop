@@ -81,6 +81,88 @@ const EditCustomerModal = ({
 
   const phoneCountries = useMemo(() => getPhoneCountries(), []);
 
+  const parseStringArray = (value: any): string[] => {
+    if (Array.isArray(value)) {
+      return value.map((v) => String(v || "").trim()).filter(Boolean);
+    }
+    if (typeof value !== "string") return [];
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map((v) => String(v || "").trim()).filter(Boolean);
+        }
+      } catch {}
+    }
+    return trimmed
+      .split(",")
+      .map((v) => String(v || "").trim())
+      .filter(Boolean);
+  };
+
+  const normalizeDialCode = (dialCode: string) => {
+    const trimmed = String(dialCode || "").trim();
+    if (!trimmed) return "";
+    return trimmed.startsWith("+") ? trimmed : `+${trimmed}`;
+  };
+
+  const normalizePhoneForStorage = (
+    country: PhoneCountry,
+    rawNumber: string,
+  ) => {
+    const input = String(rawNumber || "").trim();
+    if (!input) return "";
+
+    const compact = input.replace(/[^\d+]/g, "");
+    if (compact.startsWith("+")) {
+      return `+${compact.slice(1).replace(/\D/g, "")}`;
+    }
+
+    const dial = normalizeDialCode(country?.dialCode || "");
+    const dialDigits = dial.replace(/\D/g, "");
+    let digits = compact.replace(/\D/g, "");
+
+    if (dialDigits && digits.startsWith(dialDigits)) {
+      return `+${digits}`;
+    }
+
+    if (digits.startsWith("0")) {
+      digits = digits.replace(/^0+/, "");
+    }
+
+    return dial ? `${dial}${digits}` : digits;
+  };
+
+  const splitPhoneForInput = (full: string) => {
+    const raw = String(full || "").trim();
+    const normalized = raw.replace(/[^\d+]/g, "");
+    const withPlus = normalized.startsWith("+")
+      ? `+${normalized.slice(1).replace(/\D/g, "")}`
+      : `+${normalized.replace(/\D/g, "")}`;
+
+    let best: PhoneCountry | undefined;
+    for (const c of phoneCountries) {
+      const dial = normalizeDialCode(c?.dialCode || "");
+      if (!dial) continue;
+      if (withPlus.startsWith(dial)) {
+        if (!best || dial.length > normalizeDialCode(best.dialCode).length) {
+          best = c;
+        }
+      }
+    }
+
+    if (!best) {
+      return { country: phoneCountries[0], number: raw };
+    }
+
+    const dial = normalizeDialCode(best.dialCode);
+    let remainder = withPlus.slice(dial.length);
+    remainder = remainder.replace(/^0+/, "");
+    return { country: best, number: remainder };
+  };
+
   const pricingTiers = useMemo(() => {
     if (!selectedOutlet?.priceTier) return [];
     try {
@@ -107,29 +189,18 @@ const EditCustomerModal = ({
 
       // Handle phone numbers
       const mainPhone = customer.phoneNumber || "";
-      const otherPhones = customer.otherPhoneNumbers
-        ? customer.otherPhoneNumbers.split(",")
-        : [];
+      const otherPhones = parseStringArray(customer.otherPhoneNumbers);
       const allPhones = [mainPhone, ...otherPhones].filter(Boolean);
 
       if (allPhones.length > 0) {
-        setPhoneNumbers(
-          allPhones.map((num) => ({
-            number: num,
-            country:
-              phoneCountries.find((c) => num.startsWith(`+\${c.code}`)) ||
-              phoneCountries[0],
-          })),
-        );
+        setPhoneNumbers(allPhones.map((num) => splitPhoneForInput(num)));
       } else {
         setPhoneNumbers([{ number: "", country: phoneCountries[0] }]);
       }
 
       // Handle emails
       const mainEmail = customer.email || "";
-      const otherEmails = customer.otherEmails
-        ? customer.otherEmails.split(",")
-        : [];
+      const otherEmails = parseStringArray(customer.otherEmails);
       const allEmails = [mainEmail, ...otherEmails].filter(Boolean);
       setEmails(allEmails.length > 0 ? allEmails : [""]);
 
@@ -204,16 +275,18 @@ const EditCustomerModal = ({
       const api = (window as any).electronAPI;
       if (!api) return;
 
+      const emailValues = emails.map((e) => e.trim()).filter(Boolean);
+      const phoneValues = phoneNumbers
+        .map((p) => normalizePhoneForStorage(p.country, p.number))
+        .filter(Boolean);
+
       const payload = {
         id: customer.id,
         name: customerName,
-        email: emails[0],
-        otherEmails: emails.slice(1).join(","),
-        phoneNumber: phoneNumbers[0].number,
-        otherPhoneNumbers: phoneNumbers
-          .slice(1)
-          .map((p) => p.number)
-          .join(","),
+        email: emailValues[0] || "",
+        otherEmails: emailValues.slice(1),
+        phoneNumber: phoneValues[0] || "",
+        otherPhoneNumbers: phoneValues.slice(1),
         customerType: customerType.toLowerCase(),
         organizationName: customerType === "Organization" ? customerName : null,
         representativeNames:
@@ -550,7 +623,15 @@ const EditCustomerModal = ({
                         value={phoneEntry.number}
                         onChange={(val) => {
                           const updated = [...phoneNumbers];
-                          updated[index].number = val;
+                          if (
+                            String(val || "")
+                              .trim()
+                              .startsWith("+")
+                          ) {
+                            updated[index] = splitPhoneForInput(val);
+                          } else {
+                            updated[index].number = val;
+                          }
                           setPhoneNumbers(updated);
                         }}
                         selectedCountry={phoneEntry.country}
