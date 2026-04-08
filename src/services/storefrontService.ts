@@ -156,6 +156,18 @@ class StoreFrontService {
       false,
     );
   }
+
+  async loadProductForPreview(
+    storeCode: string,
+    limit: number = 10,
+    page: number = 1,
+  ) {
+    const code = String(storeCode || "").trim();
+    return this.request.get<LoadProductResponse>(
+      `https://jellyfish-app-dvaxa.ondigitalocean.app/${code}/products?limit=${limit}&page=${page}`,
+      false,
+    );
+  }
 }
 
 const storeFrontService = new StoreFrontService();

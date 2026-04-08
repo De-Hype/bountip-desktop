@@ -10,7 +10,8 @@ export const businessRoleSchema: TableSchema = {
       permissions TEXT NOT NULL,
       createdAt TEXT,
       updatedAt TEXT,
-      businessId TEXT NOT NULL
+      businessId TEXT NOT NULL,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
 

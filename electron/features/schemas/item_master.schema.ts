@@ -103,7 +103,7 @@ export const itemMasterSchema: TableSchema = {
       createdAt TEXT,
       updatedAt TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

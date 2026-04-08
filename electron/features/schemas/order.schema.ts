@@ -217,7 +217,7 @@ export const orderSchema: TableSchema = {
       markup REAL,
       deletedAt TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: [

@@ -213,8 +213,8 @@ const Dashboard = () => {
       icon: AssetsFiles.phusers,
       title: "Roles & Permissions",
       path: "/dashboard/roles-permissions",
-      badge: "Coming Soon",
-      available: false,
+      // badge: "Coming Soon",
+      // available: false,
     },
     {
       icon: AssetsFiles.settings,

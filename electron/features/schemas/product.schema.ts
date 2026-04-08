@@ -25,6 +25,7 @@ export type ProductUpsertParams = {
   updatedAt: string | null;
   lastSyncedAt: string | null;
   outletId: string | null;
+  version: number;
 };
 
 export const productCreateSql = `
@@ -53,7 +54,8 @@ export const productCreateSql = `
     createdAt TEXT,
     updatedAt TEXT,
     lastSyncedAt TEXT,
-    outletId TEXT
+    outletId TEXT,
+    version INTEGER DEFAULT 0 NOT NULL
   );
 `;
 
@@ -82,7 +84,8 @@ export const productUpsertSql = `
     createdAt,
     updatedAt,
     lastSyncedAt,
-    outletId
+    outletId,
+    version
   ) VALUES (
     @id,
     @name,
@@ -107,57 +110,38 @@ export const productUpsertSql = `
     @createdAt,
     @updatedAt,
     @lastSyncedAt,
-    @outletId
+    @outletId,
+    @version
   )
 `;
 
-export const buildProductUpsertParams = (p: any): ProductUpsertParams => {
-  let allergenList: string | null = null;
-
-  if (Array.isArray(p.allergenList)) {
-    allergenList = JSON.stringify(p.allergenList);
-  } else if (
-    p.allergenList &&
-    typeof p.allergenList === "object" &&
-    Array.isArray(p.allergenList.allergies)
-  ) {
-    allergenList = JSON.stringify(p.allergenList.allergies);
-  } else if (Array.isArray(p.allergens)) {
-    allergenList = JSON.stringify(p.allergens);
-  }
-
-  return {
-    id: p.id,
-    name: p.name ?? null,
-    isActive: p.isActive ? 1 : 1,
-    description: p.description ?? null,
-    category: p.category ?? null,
-    price: p.price ?? null,
-    preparationArea: p.preparationArea ?? null,
-    weight: p.weight ?? null,
-    productCode: p.productCode ?? null,
-    weightScale: p.weightScale ?? null,
-    productAvailableStock: p.productAvailableStock ?? null,
-    packagingMethod: p.packagingMethod
-      ? JSON.stringify(p.packagingMethod)
-      : null,
-    priceTierId: p.priceTierId ? JSON.stringify(p.priceTierId) : null,
-    allergenList:
-      allergenList && allergenList !== "[]" && allergenList !== "null"
-        ? allergenList
-        : null,
-    logoUrl: p.logoUrl ?? null,
-    logoHash: p.logoHash ?? null,
-    leadTime: p.leadTime ?? null,
-    availableAtStorefront: p.availableAtStorefront ? 1 : 0,
-    createdAtStorefront: p.createdAtStorefront ? 1 : 0,
-    isDeleted: p.isDeleted ? 1 : 0,
-    createdAt: p.createdAt ?? null,
-    updatedAt: p.updatedAt ?? null,
-    lastSyncedAt: p.lastSyncedAt ?? null,
-    outletId: p.outletId ?? null,
-  };
-};
+export const buildProductUpsertParams = (p: any): ProductUpsertParams => ({
+  id: p.id,
+  name: p.name ?? null,
+  isActive: p.isActive ? 1 : 0,
+  description: p.description ?? null,
+  category: p.category ?? null,
+  price: p.price ?? null,
+  preparationArea: p.preparationArea ?? null,
+  weight: p.weight ?? null,
+  productCode: p.productCode ?? null,
+  weightScale: p.weightScale ?? null,
+  productAvailableStock: p.productAvailableStock ?? null,
+  packagingMethod: p.packagingMethod ?? null,
+  priceTierId: p.priceTierId ?? null,
+  allergenList: p.allergenList ?? null,
+  logoUrl: p.logoUrl ?? null,
+  logoHash: p.logoHash ?? null,
+  leadTime: p.leadTime ?? null,
+  availableAtStorefront: p.availableAtStorefront ? 1 : 0,
+  createdAtStorefront: p.createdAtStorefront ? 1 : 0,
+  isDeleted: p.isDeleted ? 1 : 0,
+  createdAt: p.createdAt ?? null,
+  updatedAt: p.updatedAt ?? null,
+  lastSyncedAt: p.lastSyncedAt ?? null,
+  outletId: p.outletId ?? null,
+  version: Number(p.version ?? 0),
+});
 
 export const productSchema: TableSchema = {
   name: "product",

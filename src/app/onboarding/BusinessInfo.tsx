@@ -104,7 +104,8 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
     if (outletIdParam && selectedOutletId !== outletIdParam) {
       selectOutlet(outletIdParam);
     }
-  }, [outletIdParam, selectedOutletId, selectOutlet]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outletIdParam]);
 
   const showBackButton = Boolean(outletIdParam);
   const outlet = outlets.find((o) => o.id === outletIdParam) as unknown as
@@ -326,37 +327,42 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
         "Are you sure you want to reset the application? This will clear all data and cannot be undone.",
       )
     ) {
-      localStorage.clear();
-      sessionStorage.clear();
       const api = getElectronAPI();
       api?.factoryReset();
     }
   };
 
   const handleBack = () => {
-    if (!outletIdParam) {
-      navigate(-1);
-      return;
-    }
+    const currentId = outletIdParam || selectedOutletId;
 
-    const candidates = outlets.filter(
-      (o) => o.id !== outletIdParam && o.isOnboarded,
+    // Find any other outlet to switch to
+    const otherOutlets = outlets.filter(
+      (o) => o.id !== currentId && !o.isDeleted,
     );
-    const fallback = candidates[0] ?? null;
+
+    // Prioritize switching to an onboarded outlet, but any other will do
+    const fallback =
+      otherOutlets.find((o) => Boolean(o.isOnboarded)) || otherOutlets[0];
 
     if (fallback) {
       selectOutlet(fallback.id);
-      navigate("/dashboard", { replace: true });
+      if (Boolean(fallback.isOnboarded)) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate(`/onboarding?outletId=${fallback.id}`, { replace: true });
+      }
       return;
     }
 
-    if (selectedOutletId && selectedOutletId !== outletIdParam) {
-      selectOutlet(selectedOutletId);
-      navigate("/dashboard", { replace: true });
-      return;
+    // No other outlets found - if current is unonboarded, we can't go to dashboard
+    if (!outletIdParam) {
+      navigate(-1);
+    } else {
+      // If we are on a specific outlet onboarding and have no where else to go,
+      // just go back to the main onboarding step or auth if needed.
+      // But usually there's at least one outlet.
+      navigate("/onboarding", { replace: true });
     }
-
-    navigate("/dashboard", { replace: true });
   };
 
   // Show loading state

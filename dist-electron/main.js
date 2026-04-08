@@ -379,7 +379,8 @@ const userCreateSql = `
     providerData TEXT,
     createdAt TEXT,
     updatedAt TEXT,
-    lastSyncedAt TEXT
+    lastSyncedAt TEXT,
+    version INTEGER DEFAULT 0 NOT NULL
   );
 `;
 const userUpsertSql = `
@@ -405,7 +406,8 @@ const userUpsertSql = `
     providerData,
     createdAt,
     updatedAt,
-    lastSyncedAt
+    lastSyncedAt,
+    version
   ) VALUES (
     @id,
     @email,
@@ -428,7 +430,8 @@ const userUpsertSql = `
     @providerData,
     @createdAt,
     @updatedAt,
-    @lastSyncedAt
+    @lastSyncedAt,
+    @version
   )
 `;
 const buildUserUpsertParams = (u) => ({
@@ -439,7 +442,7 @@ const buildUserUpsertParams = (u) => ({
   pin: u.pin ?? null,
   otpCodeHash: u.otpCodeHash ?? null,
   otpCodeExpiry: u.otpCodeExpiry ?? null,
-  failedLoginCount: u.failedLoginCount ?? 0,
+  failedLoginCount: Number(u.failedLoginCount ?? 0),
   failedLoginRetryTime: u.failedLoginRetryTime ?? null,
   lastFailedLogin: u.lastFailedLogin ?? null,
   isEmailVerified: u.isEmailVerified ? 1 : 0,
@@ -450,10 +453,11 @@ const buildUserUpsertParams = (u) => ({
   authProvider: u.authProvider ?? null,
   providerId: u.providerId ?? null,
   publicId: u.publicId ?? null,
-  providerData: u.providerData && typeof u.providerData === "object" ? JSON.stringify(u.providerData) : u.providerData ?? null,
+  providerData: u.providerData ? JSON.stringify(u.providerData) : null,
   createdAt: u.createdAt ?? null,
   updatedAt: u.updatedAt ?? null,
-  lastSyncedAt: u.lastSyncedAt ?? null
+  lastSyncedAt: u.lastSyncedAt ?? null,
+  version: Number(u.version ?? 0)
 });
 const userSchema = {
   name: "user",
@@ -490,7 +494,8 @@ const productCreateSql = `
     createdAt TEXT,
     updatedAt TEXT,
     lastSyncedAt TEXT,
-    outletId TEXT
+    outletId TEXT,
+    version INTEGER DEFAULT 0 NOT NULL
   );
 `;
 const productUpsertSql = `
@@ -518,7 +523,8 @@ const productUpsertSql = `
     createdAt,
     updatedAt,
     lastSyncedAt,
-    outletId
+    outletId,
+    version
   ) VALUES (
     @id,
     @name,
@@ -543,45 +549,37 @@ const productUpsertSql = `
     @createdAt,
     @updatedAt,
     @lastSyncedAt,
-    @outletId
+    @outletId,
+    @version
   )
 `;
-const buildProductUpsertParams = (p) => {
-  let allergenList = null;
-  if (Array.isArray(p.allergenList)) {
-    allergenList = JSON.stringify(p.allergenList);
-  } else if (p.allergenList && typeof p.allergenList === "object" && Array.isArray(p.allergenList.allergies)) {
-    allergenList = JSON.stringify(p.allergenList.allergies);
-  } else if (Array.isArray(p.allergens)) {
-    allergenList = JSON.stringify(p.allergens);
-  }
-  return {
-    id: p.id,
-    name: p.name ?? null,
-    isActive: p.isActive ? 1 : 1,
-    description: p.description ?? null,
-    category: p.category ?? null,
-    price: p.price ?? null,
-    preparationArea: p.preparationArea ?? null,
-    weight: p.weight ?? null,
-    productCode: p.productCode ?? null,
-    weightScale: p.weightScale ?? null,
-    productAvailableStock: p.productAvailableStock ?? null,
-    packagingMethod: p.packagingMethod ? JSON.stringify(p.packagingMethod) : null,
-    priceTierId: p.priceTierId ? JSON.stringify(p.priceTierId) : null,
-    allergenList: allergenList && allergenList !== "[]" && allergenList !== "null" ? allergenList : null,
-    logoUrl: p.logoUrl ?? null,
-    logoHash: p.logoHash ?? null,
-    leadTime: p.leadTime ?? null,
-    availableAtStorefront: p.availableAtStorefront ? 1 : 0,
-    createdAtStorefront: p.createdAtStorefront ? 1 : 0,
-    isDeleted: p.isDeleted ? 1 : 0,
-    createdAt: p.createdAt ?? null,
-    updatedAt: p.updatedAt ?? null,
-    lastSyncedAt: p.lastSyncedAt ?? null,
-    outletId: p.outletId ?? null
-  };
-};
+const buildProductUpsertParams = (p) => ({
+  id: p.id,
+  name: p.name ?? null,
+  isActive: p.isActive ? 1 : 0,
+  description: p.description ?? null,
+  category: p.category ?? null,
+  price: p.price ?? null,
+  preparationArea: p.preparationArea ?? null,
+  weight: p.weight ?? null,
+  productCode: p.productCode ?? null,
+  weightScale: p.weightScale ?? null,
+  productAvailableStock: p.productAvailableStock ?? null,
+  packagingMethod: p.packagingMethod ?? null,
+  priceTierId: p.priceTierId ?? null,
+  allergenList: p.allergenList ?? null,
+  logoUrl: p.logoUrl ?? null,
+  logoHash: p.logoHash ?? null,
+  leadTime: p.leadTime ?? null,
+  availableAtStorefront: p.availableAtStorefront ? 1 : 0,
+  createdAtStorefront: p.createdAtStorefront ? 1 : 0,
+  isDeleted: p.isDeleted ? 1 : 0,
+  createdAt: p.createdAt ?? null,
+  updatedAt: p.updatedAt ?? null,
+  lastSyncedAt: p.lastSyncedAt ?? null,
+  outletId: p.outletId ?? null,
+  version: Number(p.version ?? 0)
+});
 const productSchema = {
   name: "product",
   create: productCreateSql,
@@ -635,7 +633,8 @@ const businessOutletCreateSql = `
     updatedAt TEXT,
     lastSyncedAt TEXT,
     businessId TEXT,
-    bankDetails TEXT
+    bankDetails TEXT,
+    version INTEGER DEFAULT 0 NOT NULL
   );
 `;
 const businessOutletUpsertSql = `
@@ -679,7 +678,8 @@ const businessOutletUpsertSql = `
     updatedAt,
     lastSyncedAt,
     businessId,
-    bankDetails
+    bankDetails,
+    version
   ) VALUES (
     @id,
     @name,
@@ -720,9 +720,9 @@ const businessOutletUpsertSql = `
     @updatedAt,
     @lastSyncedAt,
     @businessId,
-    @bankDetails
-  )
-  ON CONFLICT(id) DO UPDATE SET
+    @bankDetails,
+    @version
+  ) ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     description = excluded.description,
     address = excluded.address,
@@ -744,7 +744,9 @@ const businessOutletUpsertSql = `
     whatsappChannel = excluded.whatsappChannel,
     emailChannel = excluded.emailChannel,
     isDeleted = excluded.isDeleted,
-    isOnboarded = CASE WHEN business_outlet.isOnboarded = 1 THEN 1 ELSE excluded.isOnboarded END,
+    isOnboarded = excluded.isOnboarded,
+    isOfflineImage = excluded.isOfflineImage,
+    localLogoPath = excluded.localLogoPath,
     operatingHours = excluded.operatingHours,
     logoUrl = excluded.logoUrl,
     taxSettings = excluded.taxSettings,
@@ -755,14 +757,14 @@ const businessOutletUpsertSql = `
     labelSettings = excluded.labelSettings,
     invoiceSettings = excluded.invoiceSettings,
     generalSettings = excluded.generalSettings,
-    createdAt = excluded.createdAt,
     updatedAt = excluded.updatedAt,
-    lastSyncedAt = excluded.lastSyncedAt,
     businessId = excluded.businessId,
-    bankDetails = excluded.bankDetails
+    bankDetails = excluded.bankDetails,
+    version = excluded.version
+  WHERE excluded.version >= business_outlet.version OR excluded.updatedAt >= business_outlet.updatedAt OR business_outlet.updatedAt IS NULL
 `;
 const buildBusinessOutletUpsertParams = (o) => ({
-  id: o.id,
+  id: String(o.id || ""),
   name: o.name ?? null,
   description: o.description ?? null,
   address: o.address ?? null,
@@ -780,28 +782,29 @@ const buildBusinessOutletUpsertParams = (o) => ({
   outletRef: o.outletRef ?? null,
   isMainLocation: o.isMainLocation ? 1 : 0,
   businessType: o.businessType ?? null,
-  isActive: o.isActive ? 1 : 0,
-  whatsappChannel: o.whatsappChannel ? 1 : 0,
-  emailChannel: o.emailChannel ? 1 : 0,
-  isDeleted: o.isDeleted ?? 0,
-  isOnboarded: o.isOnboarded ?? 0,
-  isOfflineImage: o.isOfflineImage ?? 0,
+  isActive: o.isActive ? 1 : 1,
+  whatsappChannel: o.whatsappChannel ? 1 : 1,
+  emailChannel: o.emailChannel ? 1 : 1,
+  isDeleted: o.isDeleted ? 1 : 0,
+  isOnboarded: o.isOnboarded ? 1 : 0,
+  isOfflineImage: o.isOfflineImage ? 1 : 0,
   localLogoPath: o.localLogoPath ?? null,
-  operatingHours: o.operatingHours ?? null,
+  operatingHours: o.operatingHours ? JSON.stringify(o.operatingHours) : null,
   logoUrl: o.logoUrl ?? null,
-  taxSettings: o.taxSettings && typeof o.taxSettings === "object" ? JSON.stringify(o.taxSettings) : o.taxSettings ?? null,
-  serviceCharges: o.serviceCharges && typeof o.serviceCharges === "object" ? JSON.stringify(o.serviceCharges) : o.serviceCharges ?? null,
-  paymentMethods: o.paymentMethods && typeof o.paymentMethods === "object" ? JSON.stringify(o.paymentMethods) : o.paymentMethods ?? null,
-  priceTier: o.priceTier && typeof o.priceTier === "object" ? JSON.stringify(o.priceTier) : o.priceTier ?? null,
-  receiptSettings: o.receiptSettings && typeof o.receiptSettings === "object" ? JSON.stringify(o.receiptSettings) : o.receiptSettings ?? null,
-  labelSettings: o.labelSettings && typeof o.labelSettings === "object" ? JSON.stringify(o.labelSettings) : o.labelSettings ?? null,
-  invoiceSettings: o.invoiceSettings && typeof o.invoiceSettings === "object" ? JSON.stringify(o.invoiceSettings) : o.invoiceSettings ?? null,
-  generalSettings: o.generalSettings && typeof o.generalSettings === "object" ? JSON.stringify(o.generalSettings) : o.generalSettings ?? null,
+  taxSettings: o.taxSettings ? JSON.stringify(o.taxSettings) : null,
+  serviceCharges: o.serviceCharges ? JSON.stringify(o.serviceCharges) : null,
+  paymentMethods: o.paymentMethods ? JSON.stringify(o.paymentMethods) : null,
+  priceTier: o.priceTier ? JSON.stringify(o.priceTier) : null,
+  receiptSettings: o.receiptSettings ? JSON.stringify(o.receiptSettings) : null,
+  labelSettings: o.labelSettings ? JSON.stringify(o.labelSettings) : null,
+  invoiceSettings: o.invoiceSettings ? JSON.stringify(o.invoiceSettings) : null,
+  generalSettings: o.generalSettings ? JSON.stringify(o.generalSettings) : null,
   createdAt: o.createdAt ?? null,
   updatedAt: o.updatedAt ?? null,
   lastSyncedAt: o.lastSyncedAt ?? null,
   businessId: o.businessId ?? null,
-  bankDetails: o.bankDetails && typeof o.bankDetails === "object" ? JSON.stringify(o.bankDetails) : o.bankDetails ?? null
+  bankDetails: o.bankDetails ? JSON.stringify(o.bankDetails) : null,
+  version: Number(o.version ?? 0)
 });
 const businessOutletSchema = {
   name: "business_outlet",
@@ -830,7 +833,8 @@ const businessCreateSql = `
     createdAt TEXT,
     updatedAt TEXT,
     lastSyncedAt TEXT,
-    ownerId TEXT
+    ownerId TEXT,
+    version INTEGER DEFAULT 0 NOT NULL
   );
 `;
 const businessUpsertSql = `
@@ -848,7 +852,8 @@ const businessUpsertSql = `
     createdAt,
     updatedAt,
     lastSyncedAt,
-    ownerId
+    ownerId,
+    version
   ) VALUES (
     @id,
     @name,
@@ -863,7 +868,8 @@ const businessUpsertSql = `
     @createdAt,
     @updatedAt,
     @lastSyncedAt,
-    @ownerId
+    @ownerId,
+    @version
   )
 `;
 const buildBusinessUpsertParams = (b) => ({
@@ -880,7 +886,8 @@ const buildBusinessUpsertParams = (b) => ({
   createdAt: b.createdAt ?? null,
   updatedAt: b.updatedAt ?? null,
   lastSyncedAt: b.lastSyncedAt ?? null,
-  ownerId: b.ownerId ?? null
+  ownerId: b.ownerId ?? null,
+  version: Number(b.version ?? 0)
 });
 const businessSchema = {
   name: "business",
@@ -901,7 +908,8 @@ const businessRoleSchema = {
       permissions TEXT NOT NULL,
       createdAt TEXT,
       updatedAt TEXT,
-      businessId TEXT NOT NULL
+      businessId TEXT NOT NULL,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -929,7 +937,8 @@ const businessUserSchema = {
       lastSyncedAt TEXT,
       userId TEXT,
       outletId TEXT NOT NULL,
-      businessId TEXT NOT NULL
+      businessId TEXT NOT NULL,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `
 };
@@ -939,6 +948,7 @@ const businessUserRolesBusinessRoleSchema = {
     CREATE TABLE IF NOT EXISTS business_user_roles_business_role (
       businessUserId TEXT NOT NULL,
       businessRoleId TEXT NOT NULL,
+      version INTEGER DEFAULT 0 NOT NULL,
       PRIMARY KEY (businessUserId, businessRoleId)
     );
   `
@@ -1061,7 +1071,7 @@ const customersSchema = {
       deletedAt TEXT,
       reason TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: [
@@ -1079,10 +1089,39 @@ const customerAddressSchema = {
       isDefault INTEGER DEFAULT 0 NOT NULL,
       createdAt TEXT,
       updatedAt TEXT,
-      customerId TEXT
+      customerId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `
 };
+const customerAddressUpsertSql = `
+  INSERT INTO customer_address (
+    id, address, isDefault, createdAt, updatedAt, customerId, recordId, version
+  ) VALUES (
+    @id, @address, @isDefault, @createdAt, @updatedAt, @customerId, @recordId, @version
+  ) ON CONFLICT(id) DO UPDATE SET
+    address = excluded.address,
+    isDefault = excluded.isDefault,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    customerId = excluded.customerId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= customer_address.version OR excluded.updatedAt >= customer_address.updatedAt OR customer_address.updatedAt IS NULL
+`;
+function buildCustomerAddressUpsertParams(data) {
+  return {
+    id: data.id,
+    address: data.address,
+    isDefault: data.isDefault ? 1 : 0,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    customerId: data.customerId,
+    recordId: data.recordId || null,
+    version: data.version || 0
+  };
+}
 const cartUpsertSql = `
   INSERT INTO cart (
     id,
@@ -1153,7 +1192,7 @@ const cartSchema = {
       totalAmount REAL DEFAULT 0 NOT NULL,
       customerId TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: [
@@ -1217,7 +1256,7 @@ const cartItemSchema = {
       priceTierDiscount REAL DEFAULT 0 NOT NULL,
       priceTierMarkup REAL DEFAULT 0 NOT NULL,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: ["CREATE INDEX IF NOT EXISTS idx_cart_item_cartId ON cart_item(cartId)"]
@@ -1234,7 +1273,8 @@ const cartItemModifierSchema = {
       cartItemId TEXT,
       modifierId TEXT,
       priceTierDiscount REAL DEFAULT 0 NOT NULL,
-      priceTierMarkup REAL DEFAULT 0 NOT NULL
+      priceTierMarkup REAL DEFAULT 0 NOT NULL,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `
 };
@@ -1306,7 +1346,7 @@ const inventorySchema = {
       createdAt TEXT,
       updatedAt TEXT,
       recordId TEXT,
-      version INTEGER,
+      version INTEGER DEFAULT 0 NOT NULL,
       businessId TEXT,
       outletId TEXT
     );
@@ -1401,7 +1441,7 @@ const inventoryItemSchema = {
       itemMasterId TEXT NOT NULL,
       inventoryId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -1509,7 +1549,7 @@ const itemMasterSchema = {
       createdAt TEXT,
       updatedAt TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -1602,7 +1642,7 @@ const itemLotSchema = {
       updatedAt TEXT,
       itemId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -1627,7 +1667,8 @@ const recipeUpsertSql = `
     updatedAt,
     createdBy,
     isDeleted,
-    inventoryId
+    inventoryId,
+    version
   ) VALUES (
     @id,
     @name,
@@ -1645,7 +1686,8 @@ const recipeUpsertSql = `
     @updatedAt,
     @createdBy,
     @isDeleted,
-    @inventoryId
+    @inventoryId,
+    @version
   )
   ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
@@ -1662,7 +1704,8 @@ const recipeUpsertSql = `
     updatedAt = excluded.updatedAt,
     createdBy = excluded.createdBy,
     isDeleted = excluded.isDeleted,
-    inventoryId = excluded.inventoryId
+    inventoryId = excluded.inventoryId,
+    version = excluded.version
 `;
 const buildRecipeUpsertParams = (r) => ({
   id: r.id,
@@ -1681,7 +1724,8 @@ const buildRecipeUpsertParams = (r) => ({
   updatedAt: r.updatedAt || null,
   createdBy: r.createdBy || "",
   isDeleted: r.isDeleted ? 1 : 0,
-  inventoryId: r.inventoryId || null
+  inventoryId: r.inventoryId || null,
+  version: Number(r.version || 0)
 });
 const recipesSchema = {
   name: "recipes",
@@ -1703,7 +1747,8 @@ const recipesSchema = {
       updatedAt TEXT,
       createdBy TEXT NOT NULL,
       isDeleted INTEGER DEFAULT 0 NOT NULL,
-      inventoryId TEXT
+      inventoryId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `
 };
@@ -1720,7 +1765,8 @@ const recipeIngredientUpsertSql = `
     createdAt,
     updatedAt,
     recipeId,
-    itemId
+    itemId,
+    version
   ) VALUES (
     @id,
     @itemName,
@@ -1733,7 +1779,8 @@ const recipeIngredientUpsertSql = `
     @createdAt,
     @updatedAt,
     @recipeId,
-    @itemId
+    @itemId,
+    @version
   )
   ON CONFLICT(id) DO UPDATE SET
     itemName = excluded.itemName,
@@ -1745,7 +1792,8 @@ const recipeIngredientUpsertSql = `
     isDeleted = excluded.isDeleted,
     updatedAt = excluded.updatedAt,
     recipeId = excluded.recipeId,
-    itemId = excluded.itemId
+    itemId = excluded.itemId,
+    version = excluded.version
 `;
 const buildRecipeIngredientUpsertParams = (ri) => ({
   id: ri.id,
@@ -1759,7 +1807,8 @@ const buildRecipeIngredientUpsertParams = (ri) => ({
   createdAt: ri.createdAt || null,
   updatedAt: ri.updatedAt || null,
   recipeId: ri.recipeId || null,
-  itemId: ri.itemId || null
+  itemId: ri.itemId || null,
+  version: Number(ri.version || 0)
 });
 const recipeIngredientsSchema = {
   name: "recipe_ingredients",
@@ -1776,7 +1825,8 @@ const recipeIngredientsSchema = {
       createdAt TEXT,
       updatedAt TEXT,
       recipeId TEXT,
-      itemId TEXT
+      itemId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `
 };
@@ -1834,7 +1884,7 @@ const recipeVariantsSchema = {
       isDeleted INTEGER DEFAULT 0 NOT NULL,
       recipeId TEXT NOT NULL,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: [
@@ -1876,7 +1926,7 @@ const systemDefaultSchema = {
       data TEXT NOT NULL,
       outletId TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: [
@@ -1905,7 +1955,8 @@ const syncSessionSchema = {
       errorMessage TEXT,
       errorDetails TEXT,
       createdAt TEXT,
-      updatedAt TEXT
+      updatedAt TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `
 };
@@ -1928,7 +1979,8 @@ const syncTableLogSchema = {
       filterState TEXT,
       conflictsDetected INTEGER DEFAULT 0 NOT NULL,
       conflictsResolved INTEGER DEFAULT 0 NOT NULL,
-      createdAt TEXT
+      createdAt TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `
 };
@@ -1941,7 +1993,8 @@ const notificationsSchema = {
       message TEXT NOT NULL,
       isRead INTEGER DEFAULT 0 NOT NULL,
       createdAt TEXT,
-      userId TEXT
+      userId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `
 };
@@ -1957,7 +2010,7 @@ const paymentTermSchema = {
       paymentInInstallment TEXT, -- JSON string
       outletId TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0,
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       deletedAt DATETIME
@@ -2180,7 +2233,7 @@ const orderSchema = {
       markup REAL,
       deletedAt TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: [
@@ -2288,7 +2341,7 @@ const productionSchema = {
       metadata TEXT,
       outletId TEXT,
       recordId TEXT,
-      version INTEGER,
+      version INTEGER DEFAULT 0 NOT NULL,
       productionDueDate TEXT,
       productionManager TEXT
     );
@@ -2350,7 +2403,7 @@ const productionItemSchema = {
       productionId TEXT,
       orderId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -2451,7 +2504,7 @@ const invoiceSchema = {
       outletId TEXT,
       supplierId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -2538,7 +2591,7 @@ const invoiceItemSchema = {
       updatedAt TEXT,
       deletedAt TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -2639,7 +2692,7 @@ const supplierSchema = {
       deletedAt TEXT,
       outletId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -2706,7 +2759,7 @@ const supplierItemSchema = {
       supplierId TEXT,
       itemId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -2822,7 +2875,7 @@ const componentSchema = {
       deletedAt TEXT,
       inventoryId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -2919,7 +2972,7 @@ const componentItemSchema = {
       componentItemLotId TEXT,
       itemId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -3019,7 +3072,7 @@ const componentLotSchema = {
       updatedBy TEXT,
       componentId TEXT,
       recordId TEXT,
-      version INTEGER,
+      version INTEGER DEFAULT 0 NOT NULL,
       totalCost REAL
     );
   `,
@@ -3102,7 +3155,7 @@ const componentLotLogSchema = {
       deletedAt TEXT,
       lotId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [
@@ -3254,6 +3307,319 @@ const modifierOptionSchema = {
     `CREATE INDEX IF NOT EXISTS idx_modifier_option_modifierId ON modifier_option(modifierId);`
   ]
 };
+const productionV2UpsertSql = `
+  INSERT INTO productions_v2 (
+    id,
+    status,
+    previousStatus,
+    workflowPath,
+    recipeValidationStatus,
+    recipeValidationStrategy,
+    initiator,
+    inventoryCheckedBy,
+    inventoryApprovedBy,
+    productionStartedBy,
+    qcApprovedBy,
+    inventoryCheckedAt,
+    inventoryApprovedAt,
+    preparationStartedAt,
+    qcStartedAt,
+    readyAt,
+    cancelReason,
+    metadata,
+    createdAt,
+    updatedAt,
+    outletId,
+    batchId,
+    productionDate,
+    productionTime,
+    productionDueDate,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @status,
+    @previousStatus,
+    @workflowPath,
+    @recipeValidationStatus,
+    @recipeValidationStrategy,
+    @initiator,
+    @inventoryCheckedBy,
+    @inventoryApprovedBy,
+    @productionStartedBy,
+    @qcApprovedBy,
+    @inventoryCheckedAt,
+    @inventoryApprovedAt,
+    @preparationStartedAt,
+    @qcStartedAt,
+    @readyAt,
+    @cancelReason,
+    @metadata,
+    @createdAt,
+    @updatedAt,
+    @outletId,
+    @batchId,
+    @productionDate,
+    @productionTime,
+    @productionDueDate,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    status = excluded.status,
+    previousStatus = excluded.previousStatus,
+    workflowPath = excluded.workflowPath,
+    recipeValidationStatus = excluded.recipeValidationStatus,
+    recipeValidationStrategy = excluded.recipeValidationStrategy,
+    initiator = excluded.initiator,
+    inventoryCheckedBy = excluded.inventoryCheckedBy,
+    inventoryApprovedBy = excluded.inventoryApprovedBy,
+    productionStartedBy = excluded.productionStartedBy,
+    qcApprovedBy = excluded.qcApprovedBy,
+    inventoryCheckedAt = excluded.inventoryCheckedAt,
+    inventoryApprovedAt = excluded.inventoryApprovedAt,
+    preparationStartedAt = excluded.preparationStartedAt,
+    qcStartedAt = excluded.qcStartedAt,
+    readyAt = excluded.readyAt,
+    cancelReason = excluded.cancelReason,
+    metadata = excluded.metadata,
+    updatedAt = excluded.updatedAt,
+    outletId = excluded.outletId,
+    batchId = excluded.batchId,
+    productionDate = excluded.productionDate,
+    productionTime = excluded.productionTime,
+    productionDueDate = excluded.productionDueDate,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= productions_v2.version OR excluded.updatedAt >= productions_v2.updatedAt OR productions_v2.updatedAt IS NULL
+`;
+const buildProductionV2UpsertParams = (p) => ({
+  id: p.id,
+  status: p.status,
+  previousStatus: p.previousStatus,
+  workflowPath: p.workflowPath,
+  recipeValidationStatus: p.recipeValidationStatus,
+  recipeValidationStrategy: p.recipeValidationStrategy,
+  initiator: p.initiator,
+  inventoryCheckedBy: p.inventoryCheckedBy,
+  inventoryApprovedBy: p.inventoryApprovedBy,
+  productionStartedBy: p.productionStartedBy,
+  qcApprovedBy: p.qcApprovedBy,
+  inventoryCheckedAt: p.inventoryCheckedAt,
+  inventoryApprovedAt: p.inventoryApprovedAt,
+  preparationStartedAt: p.preparationStartedAt,
+  qcStartedAt: p.qcStartedAt,
+  readyAt: p.readyAt,
+  cancelReason: p.cancelReason,
+  metadata: p.metadata && typeof p.metadata === "object" ? JSON.stringify(p.metadata) : p.metadata,
+  createdAt: p.createdAt,
+  updatedAt: p.updatedAt,
+  outletId: p.outletId,
+  batchId: p.batchId,
+  productionDate: p.productionDate,
+  productionTime: p.productionTime,
+  productionDueDate: p.productionDueDate,
+  recordId: p.recordId,
+  version: Number(p.version || 0)
+});
+const productionV2Schema = {
+  name: "productions_v2",
+  create: `
+    CREATE TABLE IF NOT EXISTS productions_v2 (
+      id TEXT PRIMARY KEY,
+      status TEXT,
+      previousStatus TEXT,
+      workflowPath TEXT,
+      recipeValidationStatus TEXT,
+      recipeValidationStrategy TEXT,
+      initiator TEXT,
+      inventoryCheckedBy TEXT,
+      inventoryApprovedBy TEXT,
+      productionStartedBy TEXT,
+      qcApprovedBy TEXT,
+      inventoryCheckedAt TEXT,
+      inventoryApprovedAt TEXT,
+      preparationStartedAt TEXT,
+      qcStartedAt TEXT,
+      readyAt TEXT,
+      cancelReason TEXT,
+      metadata TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      outletId TEXT,
+      batchId TEXT,
+      productionDate TEXT,
+      productionTime TEXT,
+      productionDueDate TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_productions_v2_outletId ON productions_v2(outletId)",
+    "CREATE INDEX IF NOT EXISTS idx_productions_v2_status ON productions_v2(status)"
+  ]
+};
+const productionV2ItemUpsertSql = `
+  INSERT INTO production_v2_items (
+    id,
+    requestedQuantity,
+    removedQuantity,
+    finalQuantity,
+    status,
+    notes,
+    createdAt,
+    updatedAt,
+    productionId,
+    productId,
+    recipeId,
+    batchSize,
+    batchesRequired,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @requestedQuantity,
+    @removedQuantity,
+    @finalQuantity,
+    @status,
+    @notes,
+    @createdAt,
+    @updatedAt,
+    @productionId,
+    @productId,
+    @recipeId,
+    @batchSize,
+    @batchesRequired,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    requestedQuantity = excluded.requestedQuantity,
+    removedQuantity = excluded.removedQuantity,
+    finalQuantity = excluded.finalQuantity,
+    status = excluded.status,
+    notes = excluded.notes,
+    updatedAt = excluded.updatedAt,
+    productionId = excluded.productionId,
+    productId = excluded.productId,
+    recipeId = excluded.recipeId,
+    batchSize = excluded.batchSize,
+    batchesRequired = excluded.batchesRequired,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= production_v2_items.version OR excluded.updatedAt >= production_v2_items.updatedAt OR production_v2_items.updatedAt IS NULL
+`;
+const buildProductionV2ItemUpsertParams = (pi) => ({
+  id: pi.id,
+  requestedQuantity: Number(pi.requestedQuantity || 0),
+  removedQuantity: Number(pi.removedQuantity || 0),
+  finalQuantity: Number(pi.finalQuantity || 0),
+  status: pi.status,
+  notes: pi.notes,
+  createdAt: pi.createdAt,
+  updatedAt: pi.updatedAt,
+  productionId: pi.productionId,
+  productId: pi.productId,
+  recipeId: pi.recipeId,
+  batchSize: pi.batchSize,
+  batchesRequired: pi.batchesRequired,
+  recordId: pi.recordId,
+  version: Number(pi.version || 0)
+});
+const productionV2ItemSchema = {
+  name: "production_v2_items",
+  create: `
+    CREATE TABLE IF NOT EXISTS production_v2_items (
+      id TEXT PRIMARY KEY,
+      requestedQuantity REAL,
+      removedQuantity REAL,
+      finalQuantity REAL,
+      status TEXT,
+      notes TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      productionId TEXT,
+      productId TEXT,
+      recipeId TEXT,
+      batchSize TEXT,
+      batchesRequired INTEGER,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_items_productionId ON production_v2_items(productionId)",
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_items_productId ON production_v2_items(productId)"
+  ]
+};
+const productionV2TraceUpsertSql = `
+  INSERT INTO production_v2_traces (
+    id,
+    event,
+    fromStatus,
+    toStatus,
+    actorId,
+    metadata,
+    createdAt,
+    productionId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @event,
+    @fromStatus,
+    @toStatus,
+    @actorId,
+    @metadata,
+    @createdAt,
+    @productionId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    event = excluded.event,
+    fromStatus = excluded.fromStatus,
+    toStatus = excluded.toStatus,
+    actorId = excluded.actorId,
+    metadata = excluded.metadata,
+    productionId = excluded.productionId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= production_v2_traces.version OR production_v2_traces.version IS NULL
+`;
+const buildProductionV2TraceUpsertParams = (pt) => ({
+  id: pt.id,
+  event: pt.event,
+  fromStatus: pt.fromStatus,
+  toStatus: pt.toStatus,
+  actorId: pt.actorId,
+  metadata: pt.metadata && typeof pt.metadata === "object" ? JSON.stringify(pt.metadata) : pt.metadata,
+  createdAt: pt.createdAt,
+  productionId: pt.productionId,
+  recordId: pt.recordId,
+  version: Number(pt.version || 0)
+});
+const productionV2TraceSchema = {
+  name: "production_v2_traces",
+  create: `
+    CREATE TABLE IF NOT EXISTS production_v2_traces (
+      id TEXT PRIMARY KEY,
+      event TEXT,
+      fromStatus TEXT,
+      toStatus TEXT,
+      actorId TEXT,
+      metadata TEXT,
+      createdAt TEXT,
+      productionId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_traces_productionId ON production_v2_traces(productionId)"
+  ]
+};
 const schemas = [
   userSchema,
   productSchema,
@@ -3291,7 +3657,10 @@ const schemas = [
   componentLotSchema,
   componentLotLogSchema,
   modifierSchema,
-  modifierOptionSchema
+  modifierOptionSchema,
+  productionV2Schema,
+  productionV2ItemSchema,
+  productionV2TraceSchema
 ];
 var rng;
 var hasRequiredRng;
@@ -3597,6 +3966,23 @@ class DatabaseService {
     `);
     for (const schema2 of schemas) {
       this.db.exec(schema2.create);
+      try {
+        const tableInfo = this.db.prepare(`PRAGMA table_info(${schema2.name})`).all();
+        const hasVersion = tableInfo.some((col) => col.name === "version");
+        if (!hasVersion) {
+          console.log(
+            `[DatabaseService] Migrating table '${schema2.name}': adding 'version' column`
+          );
+          this.db.exec(
+            `ALTER TABLE ${schema2.name} ADD COLUMN version INTEGER DEFAULT 0 NOT NULL`
+          );
+        }
+      } catch (error2) {
+        console.error(
+          `[DatabaseService] Migration failed for table '${schema2.name}':`,
+          error2
+        );
+      }
       if (schema2.indexes?.length) {
         for (const index of schema2.indexes) {
           this.db.exec(index);
@@ -3750,6 +4136,18 @@ class DatabaseService {
       } catch (e) {
         if (!e.message.includes("duplicate column name")) {
           console.error(`Migration error (item_lot.${col}):`, e);
+        }
+      }
+    }
+    const customerAddressColumns = ["recordId", "version"];
+    for (const col of customerAddressColumns) {
+      try {
+        let type2 = "TEXT";
+        if (col === "version") type2 = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE customer_address ADD COLUMN ${col} ${type2}`);
+      } catch (e) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (customer_address.${col}):`, e);
         }
       }
     }
@@ -3927,6 +4325,9 @@ class DatabaseService {
       JSON.stringify(value)
     );
   }
+  deleteCache(key) {
+    this.prepare("DELETE FROM cache WHERE key = ?").run(key);
+  }
   // Image Queue Methods
   addToImageQueue(item) {
     this.prepare(
@@ -3947,24 +4348,154 @@ class DatabaseService {
     ).run(error2, id);
   }
   updateRecordColumn(tableName, recordId, columnName, value) {
-    if (/[^a-zA-Z0-9_]/.test(tableName) || /[^a-zA-Z0-9_]/.test(columnName)) {
+    if (/[^a-zA-Z0-9_.]/.test(tableName) || /[^a-zA-Z0-9_.]/.test(columnName)) {
       console.error(
         `[DatabaseService] Invalid table/column name: ${tableName}.${columnName}`
       );
       return;
     }
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    const sql = `UPDATE ${tableName} SET ${columnName} = ?, updatedAt = ? WHERE id = ?`;
-    this.prepare(sql).run(value, now, recordId);
+    let sql = "";
+    try {
+      const tableInfo = this.prepare(
+        `PRAGMA table_info(${tableName})`
+      ).all();
+      const hasVersion = tableInfo.some((col) => col.name === "version");
+      if (columnName.includes(".")) {
+        const parts = columnName.split(".");
+        const baseColumn = parts[0];
+        const jsonPath = "$." + parts.slice(1).join(".");
+        if (hasVersion) {
+          sql = `UPDATE ${tableName} SET ${baseColumn} = json_set(COALESCE(${baseColumn}, '{}'), ?, ?), version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`;
+        } else {
+          sql = `UPDATE ${tableName} SET ${baseColumn} = json_set(COALESCE(${baseColumn}, '{}'), ?, ?), updatedAt = ? WHERE id = ?`;
+        }
+        this.prepare(sql).run(jsonPath, value, now, recordId);
+      } else {
+        if (hasVersion) {
+          sql = `UPDATE ${tableName} SET ${columnName} = ?, version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`;
+        } else {
+          sql = `UPDATE ${tableName} SET ${columnName} = ?, updatedAt = ? WHERE id = ?`;
+        }
+        this.prepare(sql).run(value, now, recordId);
+      }
+    } catch (error2) {
+      console.error(
+        `[DatabaseService] Error updating ${tableName}.${columnName}:`,
+        error2
+      );
+    }
+  }
+  updateQueueWithNewUrl(tableName, recordId, columnName, newUrl) {
+    const pending = this.getPendingQueueItems();
+    for (const item of pending) {
+      try {
+        const op = JSON.parse(item.op);
+        const opTable = op.table || op.tableName || op.type;
+        const opId = op.recordId || op.id;
+        if (opTable === tableName && opId === recordId) {
+          const data = op.data || op.payload || {};
+          const parts = columnName.split(".");
+          let current = data;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (current[parts[i]] && typeof current[parts[i]] === "object") {
+              current = current[parts[i]];
+            } else {
+              current = null;
+              break;
+            }
+          }
+          if (current && typeof current === "object") {
+            current[parts[parts.length - 1]] = newUrl;
+          }
+          if (data.version !== void 0) {
+            data.version = (Number(data.version) || 0) + 1;
+          }
+          if (tableName === "business_outlet") {
+            if (data.isOfflineImage !== void 0) data.isOfflineImage = 0;
+            if (data.localLogoPath !== void 0) data.localLogoPath = null;
+          }
+          this.prepare("UPDATE sync_queue SET op = ? WHERE id = ?").run(
+            JSON.stringify(op),
+            item.id
+          );
+        }
+      } catch (e) {
+        console.error("[DatabaseService] Failed to update queue item:", e);
+      }
+    }
   }
   // Queue Methods
   addToQueue(op) {
+    this.detectAndQueueAssets(op);
+    const tableName = op.table || op.tableName || op.type;
+    const recordId = op.id || op.recordId;
+    op.data || op.payload || {};
+    if (tableName && recordId) {
+      try {
+        const tableInfo = this.prepare(
+          `PRAGMA table_info(${tableName})`
+        ).all();
+        const hasVersion = tableInfo.some((col) => col.name === "version");
+        if (hasVersion) {
+          this.prepare(
+            `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`
+          ).run((/* @__PURE__ */ new Date()).toISOString(), recordId);
+          const updatedRecord = this.prepare(
+            `SELECT version FROM ${tableName} WHERE id = ?`
+          ).get(recordId);
+          if (updatedRecord) {
+            if (op.data) op.data.version = updatedRecord.version;
+            if (op.payload) op.payload.version = updatedRecord.version;
+            if (!op.data && !op.payload && op.version !== void 0) {
+              op.version = updatedRecord.version;
+            }
+          }
+        }
+      } catch (error2) {
+        console.warn(
+          `[DatabaseService] Could not auto-increment version for ${tableName}:`,
+          error2
+        );
+      }
+    }
     this.prepare("INSERT INTO sync_queue (op, status) VALUES (?, ?)").run(
       JSON.stringify(op),
       "pending"
     );
   }
+  detectAndQueueAssets(op) {
+    const tableName = op.table || op.tableName || op.type;
+    const recordId = op.id || op.recordId;
+    const data = op.data || op.payload || {};
+    if (!tableName || !recordId || !data) return;
+    const scan = (obj, path2 = "") => {
+      if (typeof obj === "string" && obj.startsWith("asset:///")) {
+        console.log(
+          `[DatabaseService] Detected local asset in ${tableName}.${path2}: ${obj}`
+        );
+        this.addToImageQueue({
+          localPath: obj,
+          tableName,
+          recordId,
+          columnName: path2 || "unknown"
+          // If nested, path might be complex, but processOfflineImages handles specific columns
+        });
+      } else if (obj && typeof obj === "object") {
+        for (const [key, value] of Object.entries(obj)) {
+          scan(value, path2 ? `${path2}.${key}` : key);
+        }
+      }
+    };
+    scan(data);
+  }
   // System Default Methods
+  getRecord(tableName, id) {
+    if (/[^a-zA-Z0-9_]/.test(tableName)) return null;
+    return this.prepare(`SELECT * FROM ${tableName} WHERE id = ?`).get(
+      id
+    );
+  }
   getSystemDefaults(key, outletId) {
     if (outletId) {
       return this.prepare(
@@ -4235,6 +4766,12 @@ class DatabaseService {
           stmt.run(this.sanitize(buildCustomerUpsertParams(c)));
         }
       }
+      if (Array.isArray(data.customerAddresses) && data.customerAddresses.length > 0) {
+        const stmt = this.prepare(customerAddressUpsertSql);
+        for (const ca of data.customerAddresses) {
+          stmt.run(this.sanitize(buildCustomerAddressUpsertParams(ca)));
+        }
+      }
       if (Array.isArray(data.inventories) && data.inventories.length > 0) {
         const stmt = this.prepare(inventoryUpsertSql);
         for (const i of data.inventories) {
@@ -4271,10 +4808,28 @@ class DatabaseService {
           stmt.run(this.sanitize(buildProductionUpsertParams(p)));
         }
       }
+      if (Array.isArray(data.productionsV2) && data.productionsV2.length > 0) {
+        const stmt = this.prepare(productionV2UpsertSql);
+        for (const p of data.productionsV2) {
+          stmt.run(this.sanitize(buildProductionV2UpsertParams(p)));
+        }
+      }
       if (Array.isArray(data.productionItems) && data.productionItems.length > 0) {
         const stmt = this.prepare(productionItemUpsertSql);
         for (const pi of data.productionItems) {
           stmt.run(this.sanitize(buildProductionItemUpsertParams(pi)));
+        }
+      }
+      if (Array.isArray(data.productionV2Items) && data.productionV2Items.length > 0) {
+        const stmt = this.prepare(productionV2ItemUpsertSql);
+        for (const pi of data.productionV2Items) {
+          stmt.run(this.sanitize(buildProductionV2ItemUpsertParams(pi)));
+        }
+      }
+      if (Array.isArray(data.productionV2Traces) && data.productionV2Traces.length > 0) {
+        const stmt = this.prepare(productionV2TraceUpsertSql);
+        for (const pt of data.productionV2Traces) {
+          stmt.run(this.sanitize(buildProductionV2TraceUpsertParams(pt)));
         }
       }
       if (Array.isArray(data.invoices) && data.invoices.length > 0) {
@@ -22450,7 +23005,10 @@ class SyncService {
       );
       for (const item of pendingImages) {
         let filePath = item.localPath;
-        if (filePath.startsWith("file://")) {
+        if (filePath.startsWith("asset:///")) {
+          const filename = filePath.replace("asset:///", "");
+          filePath = path.join(app.getPath("userData"), "assets", filename);
+        } else if (filePath.startsWith("file://")) {
           filePath = filePath.replace("file://", "");
         }
         try {
@@ -22554,24 +23112,43 @@ ${signature}\r
           );
           if (item.tableName === "business_outlet" && item.columnName === "logoUrl") {
             this.db.run(
-              "UPDATE business_outlet SET isOfflineImage = 0, localLogoPath = NULL WHERE id = ?",
-              [item.recordId]
+              "UPDATE business_outlet SET isOfflineImage = 0, localLogoPath = NULL, version = version + 1, updatedAt = ? WHERE id = ?",
+              [(/* @__PURE__ */ new Date()).toISOString(), item.recordId]
             );
           }
-          this.db.markImageAsUploaded(item.id);
-          const records = this.db.query(
-            `SELECT * FROM ${item.tableName} WHERE id = ?`,
-            [item.recordId]
+          this.db.updateQueueWithNewUrl(
+            item.tableName,
+            item.recordId,
+            item.columnName,
+            newUrl
           );
-          if (records && records.length > 0) {
-            const record = records[0];
-            const syncOp = {
-              table: item.tableName,
-              action: SYNC_ACTIONS.UPDATE,
-              data: record,
-              id: item.recordId
-            };
-            this.db.addToQueue(syncOp);
+          this.db.markImageAsUploaded(item.id);
+          const pendingOps = this.db.getPendingQueueItems();
+          const isAlreadyInQueue = pendingOps.some((opItem) => {
+            try {
+              const op = JSON.parse(opItem.op);
+              const opTable = op.table || op.tableName || op.type;
+              const opId = op.recordId || op.id;
+              return opTable === item.tableName && opId === item.recordId;
+            } catch {
+              return false;
+            }
+          });
+          if (!isAlreadyInQueue) {
+            const records = this.db.query(
+              `SELECT * FROM ${item.tableName} WHERE id = ?`,
+              [item.recordId]
+            );
+            if (records && records.length > 0) {
+              const record = records[0];
+              const syncOp = {
+                table: item.tableName,
+                action: SYNC_ACTIONS.UPDATE,
+                data: record,
+                id: item.recordId
+              };
+              this.db.addToQueue(syncOp);
+            }
           }
         } else {
           console.error(`[SyncService] Upload response missing URL`, data);
@@ -22591,6 +23168,26 @@ ${signature}\r
       if (itemsToSync.length === 0) {
         this.isSyncing = false;
         return;
+      }
+      const pendingImages = this.db.getPendingImageUploads();
+      if (pendingImages.length > 0) {
+        const itemIds = itemsToSync.map((i) => {
+          try {
+            const op = JSON.parse(i.op);
+            return op.recordId || op.id;
+          } catch {
+            return null;
+          }
+        }).filter(Boolean);
+        const relatedImages = pendingImages.filter(
+          (img) => itemIds.includes(img.recordId)
+        );
+        if (relatedImages.length > 0) {
+          console.log(
+            `[SyncService] Found ${relatedImages.length} related pending images. Processing before push...`
+          );
+          await this.processOfflineImages();
+        }
       }
       console.log(
         `[SyncService] Syncing ${itemsToSync.length} items to ${PUSH_ENDPOINT}...`
@@ -22697,8 +23294,113 @@ ${signature}\r
           updatedAt: item.created_at
         };
       });
-      console.log("Recordss stuff", records[0].payload);
-      const payload = { records };
+      console.log("Recordss stuff", records);
+      const finalizedRecords = records.map((record) => {
+        try {
+          this.db.run(
+            `UPDATE ${record.tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
+            [(/* @__PURE__ */ new Date()).toISOString(), record.recordId]
+          );
+        } catch (e) {
+          console.warn(
+            `[SyncService] Could not increment version for ${record.tableName}:`,
+            e
+          );
+        }
+        const currentData = this.db.getRecord(
+          record.tableName,
+          record.recordId
+        );
+        if (currentData) {
+          const sanitizedPayload = { ...currentData };
+          const booleanFields = [
+            "isMainLocation",
+            "isActive",
+            "whatsappChannel",
+            "emailChannel",
+            "isDeleted",
+            "isOnboarded",
+            "isOfflineImage",
+            "isEmailVerified",
+            "isPin",
+            "showInPos",
+            "limitTotalSelection",
+            "limitQuantity"
+          ];
+          for (const field of booleanFields) {
+            if (typeof sanitizedPayload[field] === "number") {
+              sanitizedPayload[field] = sanitizedPayload[field] === 1;
+            }
+          }
+          const jsonFieldsMap = {
+            product: ["packagingMethod", "priceTierId", "allergenList"],
+            customers: ["otherEmails", "otherPhoneNumbers", "otherNames"],
+            business_outlet: [
+              "operatingHours",
+              "taxSettings",
+              "serviceCharges",
+              "paymentMethods",
+              "priceTier",
+              "receiptSettings",
+              "labelSettings",
+              "invoiceSettings",
+              "bankDetails",
+              "generalSettings"
+            ],
+            orders: ["timeline"],
+            payment_terms: ["paymentInInstallment"],
+            system_default: ["data"]
+          };
+          const fieldsToParse = jsonFieldsMap[record.tableName] || [];
+          for (const field of fieldsToParse) {
+            if (typeof sanitizedPayload[field] === "string") {
+              try {
+                const parsed = JSON.parse(sanitizedPayload[field]);
+                if (parsed && typeof parsed === "object") {
+                  sanitizedPayload[field] = parsed;
+                }
+              } catch {
+              }
+            }
+          }
+          if (record.tableName === "product" && Array.isArray(sanitizedPayload.allergenList)) {
+            sanitizedPayload.allergenList = {
+              allergies: sanitizedPayload.allergenList
+            };
+          }
+          if (record.tableName === "customers") {
+            const toStringArray = (val) => {
+              if (Array.isArray(val))
+                return val.map((v) => String(v || "").trim()).filter(Boolean);
+              if (typeof val !== "string") return [];
+              const trimmed = val.trim();
+              if (!trimmed) return [];
+              return trimmed.split(",").map((v) => String(v || "").trim()).filter(Boolean);
+            };
+            if (typeof sanitizedPayload.otherEmails === "string") {
+              sanitizedPayload.otherEmails = toStringArray(
+                sanitizedPayload.otherEmails
+              );
+            }
+            if (typeof sanitizedPayload.otherPhoneNumbers === "string") {
+              sanitizedPayload.otherPhoneNumbers = toStringArray(
+                sanitizedPayload.otherPhoneNumbers
+              );
+            }
+            if (typeof sanitizedPayload.otherNames === "string") {
+              sanitizedPayload.otherNames = toStringArray(
+                sanitizedPayload.otherNames
+              );
+            }
+          }
+          return {
+            ...record,
+            payload: sanitizedPayload
+          };
+        }
+        return record;
+      });
+      const payload = { records: finalizedRecords };
       console.log(payload);
       const response = await net.fetch(PUSH_ENDPOINT, {
         method: "POST",
@@ -23524,7 +24226,8 @@ function createProductRecord(db, payload, id, now) {
         createdAt,
         updatedAt,
         lastSyncedAt,
-        outletId
+        outletId,
+        version
       ) VALUES (
         @id,
         @name,
@@ -23549,7 +24252,8 @@ function createProductRecord(db, payload, id, now) {
         @createdAt,
         @updatedAt,
         @lastSyncedAt,
-        @outletId
+        @outletId,
+        @version
       )
     `;
   const effectiveAllergenList = payload.allergenList && payload.allergenList.length > 0 ? payload.allergenList : payload.allergens && payload.allergens.length > 0 ? payload.allergens : [];
@@ -23577,7 +24281,8 @@ function createProductRecord(db, payload, id, now) {
     createdAt: payload.createdAt ?? now,
     updatedAt: payload.updatedAt ?? now,
     lastSyncedAt: payload.lastSyncedAt ?? null,
-    outletId: payload.outletId ?? null
+    outletId: payload.outletId ?? null,
+    version: payload.version ?? 0
   };
   db.run(sql, row);
   return row;
@@ -23850,6 +24555,7 @@ app.whenReady().then(() => {
     "cache:put",
     (_event, key, value) => dbService.putCache(key, value)
   );
+  ipcMain.handle("cache:delete", (_event, key) => dbService.deleteCache(key));
   ipcMain.handle(
     "db:saveOutletOnboarding",
     (_event, payload) => saveOutletOnboarding(dbService, payload)

@@ -22,7 +22,8 @@ export const syncSessionSchema: TableSchema = {
       errorMessage TEXT,
       errorDetails TEXT,
       createdAt TEXT,
-      updatedAt TEXT
+      updatedAt TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
 };

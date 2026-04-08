@@ -113,7 +113,7 @@ export const componentLotSchema: TableSchema = {
       updatedBy TEXT,
       componentId TEXT,
       recordId TEXT,
-      version INTEGER,
+      version INTEGER DEFAULT 0 NOT NULL,
       totalCost REAL
     );
   `,

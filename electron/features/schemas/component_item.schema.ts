@@ -110,7 +110,7 @@ export const componentItemSchema: TableSchema = {
       componentItemLotId TEXT,
       itemId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

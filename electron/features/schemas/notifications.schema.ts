@@ -10,7 +10,8 @@ export const notificationsSchema: TableSchema = {
       message TEXT NOT NULL,
       isRead INTEGER DEFAULT 0 NOT NULL,
       createdAt TEXT,
-      userId TEXT
+      userId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
 };

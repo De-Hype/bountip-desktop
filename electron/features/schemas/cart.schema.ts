@@ -73,7 +73,7 @@ export const cartSchema: TableSchema = {
       totalAmount REAL DEFAULT 0 NOT NULL,
       customerId TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: [

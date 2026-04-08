@@ -101,7 +101,7 @@ export const productionSchema: TableSchema = {
       metadata TEXT,
       outletId TEXT,
       recordId TEXT,
-      version INTEGER,
+      version INTEGER DEFAULT 0 NOT NULL,
       productionDueDate TEXT,
       productionManager TEXT
     );

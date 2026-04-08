@@ -56,7 +56,7 @@ export const recipeVariantsSchema: TableSchema = {
       isDeleted INTEGER DEFAULT 0 NOT NULL,
       recipeId TEXT NOT NULL,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: [

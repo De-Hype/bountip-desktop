@@ -72,7 +72,7 @@ export const supplierItemSchema: TableSchema = {
       supplierId TEXT,
       itemId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

@@ -12,7 +12,7 @@ export const paymentTermSchema: TableSchema = {
       paymentInInstallment TEXT, -- JSON string
       outletId TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0,
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       deletedAt DATETIME

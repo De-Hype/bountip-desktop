@@ -13,7 +13,8 @@ export const recipeIngredientUpsertSql = `
     createdAt,
     updatedAt,
     recipeId,
-    itemId
+    itemId,
+    version
   ) VALUES (
     @id,
     @itemName,
@@ -26,7 +27,8 @@ export const recipeIngredientUpsertSql = `
     @createdAt,
     @updatedAt,
     @recipeId,
-    @itemId
+    @itemId,
+    @version
   )
   ON CONFLICT(id) DO UPDATE SET
     itemName = excluded.itemName,
@@ -38,7 +40,8 @@ export const recipeIngredientUpsertSql = `
     isDeleted = excluded.isDeleted,
     updatedAt = excluded.updatedAt,
     recipeId = excluded.recipeId,
-    itemId = excluded.itemId
+    itemId = excluded.itemId,
+    version = excluded.version
 `;
 
 export const buildRecipeIngredientUpsertParams = (ri: any) => ({
@@ -54,6 +57,7 @@ export const buildRecipeIngredientUpsertParams = (ri: any) => ({
   updatedAt: ri.updatedAt || null,
   recipeId: ri.recipeId || null,
   itemId: ri.itemId || null,
+  version: Number(ri.version || 0),
 });
 
 export const recipeIngredientsSchema: TableSchema = {
@@ -72,7 +76,8 @@ export const recipeIngredientsSchema: TableSchema = {
       createdAt TEXT,
       updatedAt TEXT,
       recipeId TEXT,
-      itemId TEXT
+      itemId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
 };

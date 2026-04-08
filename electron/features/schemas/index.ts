@@ -36,6 +36,9 @@ import { componentLotSchema } from "./component_lot.schema";
 import { componentLotLogSchema } from "./component_lot_log.schema";
 import { modifierSchema } from "./modifier.schema";
 import { modifierOptionSchema } from "./modifier_option.schema";
+import { productionV2Schema } from "./production_v2.schema";
+import { productionV2ItemSchema } from "./production_v2_item.schema";
+import { productionV2TraceSchema } from "./production_v2_trace.schema";
 
 export const schemas: TableSchema[] = [
   userSchema,
@@ -75,4 +78,7 @@ export const schemas: TableSchema[] = [
   componentLotLogSchema,
   modifierSchema,
   modifierOptionSchema,
+  productionV2Schema,
+  productionV2ItemSchema,
+  productionV2TraceSchema,
 ];

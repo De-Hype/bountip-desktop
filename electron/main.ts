@@ -208,6 +208,7 @@ app.whenReady().then(() => {
   ipcMain.handle("cache:put", (_event, key, value) =>
     dbService.putCache(key, value),
   );
+  ipcMain.handle("cache:delete", (_event, key) => dbService.deleteCache(key));
 
   ipcMain.handle("db:saveOutletOnboarding", (_event, payload) =>
     saveOutletOnboarding(dbService, payload),

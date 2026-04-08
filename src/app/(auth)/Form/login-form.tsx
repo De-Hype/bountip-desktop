@@ -64,29 +64,36 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   });
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem("bountip_login_lock");
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as { until?: number };
-      if (parsed.until && parsed.until > Date.now()) {
-        setLockUntil(parsed.until);
-      } else {
-        window.localStorage.removeItem("bountip_login_lock");
-      }
-    } catch {}
+    const checkLock = async () => {
+      const api = (window as any).electronAPI;
+      if (!api?.cacheGet) return;
+
+      const raw = await api.cacheGet("bountip_login_lock");
+      if (!raw) return;
+
+      try {
+        const parsed = raw as { until?: number };
+        if (parsed.until && parsed.until > Date.now()) {
+          setLockUntil(parsed.until);
+        } else {
+          api.cacheDelete("bountip_login_lock");
+        }
+      } catch {}
+    };
+    checkLock();
   }, []);
 
   useEffect(() => {
     if (!lockUntil) return;
-    const update = () => {
+    const update = async () => {
       const diff = lockUntil - Date.now();
       if (diff <= 0) {
         setLockUntil(null);
         setFailedAttempts(0);
         setLockRemainingMs(0);
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem("bountip_login_lock");
+        const api = (window as any).electronAPI;
+        if (api?.cacheDelete) {
+          await api.cacheDelete("bountip_login_lock");
         }
       } else {
         setLockRemainingMs(diff);
@@ -182,8 +189,8 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       setFailedAttempts(0);
       setLockUntil(null);
       setLockRemainingMs(0);
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem("bountip_login_lock");
+      if (api?.cacheDelete) {
+        await api.cacheDelete("bountip_login_lock");
       }
       setAuth({
         user: {
@@ -291,11 +298,8 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         const until = Date.now() + lockMs;
         setLockUntil(until);
         setFailedAttempts(0);
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(
-            "bountip_login_lock",
-            JSON.stringify({ until }),
-          );
+        if (api?.cachePut) {
+          api.cachePut("bountip_login_lock", { until });
         }
         showToast(
           "error",
@@ -339,11 +343,8 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
           const lockMs = 5 * 60 * 1000;
           const until = Date.now() + lockMs;
           setLockUntil(until);
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(
-              "bountip_login_lock",
-              JSON.stringify({ until }),
-            );
+          if (api?.cachePut) {
+            api.cachePut("bountip_login_lock", { until });
           }
           showToast(
             "error",

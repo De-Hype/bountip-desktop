@@ -7,6 +7,7 @@ export const businessUserRolesBusinessRoleSchema: TableSchema = {
     CREATE TABLE IF NOT EXISTS business_user_roles_business_role (
       businessUserId TEXT NOT NULL,
       businessRoleId TEXT NOT NULL,
+      version INTEGER DEFAULT 0 NOT NULL,
       PRIMARY KEY (businessUserId, businessRoleId)
     );
   `,

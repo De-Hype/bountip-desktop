@@ -59,7 +59,7 @@ export const cartItemSchema: TableSchema = {
       priceTierDiscount REAL DEFAULT 0 NOT NULL,
       priceTierMarkup REAL DEFAULT 0 NOT NULL,
       recordId TEXT,
-      version INTEGER DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
     );
   `,
   indexes: ["CREATE INDEX IF NOT EXISTS idx_cart_item_cartId ON cart_item(cartId)"],

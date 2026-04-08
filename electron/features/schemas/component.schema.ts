@@ -132,7 +132,7 @@ export const componentSchema: TableSchema = {
       deletedAt TEXT,
       inventoryId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

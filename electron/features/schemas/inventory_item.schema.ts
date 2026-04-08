@@ -88,7 +88,7 @@ export const inventoryItemSchema: TableSchema = {
       itemMasterId TEXT NOT NULL,
       inventoryId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

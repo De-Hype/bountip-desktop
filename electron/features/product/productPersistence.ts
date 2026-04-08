@@ -56,6 +56,7 @@ export type ProductRow = {
   updatedAt: string;
   lastSyncedAt: string | null;
   outletId: string | null;
+  version: number;
 };
 
 export type ProductSyncOp = {
@@ -69,7 +70,7 @@ export type ProductSyncOp = {
 
 export function createProductRecord(
   db: DatabaseService,
-  payload: ProductCreatePayload,
+  payload: ProductCreatePayload & { version?: number },
   id: string,
   now: string,
 ): ProductRow {
@@ -98,7 +99,8 @@ export function createProductRecord(
         createdAt,
         updatedAt,
         lastSyncedAt,
-        outletId
+        outletId,
+        version
       ) VALUES (
         @id,
         @name,
@@ -123,7 +125,8 @@ export function createProductRecord(
         @createdAt,
         @updatedAt,
         @lastSyncedAt,
-        @outletId
+        @outletId,
+        @version
       )
     `;
 
@@ -167,6 +170,7 @@ export function createProductRecord(
     updatedAt: payload.updatedAt ?? now,
     lastSyncedAt: payload.lastSyncedAt ?? null,
     outletId: payload.outletId ?? null,
+    version: payload.version ?? 0,
   };
 
   db.run(sql, row);

@@ -15,6 +15,7 @@ export type BusinessUpsertParams = {
   updatedAt: string | null;
   lastSyncedAt: string | null;
   ownerId: string | null;
+  version: number;
 };
 
 export const businessCreateSql = `
@@ -33,7 +34,8 @@ export const businessCreateSql = `
     createdAt TEXT,
     updatedAt TEXT,
     lastSyncedAt TEXT,
-    ownerId TEXT
+    ownerId TEXT,
+    version INTEGER DEFAULT 0 NOT NULL
   );
 `;
 
@@ -52,7 +54,8 @@ export const businessUpsertSql = `
     createdAt,
     updatedAt,
     lastSyncedAt,
-    ownerId
+    ownerId,
+    version
   ) VALUES (
     @id,
     @name,
@@ -67,7 +70,8 @@ export const businessUpsertSql = `
     @createdAt,
     @updatedAt,
     @lastSyncedAt,
-    @ownerId
+    @ownerId,
+    @version
   )
 `;
 
@@ -86,6 +90,7 @@ export const buildBusinessUpsertParams = (b: any): BusinessUpsertParams => ({
   updatedAt: b.updatedAt ?? null,
   lastSyncedAt: b.lastSyncedAt ?? null,
   ownerId: b.ownerId ?? null,
+  version: Number(b.version ?? 0),
 });
 
 export const businessSchema: TableSchema = {

@@ -2,14 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import AssetsFiles from "@/assets";
 import SettingsAssets from "@/assets/images/settings";
-import {
-  Star,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { GoDotFill } from "react-icons/go";
-import { BusinessOutlet } from "@/types/storefront";
+import { BusinessOutlet, ProductType } from "@/types/storefront";
 import storeFrontService from "@/services/storefrontService";
+import { Pagination } from "@/shared/Pagination/pagination";
+import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 
 const categorySliderVariants = {
   enter: (direction: 1 | -1) => ({
@@ -23,103 +21,30 @@ const categorySliderVariants = {
   }),
 };
 
-type PreviewProduct = {
-  id: number;
-  badge: string;
-  name: string;
-  description: string;
-  rating: string;
-  reviews: string;
-  time: string;
-  price: string;
-  oldPrice: string;
-  image: string;
-};
-
-const previewProducts: PreviewProduct[] = [
-  {
-    id: 1,
-    badge: "Popular",
-    name: "Cake",
-    description:
-      "Classic Italian pizza with fresh mozzarella, basil, and tomato sauce",
-    rating: "4.5",
-    reviews: "(324)",
-    time: "25-30 Mins",
-    price: "£18.98",
-    oldPrice: "£19",
-    image: AssetsFiles.AuthBgImage,
-  },
-  {
-    id: 2,
-    badge: "Premium",
-    name: "Cookies",
-    description:
-      "Fresh romaine lettuce with grilled chicken, parmesan cheese, and caesar dressing",
-    rating: "4.6",
-    reviews: "(234)",
-    time: "10-15 Mins",
-    price: "£14.98",
-    oldPrice: "£19",
-    image: AssetsFiles.AuthBgImage,
-  },
-  {
-    id: 3,
-    badge: "Premium",
-    name: "English Breakfast",
-    description:
-      "Juicy beef patty with lettuce, tomato, cheese, and our special sauce",
-    rating: "4.9",
-    reviews: "(234)",
-    time: "10-15 Mins",
-    price: "£12.98",
-    oldPrice: "£19",
-    image: AssetsFiles.AuthBgImage,
-  },
-  {
-    id: 1,
-    badge: "Popular",
-    name: "Cake",
-    description:
-      "Classic Italian pizza with fresh mozzarella, basil, and tomato sauce",
-    rating: "4.5",
-    reviews: "(324)",
-    time: "25-30 Mins",
-    price: "£18.98",
-    oldPrice: "£19",
-    image: AssetsFiles.AuthBgImage,
-  },
-  {
-    id: 2,
-    badge: "Premium",
-    name: "Cookies",
-    description:
-      "Fresh romaine lettuce with grilled chicken, parmesan cheese, and caesar dressing",
-    rating: "4.6",
-    reviews: "(234)",
-    time: "10-15 Mins",
-    price: "£14.98",
-    oldPrice: "£19",
-    image: AssetsFiles.AuthBgImage,
-  },
-  {
-    id: 3,
-    badge: "Premium",
-    name: "English Breakfast",
-    description:
-      "Juicy beef patty with lettuce, tomato, cheese, and our special sauce",
-    rating: "4.9",
-    reviews: "(234)",
-    time: "10-15 Mins",
-    price: "£12.98",
-    oldPrice: "£19",
-    image: AssetsFiles.AuthBgImage,
-  },
-];
-
 type PreviewStoreFrontType = {
   storeInfo: BusinessOutlet | null;
 };
+
+const ProductCardSkeleton = () => (
+  <div className="flex flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_10px_25px_rgba(0,0,0,0.08)] animate-pulse">
+    <div className="relative h-40 w-full bg-gray-200" />
+    <div className="flex flex-1 flex-col gap-2 px-4 py-3">
+      <div className="h-4 w-3/4 rounded bg-gray-200" />
+      <div className="space-y-1">
+        <div className="h-3 w-full rounded bg-gray-200" />
+        <div className="h-3 w-5/6 rounded bg-gray-200" />
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="h-4 w-12 rounded bg-gray-200" />
+        <div className="h-4 w-16 rounded bg-gray-200" />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="h-5 w-16 rounded bg-gray-200" />
+        <div className="h-8 w-20 rounded-full bg-gray-200" />
+      </div>
+    </div>
+  </div>
+);
 
 const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
   console.log(storeInfo);
@@ -132,6 +57,26 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
   const [categoryDirection, setCategoryDirection] = useState<1 | -1>(1);
   const [now, setNow] = useState(() => new Date());
 
+  const currencySymbol = useMemo(() => {
+    return getCurrencySymbol(storeInfo.currency || "NGN");
+  }, [storeInfo.currency]);
+
+  const formatPrice = (price: string | number) => {
+    const num = typeof price === "string" ? parseFloat(price) : price;
+    if (isNaN(num)) return `${currencySymbol}0.00`;
+    return `${currencySymbol}${num.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
+
+  // Product pagination states
+  const [products, setProducts] = useState<ProductType[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     const code = String(storeInfo?.storeCode || "").trim();
@@ -140,9 +85,7 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
       setCategories(["All"]);
       setActiveCategory("All");
       setCategoryStartIndex(0);
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
     (async () => {
@@ -185,6 +128,38 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
       cancelled = true;
     };
   }, [storeInfo?.storeCode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const code = String(storeInfo?.storeCode || "").trim();
+
+    if (!code) return;
+
+    (async () => {
+      try {
+        setIsLoadingProducts(true);
+        const res = await storeFrontService.loadProductForPreview(
+          code,
+          itemsPerPage,
+          currentPage,
+        );
+        if (!cancelled && res?.status) {
+          setProducts(res.data.data || []);
+          setTotalCount(res.data.meta?.total || 0);
+        }
+      } catch (err) {
+        console.error("Failed to load products for preview:", err);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingProducts(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storeInfo?.storeCode, currentPage, itemsPerPage]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 30_000);
@@ -571,79 +546,107 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-3">
-              {previewProducts.map((product) => (
-                <div
-                  key={product.id}
-                  className="flex flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_10px_25px_rgba(0,0,0,0.08)]"
-                >
-                  <div className="relative h-40 w-full">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="h-full w-full object-cover"
-                    />
-                    <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1 text-xs font-medium text-[#111827] shadow-sm">
-                      {product.badge}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-1 flex-col gap-2 px-4 py-3">
-                    <p className="text-sm font-semibold text-[#111827]">
-                      {product.name}
-                    </p>
-                    <p className="text-xs text-[#6B7280]">
-                      {product.description}
-                    </p>
-
-                    <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-1 text-[#111827]">
-                        <Star
-                          className="h-4 w-4 text-[#FACC15]"
-                          fill="#FACC15"
-                        />
-                        <span className="font-medium">{product.rating}</span>
-                        <span className="text-[#6B7280]">
-                          {product.reviews}
+              {isLoadingProducts ? (
+                <>
+                  <ProductCardSkeleton />
+                  <ProductCardSkeleton />
+                  <ProductCardSkeleton />
+                  <ProductCardSkeleton />
+                  <ProductCardSkeleton />
+                  <ProductCardSkeleton />
+                </>
+              ) : products.length > 0 ? (
+                products.map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_10px_25px_rgba(0,0,0,0.08)]"
+                  >
+                    <div className="relative h-40 w-full">
+                      <img
+                        src={product.logoUrl || AssetsFiles.AuthBgImage}
+                        alt={product.name}
+                        className="h-full w-full object-cover"
+                      />
+                      {product.availableAtStorefront && (
+                        <span className="absolute left-4 top-4 rounded-full bg-[#15BA5C] px-3 py-1 text-xs font-medium text-white shadow-sm">
+                          Available
                         </span>
-                      </div>
-                      <div className="flex items-center gap-1 text-[#16A34A]">
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 14 14"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M6.74813 1.26562C3.72036 1.26562 1.26562 3.72036 1.26562 6.74813C1.26562 9.77589 3.72036 12.2306 6.74813 12.2306C9.77589 12.2306 12.2306 9.77589 12.2306 6.74813C12.2306 3.72036 9.77589 1.26562 6.74813 1.26562ZM9.27851 7.59159H6.74813C6.63628 7.59159 6.52901 7.54716 6.44992 7.46807C6.37083 7.38898 6.3264 7.28171 6.3264 7.16986V3.37428C6.3264 3.26243 6.37083 3.15516 6.44992 3.07607C6.52901 2.99698 6.63628 2.95255 6.74813 2.95255C6.85998 2.95255 6.96724 2.99698 7.04633 3.07607C7.12542 3.15516 7.16986 3.26243 7.16986 3.37428V6.74813H9.27851C9.39036 6.74813 9.49763 6.79256 9.57672 6.87165C9.65581 6.95074 9.70024 7.05801 9.70024 7.16986C9.70024 7.28171 9.65581 7.38898 9.57672 7.46807C9.49763 7.54716 9.39036 7.59159 9.27851 7.59159Z"
-                            fill="#15BA5C"
+                      )}
+                    </div>
+
+                    <div className="flex flex-1 flex-col gap-2 px-4 py-3">
+                      <p className="text-sm font-semibold text-[#111827]">
+                        {product.name}
+                      </p>
+                      <p className="line-clamp-2 text-xs text-[#6B7280]">
+                        {product.description}
+                      </p>
+
+                      <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1 text-[#111827]">
+                          <Star
+                            className="h-4 w-4 text-[#FACC15]"
+                            fill="#FACC15"
                           />
-                        </svg>
+                          <span className="font-medium">4.5</span>
+                          <span className="text-[#6B7280]">(0)</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[#16A34A]">
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M6.74813 1.26562C3.72036 1.26562 1.26562 3.72036 1.26562 6.74813C1.26562 9.77589 3.72036 12.2306 6.74813 12.2306C9.77589 12.2306 12.2306 9.77589 12.2306 6.74813C12.2306 3.72036 9.77589 1.26562 6.74813 1.26562ZM9.27851 7.59159H6.74813C6.63628 7.59159 6.52901 7.54716 6.44992 7.46807C6.37083 7.38898 6.3264 7.28171 6.3264 7.16986V3.37428C6.3264 3.26243 6.37083 3.15516 6.44992 3.07607C6.52901 2.99698 6.63628 2.95255 6.74813 2.95255C6.85998 2.95255 6.96724 2.99698 7.04633 3.07607C7.12542 3.15516 7.16986 3.26243 7.16986 3.37428V6.74813H9.27851C9.39036 6.74813 9.49763 6.79256 9.57672 6.87165C9.65581 6.95074 9.70024 7.05801 9.70024 7.16986C9.70024 7.28171 9.65581 7.38898 9.57672 7.46807C9.49763 7.54716 9.39036 7.59159 9.27851 7.59159Z"
+                              fill="#15BA5C"
+                            />
+                          </svg>
 
-                        <span>{product.time}</span>
+                          <span>{product.leadTime || 0} Mins</span>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-sm font-semibold text-[#16A34A]">
-                          {product.price}
-                        </span>
-                        <span className="text-xs text-[#9CA3AF] line-through">
-                          {product.oldPrice}
-                        </span>
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-semibold text-[#16A34A]">
+                            {formatPrice(product.price)}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-full bg-[#15BA5C] px-4 py-1.5 text-xs font-medium text-white cursor-pointer"
+                        >
+                          + Add
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className="rounded-full bg-[#15BA5C] px-4 py-1.5 text-xs font-medium text-white cursor-pointer"
-                      >
-                        + Add
-                      </button>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="col-span-full py-10 text-center text-gray-500">
+                  No products found for this outlet.
                 </div>
-              ))}
+              )}
             </div>
+
+            {totalCount > itemsPerPage && (
+              <div className="mt-8">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={Math.ceil(totalCount / itemsPerPage)}
+                  onPageChange={setCurrentPage}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={(val) => {
+                    setItemsPerPage(val);
+                    setCurrentPage(1);
+                  }}
+                  totalItems={totalCount}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

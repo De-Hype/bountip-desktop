@@ -28,6 +28,10 @@ import {
   buildCustomerUpsertParams,
 } from "../features/schemas/customers.schema";
 import {
+  customerAddressUpsertSql,
+  buildCustomerAddressUpsertParams,
+} from "../features/schemas/customer_address.schema";
+import {
   inventoryUpsertSql,
   buildInventoryUpsertParams,
 } from "../features/schemas/inventory.schema";
@@ -115,6 +119,18 @@ import {
   modifierOptionUpsertSql,
   buildModifierOptionUpsertParams,
 } from "../features/schemas/modifier_option.schema";
+import {
+  productionV2UpsertSql,
+  buildProductionV2UpsertParams,
+} from "../features/schemas/production_v2.schema";
+import {
+  productionV2ItemUpsertSql,
+  buildProductionV2ItemUpsertParams,
+} from "../features/schemas/production_v2_item.schema";
+import {
+  productionV2TraceUpsertSql,
+  buildProductionV2TraceUpsertParams,
+} from "../features/schemas/production_v2_trace.schema";
 import { v4 as uuidv4 } from "uuid";
 import { LocalUserProfile } from "../types/user.types";
 import { SYNC_ACTIONS } from "../types/action.types";
@@ -287,6 +303,28 @@ export class DatabaseService {
 
     for (const schema of schemas) {
       this.db.exec(schema.create);
+
+      // Migration: Ensure 'version' column exists for all schema tables
+      try {
+        const tableInfo = this.db
+          .prepare(`PRAGMA table_info(${schema.name})`)
+          .all() as any[];
+        const hasVersion = tableInfo.some((col: any) => col.name === "version");
+
+        if (!hasVersion) {
+          console.log(
+            `[DatabaseService] Migrating table '${schema.name}': adding 'version' column`,
+          );
+          this.db.exec(
+            `ALTER TABLE ${schema.name} ADD COLUMN version INTEGER DEFAULT 0 NOT NULL`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          `[DatabaseService] Migration failed for table '${schema.name}':`,
+          error,
+        );
+      }
 
       if (schema.indexes?.length) {
         for (const index of schema.indexes) {
@@ -466,6 +504,20 @@ export class DatabaseService {
       } catch (e: any) {
         if (!e.message.includes("duplicate column name")) {
           console.error(`Migration error (item_lot.${col}):`, e);
+        }
+      }
+    }
+
+    // Migration: Add missing columns to customer_address
+    const customerAddressColumns = ["recordId", "version"];
+    for (const col of customerAddressColumns) {
+      try {
+        let type = "TEXT";
+        if (col === "version") type = "INTEGER DEFAULT 0";
+        this.db.exec(`ALTER TABLE customer_address ADD COLUMN ${col} ${type}`);
+      } catch (e: any) {
+        if (!e.message.includes("duplicate column name")) {
+          console.error(`Migration error (customer_address.${col}):`, e);
         }
       }
     }
@@ -714,6 +766,10 @@ export class DatabaseService {
     );
   }
 
+  deleteCache(key: string) {
+    this.prepare("DELETE FROM cache WHERE key = ?").run(key);
+  }
+
   // Image Queue Methods
   addToImageQueue(item: {
     localPath: string;
@@ -749,8 +805,7 @@ export class DatabaseService {
     value: any,
   ) {
     // Basic safety check for table name to prevent arbitrary SQL injection
-    // In a real app, whitelist tables.
-    if (/[^a-zA-Z0-9_]/.test(tableName) || /[^a-zA-Z0-9_]/.test(columnName)) {
+    if (/[^a-zA-Z0-9_.]/.test(tableName) || /[^a-zA-Z0-9_.]/.test(columnName)) {
       console.error(
         `[DatabaseService] Invalid table/column name: ${tableName}.${columnName}`,
       );
@@ -758,17 +813,146 @@ export class DatabaseService {
     }
 
     const now = new Date().toISOString();
-    // Also clear the offline flag if it was an image upload
-    // But we don't know if it's an image upload here generically.
-    // However, for business_outlet logo, we usually set isOfflineImage = 0.
-    // We can do that in SyncService or here if we detect it.
-    // Let's just do the update here.
-    const sql = `UPDATE ${tableName} SET ${columnName} = ?, updatedAt = ? WHERE id = ?`;
-    this.prepare(sql).run(value, now, recordId);
+
+    // Try to increment version if the column exists
+    let sql = "";
+    try {
+      // Check if version column exists
+      const tableInfo = this.prepare(
+        `PRAGMA table_info(${tableName})`,
+      ).all() as any[];
+      const hasVersion = tableInfo.some((col: any) => col.name === "version");
+
+      if (columnName.includes(".")) {
+        const parts = columnName.split(".");
+        const baseColumn = parts[0];
+        const jsonPath = "$." + parts.slice(1).join(".");
+
+        if (hasVersion) {
+          sql = `UPDATE ${tableName} SET ${baseColumn} = json_set(COALESCE(${baseColumn}, '{}'), ?, ?), version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`;
+        } else {
+          sql = `UPDATE ${tableName} SET ${baseColumn} = json_set(COALESCE(${baseColumn}, '{}'), ?, ?), updatedAt = ? WHERE id = ?`;
+        }
+        this.prepare(sql).run(jsonPath, value, now, recordId);
+      } else {
+        if (hasVersion) {
+          sql = `UPDATE ${tableName} SET ${columnName} = ?, version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`;
+        } else {
+          sql = `UPDATE ${tableName} SET ${columnName} = ?, updatedAt = ? WHERE id = ?`;
+        }
+        this.prepare(sql).run(value, now, recordId);
+      }
+    } catch (error) {
+      console.error(
+        `[DatabaseService] Error updating ${tableName}.${columnName}:`,
+        error,
+      );
+    }
+  }
+
+  updateQueueWithNewUrl(
+    tableName: string,
+    recordId: string,
+    columnName: string,
+    newUrl: string,
+  ) {
+    const pending = this.getPendingQueueItems() as any[];
+    for (const item of pending) {
+      try {
+        const op = JSON.parse(item.op);
+        const opTable = op.table || op.tableName || op.type;
+        const opId = op.recordId || op.id;
+
+        if (opTable === tableName && opId === recordId) {
+          // Update the payload with the new URL
+          const data = op.data || op.payload || {};
+
+          // Handle nested column names (e.g., "generalSettings.logoUrl")
+          const parts = columnName.split(".");
+          let current = data;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (current[parts[i]] && typeof current[parts[i]] === "object") {
+              current = current[parts[i]];
+            } else {
+              // Path not found, break
+              current = null;
+              break;
+            }
+          }
+
+          if (current && typeof current === "object") {
+            current[parts[parts.length - 1]] = newUrl;
+          }
+
+          // Increment version in the payload if it exists
+          if (data.version !== undefined) {
+            data.version = (Number(data.version) || 0) + 1;
+          }
+
+          // Also clear offline flags if applicable in the payload
+          if (tableName === "business_outlet") {
+            if (data.isOfflineImage !== undefined) data.isOfflineImage = 0;
+            if (data.localLogoPath !== undefined) data.localLogoPath = null;
+          }
+
+          // Update the op in the database
+          this.prepare("UPDATE sync_queue SET op = ? WHERE id = ?").run(
+            JSON.stringify(op),
+            item.id,
+          );
+        }
+      } catch (e) {
+        console.error("[DatabaseService] Failed to update queue item:", e);
+      }
+    }
   }
 
   // Queue Methods
   addToQueue(op: any) {
+    // Automatically detect local assets and add them to image upload queue
+    this.detectAndQueueAssets(op);
+
+    const tableName = op.table || op.tableName || op.type;
+    const recordId = op.id || op.recordId;
+    const data = op.data || op.payload || {};
+
+    // Automatically increment version in the database and in the payload
+    if (tableName && recordId) {
+      try {
+        const tableInfo = this.prepare(
+          `PRAGMA table_info(${tableName})`,
+        ).all() as any[];
+        const hasVersion = tableInfo.some((col: any) => col.name === "version");
+
+        if (hasVersion) {
+          // 1. Increment version in the database table
+          this.prepare(
+            `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
+          ).run(new Date().toISOString(), recordId);
+
+          // 2. Fetch the updated version to put into the payload
+          const updatedRecord = this.prepare(
+            `SELECT version FROM ${tableName} WHERE id = ?`,
+          ).get(recordId) as { version: number } | undefined;
+
+          if (updatedRecord) {
+            if (op.data) op.data.version = updatedRecord.version;
+            if (op.payload) op.payload.version = updatedRecord.version;
+            // Handle cases where data is at the root of op
+            if (!op.data && !op.payload && op.version !== undefined) {
+              op.version = updatedRecord.version;
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail if table doesn't exist or other issues
+        console.warn(
+          `[DatabaseService] Could not auto-increment version for ${tableName}:`,
+          error,
+        );
+      }
+    }
+
     // Avoid duplicates if op is identical?
     // For now, append is fine.
     this.prepare("INSERT INTO sync_queue (op, status) VALUES (?, ?)").run(
@@ -777,7 +961,43 @@ export class DatabaseService {
     );
   }
 
+  private detectAndQueueAssets(op: any) {
+    const tableName = op.table || op.tableName || op.type;
+    const recordId = op.id || op.recordId;
+    const data = op.data || op.payload || {};
+
+    if (!tableName || !recordId || !data) return;
+
+    // We only care about strings starting with asset:///
+    const scan = (obj: any, path: string = "") => {
+      if (typeof obj === "string" && obj.startsWith("asset:///")) {
+        console.log(
+          `[DatabaseService] Detected local asset in ${tableName}.${path}: ${obj}`,
+        );
+        this.addToImageQueue({
+          localPath: obj,
+          tableName,
+          recordId,
+          columnName: path || "unknown", // If nested, path might be complex, but processOfflineImages handles specific columns
+        });
+      } else if (obj && typeof obj === "object") {
+        for (const [key, value] of Object.entries(obj)) {
+          scan(value, path ? `${path}.${key}` : key);
+        }
+      }
+    };
+
+    scan(data);
+  }
+
   // System Default Methods
+  getRecord(tableName: string, id: string) {
+    if (/[^a-zA-Z0-9_]/.test(tableName)) return null;
+    return this.prepare(`SELECT * FROM ${tableName} WHERE id = ?`).get(
+      id,
+    ) as any;
+  }
+
   getSystemDefaults(key: string, outletId?: string) {
     if (outletId) {
       return this.prepare(
@@ -1137,6 +1357,17 @@ export class DatabaseService {
         }
       }
 
+      if (
+        Array.isArray(data.customerAddresses) &&
+        data.customerAddresses.length > 0
+      ) {
+        const stmt = this.prepare(customerAddressUpsertSql);
+
+        for (const ca of data.customerAddresses) {
+          stmt.run(this.sanitize(buildCustomerAddressUpsertParams(ca)));
+        }
+      }
+
       if (Array.isArray(data.inventories) && data.inventories.length > 0) {
         const stmt = this.prepare(inventoryUpsertSql);
 
@@ -1187,6 +1418,13 @@ export class DatabaseService {
         }
       }
 
+      if (Array.isArray(data.productionsV2) && data.productionsV2.length > 0) {
+        const stmt = this.prepare(productionV2UpsertSql);
+        for (const p of data.productionsV2) {
+          stmt.run(this.sanitize(buildProductionV2UpsertParams(p)));
+        }
+      }
+
       if (
         Array.isArray(data.productionItems) &&
         data.productionItems.length > 0
@@ -1194,6 +1432,26 @@ export class DatabaseService {
         const stmt = this.prepare(productionItemUpsertSql);
         for (const pi of data.productionItems) {
           stmt.run(this.sanitize(buildProductionItemUpsertParams(pi)));
+        }
+      }
+
+      if (
+        Array.isArray(data.productionV2Items) &&
+        data.productionV2Items.length > 0
+      ) {
+        const stmt = this.prepare(productionV2ItemUpsertSql);
+        for (const pi of data.productionV2Items) {
+          stmt.run(this.sanitize(buildProductionV2ItemUpsertParams(pi)));
+        }
+      }
+
+      if (
+        Array.isArray(data.productionV2Traces) &&
+        data.productionV2Traces.length > 0
+      ) {
+        const stmt = this.prepare(productionV2TraceUpsertSql);
+        for (const pt of data.productionV2Traces) {
+          stmt.run(this.sanitize(buildProductionV2TraceUpsertParams(pt)));
         }
       }
 

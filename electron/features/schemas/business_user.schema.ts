@@ -17,7 +17,8 @@ export const businessUserSchema: TableSchema = {
       lastSyncedAt TEXT,
       userId TEXT,
       outletId TEXT NOT NULL,
-      businessId TEXT NOT NULL
+      businessId TEXT NOT NULL,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
 };

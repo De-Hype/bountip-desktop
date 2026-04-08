@@ -23,6 +23,7 @@ export type UserUpsertParams = {
   createdAt: string | null;
   updatedAt: string | null;
   lastSyncedAt: string | null;
+  version: number;
 };
 
 export const userCreateSql = `
@@ -48,7 +49,8 @@ export const userCreateSql = `
     providerData TEXT,
     createdAt TEXT,
     updatedAt TEXT,
-    lastSyncedAt TEXT
+    lastSyncedAt TEXT,
+    version INTEGER DEFAULT 0 NOT NULL
   );
 `;
 
@@ -75,7 +77,8 @@ export const userUpsertSql = `
     providerData,
     createdAt,
     updatedAt,
-    lastSyncedAt
+    lastSyncedAt,
+    version
   ) VALUES (
     @id,
     @email,
@@ -98,7 +101,8 @@ export const userUpsertSql = `
     @providerData,
     @createdAt,
     @updatedAt,
-    @lastSyncedAt
+    @lastSyncedAt,
+    @version
   )
 `;
 
@@ -110,7 +114,7 @@ export const buildUserUpsertParams = (u: any): UserUpsertParams => ({
   pin: u.pin ?? null,
   otpCodeHash: u.otpCodeHash ?? null,
   otpCodeExpiry: u.otpCodeExpiry ?? null,
-  failedLoginCount: u.failedLoginCount ?? 0,
+  failedLoginCount: Number(u.failedLoginCount ?? 0),
   failedLoginRetryTime: u.failedLoginRetryTime ?? null,
   lastFailedLogin: u.lastFailedLogin ?? null,
   isEmailVerified: u.isEmailVerified ? 1 : 0,
@@ -121,13 +125,11 @@ export const buildUserUpsertParams = (u: any): UserUpsertParams => ({
   authProvider: u.authProvider ?? null,
   providerId: u.providerId ?? null,
   publicId: u.publicId ?? null,
-  providerData:
-    u.providerData && typeof u.providerData === "object"
-      ? JSON.stringify(u.providerData)
-      : (u.providerData ?? null),
+  providerData: u.providerData ? JSON.stringify(u.providerData) : null,
   createdAt: u.createdAt ?? null,
   updatedAt: u.updatedAt ?? null,
   lastSyncedAt: u.lastSyncedAt ?? null,
+  version: Number(u.version ?? 0),
 });
 
 export const userSchema: TableSchema = {

@@ -123,6 +123,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cacheGet: async (key: string) => ipcRenderer.invoke("cache:get", key),
   cachePut: async (key: string, value: any) =>
     ipcRenderer.invoke("cache:put", key, value),
+  cacheDelete: async (key: string) => ipcRenderer.invoke("cache:delete", key),
   getSystemDefaults: async (key: string, outletId?: string) =>
     ipcRenderer.invoke("db:getSystemDefaults", key, outletId),
   addSystemDefault: async (key: string, data: any, outletId: string) =>

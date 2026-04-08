@@ -41,6 +41,7 @@ export type BusinessOutletUpsertParams = {
   lastSyncedAt: string | null;
   businessId: string | null;
   bankDetails: string | null;
+  version: number;
 };
 
 export const businessOutletCreateSql = `
@@ -85,7 +86,8 @@ export const businessOutletCreateSql = `
     updatedAt TEXT,
     lastSyncedAt TEXT,
     businessId TEXT,
-    bankDetails TEXT
+    bankDetails TEXT,
+    version INTEGER DEFAULT 0 NOT NULL
   );
 `;
 
@@ -130,7 +132,8 @@ export const businessOutletUpsertSql = `
     updatedAt,
     lastSyncedAt,
     businessId,
-    bankDetails
+    bankDetails,
+    version
   ) VALUES (
     @id,
     @name,
@@ -171,9 +174,9 @@ export const businessOutletUpsertSql = `
     @updatedAt,
     @lastSyncedAt,
     @businessId,
-    @bankDetails
-  )
-  ON CONFLICT(id) DO UPDATE SET
+    @bankDetails,
+    @version
+  ) ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     description = excluded.description,
     address = excluded.address,
@@ -195,7 +198,9 @@ export const businessOutletUpsertSql = `
     whatsappChannel = excluded.whatsappChannel,
     emailChannel = excluded.emailChannel,
     isDeleted = excluded.isDeleted,
-    isOnboarded = CASE WHEN business_outlet.isOnboarded = 1 THEN 1 ELSE excluded.isOnboarded END,
+    isOnboarded = excluded.isOnboarded,
+    isOfflineImage = excluded.isOfflineImage,
+    localLogoPath = excluded.localLogoPath,
     operatingHours = excluded.operatingHours,
     logoUrl = excluded.logoUrl,
     taxSettings = excluded.taxSettings,
@@ -206,17 +211,17 @@ export const businessOutletUpsertSql = `
     labelSettings = excluded.labelSettings,
     invoiceSettings = excluded.invoiceSettings,
     generalSettings = excluded.generalSettings,
-    createdAt = excluded.createdAt,
     updatedAt = excluded.updatedAt,
-    lastSyncedAt = excluded.lastSyncedAt,
     businessId = excluded.businessId,
-    bankDetails = excluded.bankDetails
+    bankDetails = excluded.bankDetails,
+    version = excluded.version
+  WHERE excluded.version >= business_outlet.version OR excluded.updatedAt >= business_outlet.updatedAt OR business_outlet.updatedAt IS NULL
 `;
 
 export const buildBusinessOutletUpsertParams = (
   o: any,
 ): BusinessOutletUpsertParams => ({
-  id: o.id,
+  id: String(o.id || ""),
   name: o.name ?? null,
   description: o.description ?? null,
   address: o.address ?? null,
@@ -234,55 +239,29 @@ export const buildBusinessOutletUpsertParams = (
   outletRef: o.outletRef ?? null,
   isMainLocation: o.isMainLocation ? 1 : 0,
   businessType: o.businessType ?? null,
-  isActive: o.isActive ? 1 : 0,
-  whatsappChannel: o.whatsappChannel ? 1 : 0,
-  emailChannel: o.emailChannel ? 1 : 0,
-  isDeleted: o.isDeleted ?? 0,
-  isOnboarded: o.isOnboarded ?? 0,
-  isOfflineImage: o.isOfflineImage ?? 0,
+  isActive: o.isActive ? 1 : 1,
+  whatsappChannel: o.whatsappChannel ? 1 : 1,
+  emailChannel: o.emailChannel ? 1 : 1,
+  isDeleted: o.isDeleted ? 1 : 0,
+  isOnboarded: o.isOnboarded ? 1 : 0,
+  isOfflineImage: o.isOfflineImage ? 1 : 0,
   localLogoPath: o.localLogoPath ?? null,
-  operatingHours: o.operatingHours ?? null,
+  operatingHours: o.operatingHours ? JSON.stringify(o.operatingHours) : null,
   logoUrl: o.logoUrl ?? null,
-  taxSettings:
-    o.taxSettings && typeof o.taxSettings === "object"
-      ? JSON.stringify(o.taxSettings)
-      : (o.taxSettings ?? null),
-  serviceCharges:
-    o.serviceCharges && typeof o.serviceCharges === "object"
-      ? JSON.stringify(o.serviceCharges)
-      : (o.serviceCharges ?? null),
-  paymentMethods:
-    o.paymentMethods && typeof o.paymentMethods === "object"
-      ? JSON.stringify(o.paymentMethods)
-      : (o.paymentMethods ?? null),
-  priceTier:
-    o.priceTier && typeof o.priceTier === "object"
-      ? JSON.stringify(o.priceTier)
-      : (o.priceTier ?? null),
-  receiptSettings:
-    o.receiptSettings && typeof o.receiptSettings === "object"
-      ? JSON.stringify(o.receiptSettings)
-      : (o.receiptSettings ?? null),
-  labelSettings:
-    o.labelSettings && typeof o.labelSettings === "object"
-      ? JSON.stringify(o.labelSettings)
-      : (o.labelSettings ?? null),
-  invoiceSettings:
-    o.invoiceSettings && typeof o.invoiceSettings === "object"
-      ? JSON.stringify(o.invoiceSettings)
-      : (o.invoiceSettings ?? null),
-  generalSettings:
-    o.generalSettings && typeof o.generalSettings === "object"
-      ? JSON.stringify(o.generalSettings)
-      : (o.generalSettings ?? null),
+  taxSettings: o.taxSettings ? JSON.stringify(o.taxSettings) : null,
+  serviceCharges: o.serviceCharges ? JSON.stringify(o.serviceCharges) : null,
+  paymentMethods: o.paymentMethods ? JSON.stringify(o.paymentMethods) : null,
+  priceTier: o.priceTier ? JSON.stringify(o.priceTier) : null,
+  receiptSettings: o.receiptSettings ? JSON.stringify(o.receiptSettings) : null,
+  labelSettings: o.labelSettings ? JSON.stringify(o.labelSettings) : null,
+  invoiceSettings: o.invoiceSettings ? JSON.stringify(o.invoiceSettings) : null,
+  generalSettings: o.generalSettings ? JSON.stringify(o.generalSettings) : null,
   createdAt: o.createdAt ?? null,
   updatedAt: o.updatedAt ?? null,
   lastSyncedAt: o.lastSyncedAt ?? null,
   businessId: o.businessId ?? null,
-  bankDetails:
-    o.bankDetails && typeof o.bankDetails === "object"
-      ? JSON.stringify(o.bankDetails)
-      : (o.bankDetails ?? null),
+  bankDetails: o.bankDetails ? JSON.stringify(o.bankDetails) : null,
+  version: Number(o.version ?? 0),
 });
 
 export const businessOutletSchema: TableSchema = {

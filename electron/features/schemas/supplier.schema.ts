@@ -123,7 +123,7 @@ export const supplierSchema: TableSchema = {
       deletedAt TEXT,
       outletId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

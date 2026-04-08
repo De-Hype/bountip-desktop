@@ -244,7 +244,11 @@ export class SyncService {
 
       for (const item of pendingImages) {
         let filePath = item.localPath;
-        if (filePath.startsWith("file://")) {
+
+        if (filePath.startsWith("asset:///")) {
+          const filename = filePath.replace("asset:///", "");
+          filePath = path.join(app.getPath("userData"), "assets", filename);
+        } else if (filePath.startsWith("file://")) {
           filePath = filePath.replace("file://", "");
         }
 
@@ -357,36 +361,61 @@ export class SyncService {
             newUrl,
           );
 
-          // 2. Special handling for business_outlet logo to clear offline flag
+          // 2. Clear offline flags in DB if applicable (special case for business_outlet)
           if (
             item.tableName === "business_outlet" &&
             item.columnName === "logoUrl"
           ) {
+            // Since updateRecordColumn already incremented version once, we just update the flags here
+            // but we use the same increment pattern to stay consistent if this was the only update.
             this.db.run(
-              "UPDATE business_outlet SET isOfflineImage = 0, localLogoPath = NULL WHERE id = ?",
-              [item.recordId],
+              "UPDATE business_outlet SET isOfflineImage = 0, localLogoPath = NULL, version = version + 1, updatedAt = ? WHERE id = ?",
+              [new Date().toISOString(), item.recordId],
             );
           }
 
-          // 3. Mark as uploaded
+          // 3. Update existing pending sync operations in the queue
+          // This avoids redundant operations and ensures the latest URL is used
+          this.db.updateQueueWithNewUrl(
+            item.tableName,
+            item.recordId,
+            item.columnName,
+            newUrl,
+          );
+
+          // 4. Mark image as uploaded
           this.db.markImageAsUploaded(item.id);
 
-          // 4. Queue Sync for the updated record
-          // We fetch the latest record state to sync
-          const records = this.db.query(
-            `SELECT * FROM ${item.tableName} WHERE id = ?`,
-            [item.recordId],
-          ) as any[];
+          // 5. If there's no pending sync for this record, add an UPDATE operation
+          // This ensures the record is eventually synced even if it wasn't already in the queue
+          const pendingOps = this.db.getPendingQueueItems() as any[];
+          const isAlreadyInQueue = pendingOps.some((opItem: any) => {
+            try {
+              const op = JSON.parse(opItem.op);
+              const opTable = op.table || op.tableName || op.type;
+              const opId = op.recordId || op.id;
+              return opTable === item.tableName && opId === item.recordId;
+            } catch {
+              return false;
+            }
+          });
 
-          if (records && records.length > 0) {
-            const record = records[0];
-            const syncOp = {
-              table: item.tableName,
-              action: SYNC_ACTIONS.UPDATE,
-              data: record,
-              id: item.recordId,
-            };
-            this.db.addToQueue(syncOp);
+          if (!isAlreadyInQueue) {
+            const records = this.db.query(
+              `SELECT * FROM ${item.tableName} WHERE id = ?`,
+              [item.recordId],
+            ) as any[];
+
+            if (records && records.length > 0) {
+              const record = records[0];
+              const syncOp = {
+                table: item.tableName,
+                action: SYNC_ACTIONS.UPDATE,
+                data: record,
+                id: item.recordId,
+              };
+              this.db.addToQueue(syncOp);
+            }
           }
         } else {
           console.error(`[SyncService] Upload response missing URL`, data);
@@ -408,6 +437,32 @@ export class SyncService {
       if (itemsToSync.length === 0) {
         this.isSyncing = false;
         return;
+      }
+
+      // Check for pending images related to these items before pushing
+      const pendingImages = this.db.getPendingImageUploads();
+      if (pendingImages.length > 0) {
+        const itemIds = itemsToSync
+          .map((i: any) => {
+            try {
+              const op = JSON.parse(i.op);
+              return op.recordId || op.id;
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean);
+
+        const relatedImages = pendingImages.filter((img) =>
+          itemIds.includes(img.recordId),
+        );
+
+        if (relatedImages.length > 0) {
+          console.log(
+            `[SyncService] Found ${relatedImages.length} related pending images. Processing before push...`,
+          );
+          await this.processOfflineImages();
+        }
       }
 
       console.log(
@@ -537,9 +592,135 @@ export class SyncService {
           updatedAt: item.created_at,
         };
       });
-      console.log("Recordss stuff", records[0].payload);
+      console.log("Recordss stuff", records);
 
-      const payload = { records: records };
+      // Re-fetch records if they might have been updated by image upload
+      const finalizedRecords = records.map((record) => {
+        // Increment the version in the database table before sync to ensure fresh versioning
+        try {
+          this.db.run(
+            `UPDATE ${record.tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
+            [new Date().toISOString(), record.recordId],
+          );
+        } catch (e) {
+          // If update fails (e.g. table doesn't have version column), just proceed
+          console.warn(
+            `[SyncService] Could not increment version for ${record.tableName}:`,
+            e,
+          );
+        }
+
+        const currentData = this.db.getRecord(
+          record.tableName,
+          record.recordId,
+        );
+
+        if (currentData) {
+          // Re-sanitize the fresh data from DB
+          const sanitizedPayload = { ...currentData };
+          const booleanFields = [
+            "isMainLocation",
+            "isActive",
+            "whatsappChannel",
+            "emailChannel",
+            "isDeleted",
+            "isOnboarded",
+            "isOfflineImage",
+            "isEmailVerified",
+            "isPin",
+            "showInPos",
+            "limitTotalSelection",
+            "limitQuantity",
+          ];
+
+          for (const field of booleanFields) {
+            if (typeof sanitizedPayload[field] === "number") {
+              sanitizedPayload[field] = sanitizedPayload[field] === 1;
+            }
+          }
+
+          const jsonFieldsMap: Record<string, string[]> = {
+            product: ["packagingMethod", "priceTierId", "allergenList"],
+            customers: ["otherEmails", "otherPhoneNumbers", "otherNames"],
+            business_outlet: [
+              "operatingHours",
+              "taxSettings",
+              "serviceCharges",
+              "paymentMethods",
+              "priceTier",
+              "receiptSettings",
+              "labelSettings",
+              "invoiceSettings",
+              "bankDetails",
+              "generalSettings",
+            ],
+            orders: ["timeline"],
+            payment_terms: ["paymentInInstallment"],
+            system_default: ["data"],
+          };
+
+          const fieldsToParse = jsonFieldsMap[record.tableName] || [];
+          for (const field of fieldsToParse) {
+            if (typeof sanitizedPayload[field] === "string") {
+              try {
+                const parsed = JSON.parse(sanitizedPayload[field]);
+                if (parsed && typeof parsed === "object") {
+                  sanitizedPayload[field] = parsed;
+                }
+              } catch {}
+            }
+          }
+
+          if (
+            record.tableName === "product" &&
+            Array.isArray((sanitizedPayload as any).allergenList)
+          ) {
+            (sanitizedPayload as any).allergenList = {
+              allergies: (sanitizedPayload as any).allergenList,
+            };
+          }
+
+          if (record.tableName === "customers") {
+            const toStringArray = (val: any) => {
+              if (Array.isArray(val))
+                return val.map((v) => String(v || "").trim()).filter(Boolean);
+              if (typeof val !== "string") return [];
+              const trimmed = val.trim();
+              if (!trimmed) return [];
+              return trimmed
+                .split(",")
+                .map((v) => String(v || "").trim())
+                .filter(Boolean);
+            };
+
+            if (typeof (sanitizedPayload as any).otherEmails === "string") {
+              (sanitizedPayload as any).otherEmails = toStringArray(
+                (sanitizedPayload as any).otherEmails,
+              );
+            }
+            if (
+              typeof (sanitizedPayload as any).otherPhoneNumbers === "string"
+            ) {
+              (sanitizedPayload as any).otherPhoneNumbers = toStringArray(
+                (sanitizedPayload as any).otherPhoneNumbers,
+              );
+            }
+            if (typeof (sanitizedPayload as any).otherNames === "string") {
+              (sanitizedPayload as any).otherNames = toStringArray(
+                (sanitizedPayload as any).otherNames,
+              );
+            }
+          }
+
+          return {
+            ...record,
+            payload: sanitizedPayload,
+          };
+        }
+        return record;
+      });
+
+      const payload = { records: finalizedRecords };
       console.log(payload);
 
       const response = await net.fetch(PUSH_ENDPOINT, {

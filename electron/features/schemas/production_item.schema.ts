@@ -52,7 +52,7 @@ export const productionItemSchema: TableSchema = {
       productionId TEXT,
       orderId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

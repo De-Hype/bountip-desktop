@@ -98,7 +98,7 @@ export const invoiceItemSchema: TableSchema = {
       updatedAt TEXT,
       deletedAt TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

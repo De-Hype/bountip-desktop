@@ -92,7 +92,7 @@ export const componentLotLogSchema: TableSchema = {
       deletedAt TEXT,
       lotId TEXT,
       recordId TEXT,
-      version INTEGER
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

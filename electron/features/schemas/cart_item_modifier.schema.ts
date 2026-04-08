@@ -13,7 +13,8 @@ export const cartItemModifierSchema: TableSchema = {
       cartItemId TEXT,
       modifierId TEXT,
       priceTierDiscount REAL DEFAULT 0 NOT NULL,
-      priceTierMarkup REAL DEFAULT 0 NOT NULL
+      priceTierMarkup REAL DEFAULT 0 NOT NULL,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
 };

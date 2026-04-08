@@ -25,7 +25,6 @@ const UserProfile = ({
   logoUrl,
   onProfileClick,
 }: UserProfileProps) => {
-  const ACTIVE_OUTLET_STORAGE_KEY = "bountip_active_outlet_id";
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,13 +35,11 @@ const UserProfile = ({
     isLoading,
     hasInitialized,
     selectedOutlet,
+    selectedOutletId,
     selectOutlet,
     fetchBusinessData,
   } = useBusinessStore();
   const { user: authUser } = useAuthStore();
-  const [activeOutletId, setActiveOutletId] = useState<string | null>(null);
-  const hasSyncedFromStorage = useRef(false);
-  const isInitialMount = useRef(true);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -67,21 +64,6 @@ const UserProfile = ({
     fetchBusinessData();
   }, [fetchBusinessData]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!isInitialMount.current) return;
-    try {
-      const savedId = localStorage.getItem(ACTIVE_OUTLET_STORAGE_KEY);
-      if (savedId) {
-        setActiveOutletId(savedId);
-        selectOutlet(savedId);
-      } else if (selectedOutlet?.id) {
-        setActiveOutletId(selectedOutlet.id);
-      }
-      isInitialMount.current = false;
-    } catch {}
-  }, [selectedOutlet, selectOutlet]);
-
   const handleProfileClick = () => {
     setOpen(false);
 
@@ -98,47 +80,7 @@ const UserProfile = ({
     (outlet) => !outlet.isDeleted,
   );
 
-  // Once outlets are loaded, sync with Redux ONLY on initial load
-  useEffect(() => {
-    if (outletList.length === 0) return;
-    if (hasSyncedFromStorage.current) return;
-
-    const targetId = activeOutletId || selectedOutlet?.id;
-
-    // If we have a target ID, try to match it in the outlet list
-    if (targetId) {
-      const matched = outletList.find((outlet) => outlet.id === targetId);
-      if (matched) {
-        selectOutlet(matched.id);
-        if (!activeOutletId) {
-          setActiveOutletId(matched.id);
-        }
-        hasSyncedFromStorage.current = true;
-        return;
-      }
-    }
-
-    // Only auto-select first outlet if there's no previous selection at all
-    if (!targetId && outletList.length > 0) {
-      selectOutlet(outletList[0].id);
-      setActiveOutletId(outletList[0].id);
-      hasSyncedFromStorage.current = true;
-    }
-  }, [outletList, activeOutletId, selectedOutlet, selectOutlet]);
-
-  // Persist active outlet id to localStorage
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!activeOutletId) return;
-    try {
-      localStorage.setItem(ACTIVE_OUTLET_STORAGE_KEY, activeOutletId);
-    } catch {
-      // ignore storage errors
-    }
-  }, [activeOutletId]);
-
   const handleOutletSelect = (outlet: OutletView) => {
-    setActiveOutletId(outlet.id);
     selectOutlet(outlet.id);
     setOpen(false);
     console.log("Onboarding stuff", outlet.isOnboarded);
@@ -149,10 +91,7 @@ const UserProfile = ({
     }
   };
 
-  const activeOutlet =
-    selectedOutlet ||
-    outletList.find((outlet) => outlet.id === activeOutletId) ||
-    null;
+  const activeOutlet = selectedOutlet;
   const displayImage =
     (activeOutlet as OutletView | null)?.logoUrl ||
     logoUrl ||

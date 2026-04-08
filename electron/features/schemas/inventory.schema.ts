@@ -71,7 +71,7 @@ export const inventorySchema: TableSchema = {
       createdAt TEXT,
       updatedAt TEXT,
       recordId TEXT,
-      version INTEGER,
+      version INTEGER DEFAULT 0 NOT NULL,
       businessId TEXT,
       outletId TEXT
     );

@@ -20,7 +20,8 @@ export const syncTableLogSchema: TableSchema = {
       filterState TEXT,
       conflictsDetected INTEGER DEFAULT 0 NOT NULL,
       conflictsResolved INTEGER DEFAULT 0 NOT NULL,
-      createdAt TEXT
+      createdAt TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
 };

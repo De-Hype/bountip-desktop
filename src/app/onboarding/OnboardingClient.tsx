@@ -17,10 +17,10 @@ const OnboardingClient = () => {
   const outletId = searchParams.get("outletId") || "";
   const outlet = outlets.find((o) => o.id === outletId) as unknown as
     | {
-        isOnboarded?: boolean;
+        isOnboarded?: boolean | number;
       }
     | undefined;
-  const skipPin = outlet && outlet.isOnboarded === false;
+  const skipPin = outlet && Boolean(outlet.isOnboarded);
 
   const handleNextStep = useCallback(async () => {
     const api = (window as any).electronAPI;
