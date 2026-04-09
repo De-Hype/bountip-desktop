@@ -48,7 +48,7 @@ export const systemDefaultSchema: TableSchema = {
       data TEXT NOT NULL,
       outletId TEXT,
       recordId TEXT,
-      version INTEGER DEFAULT 0 NOT NULL DEFAULT 0
+      version INTEGER DEFAULT 0 NOT NULL
     );
   `,
   indexes: [

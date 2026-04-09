@@ -61,6 +61,10 @@ import {
   deletePaymentTerm,
 } from "./features/customer-management/payment";
 import { getBusinesses } from "./features/business";
+import {
+  getBusinessRoles,
+  getBusinessUsersWithRoles,
+} from "./features/roles-permissions";
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -226,6 +230,12 @@ app.whenReady().then(() => {
     deletePaymentTerm(dbService, id),
   );
   ipcMain.handle("db:getBusinesses", () => getBusinesses(dbService));
+  ipcMain.handle("db:getBusinessRoles", (_event, outletId?: string) =>
+    getBusinessRoles(dbService, outletId),
+  );
+  ipcMain.handle("db:getBusinessUsersWithRoles", (_event, outletId?: string) =>
+    getBusinessUsersWithRoles(dbService, outletId),
+  );
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>
     updateBusinessDetails(dbService, payload),

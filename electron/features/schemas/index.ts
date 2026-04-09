@@ -1,5 +1,6 @@
 import { TableSchema } from "./types";
 import { userSchema } from "./user.schema";
+import { usersSchema } from "./users.schema";
 import { productSchema } from "./product.schema";
 import { businessOutletSchema } from "./business_outlet.schema";
 import { businessSchema } from "./business.schema";
@@ -42,6 +43,7 @@ import { productionV2TraceSchema } from "./production_v2_trace.schema";
 
 export const schemas: TableSchema[] = [
   userSchema,
+  usersSchema,
   productSchema,
   businessOutletSchema,
   businessSchema,

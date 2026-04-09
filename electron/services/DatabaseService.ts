@@ -8,6 +8,10 @@ import {
   buildUserUpsertParams,
 } from "../features/schemas/user.schema";
 import {
+  usersUpsertSql,
+  buildUsersUpsertParams,
+} from "../features/schemas/users.schema";
+import {
   businessUpsertSql,
   buildBusinessUpsertParams,
 } from "../features/schemas/business.schema";
@@ -15,6 +19,18 @@ import {
   businessOutletUpsertSql,
   buildBusinessOutletUpsertParams,
 } from "../features/schemas/business_outlet.schema";
+import {
+  businessRoleUpsertSql,
+  buildBusinessRoleUpsertParams,
+} from "../features/schemas/business-role.schema";
+import {
+  businessUserUpsertSql,
+  buildBusinessUserUpsertParams,
+} from "../features/schemas/business_user.schema";
+import {
+  businessUserRolesBusinessRoleUpsertSql,
+  buildBusinessUserRolesBusinessRoleUpsertParams,
+} from "../features/schemas/business_user_roles_business_role.schema";
 import {
   productUpsertSql,
   buildProductUpsertParams,
@@ -318,6 +334,27 @@ export class DatabaseService {
           this.db.exec(
             `ALTER TABLE ${schema.name} ADD COLUMN version INTEGER DEFAULT 0 NOT NULL`,
           );
+        }
+
+        // Specific Migration: Ensure 'roleId' and 'createdBy' exist for 'business_user'
+        if (schema.name === "business_user") {
+          const hasRoleId = tableInfo.some((col: any) => col.name === "roleId");
+          const hasCreatedBy = tableInfo.some(
+            (col: any) => col.name === "createdBy",
+          );
+
+          if (!hasRoleId) {
+            console.log(
+              "[DatabaseService] Migrating 'business_user': adding 'roleId' column",
+            );
+            this.db.exec("ALTER TABLE business_user ADD COLUMN roleId TEXT");
+          }
+          if (!hasCreatedBy) {
+            console.log(
+              "[DatabaseService] Migrating 'business_user': adding 'createdBy' column",
+            );
+            this.db.exec("ALTER TABLE business_user ADD COLUMN createdBy TEXT");
+          }
         }
       } catch (error) {
         console.error(
@@ -1225,9 +1262,66 @@ export class DatabaseService {
     data: any;
     syncType?: "full" | "incremental";
   }) {
-    const { data } = payload;
+    const { data, syncType = "incremental" } = payload;
 
     const tx = this.transaction(() => {
+      const isFullSync = syncType === "full";
+      const resetTableIfFullAndProvided = (key: string, table: string) => {
+        if (!isFullSync) return;
+        if (Array.isArray((data as any)?.[key])) {
+          this.prepare(`DELETE FROM ${table}`).run();
+        }
+      };
+
+      resetTableIfFullAndProvided("cartItems", "cart_item");
+      resetTableIfFullAndProvided("carts", "cart");
+      resetTableIfFullAndProvided("users", "users");
+
+      resetTableIfFullAndProvided(
+        "businessUserRolesBusinessRole",
+        "business_user_roles_business_role",
+      );
+      resetTableIfFullAndProvided("businessUsers", "business_user");
+      resetTableIfFullAndProvided("businessRoles", "business_role");
+      resetTableIfFullAndProvided("businesses", "business");
+      resetTableIfFullAndProvided("outlets", "business_outlet");
+
+      resetTableIfFullAndProvided("modifierOptions", "modifier_option");
+      resetTableIfFullAndProvided("modifiers", "modifier");
+      resetTableIfFullAndProvided("recipeIngredients", "recipe_ingredients");
+      resetTableIfFullAndProvided("recipeVariants", "recipe_variants");
+      resetTableIfFullAndProvided("recipes", "recipes");
+      resetTableIfFullAndProvided("products", "product");
+      resetTableIfFullAndProvided("systemDefaults", "system_default");
+
+      resetTableIfFullAndProvided("customerAddresses", "customer_address");
+      resetTableIfFullAndProvided("customers", "customers");
+
+      resetTableIfFullAndProvided("inventoryItems", "inventory_item");
+      resetTableIfFullAndProvided("inventories", "inventory");
+      resetTableIfFullAndProvided("itemLots", "item_lot");
+      resetTableIfFullAndProvided("itemMasters", "item_master");
+
+      resetTableIfFullAndProvided("invoiceItems", "invoice_items");
+      resetTableIfFullAndProvided("invoices", "invoices");
+
+      resetTableIfFullAndProvided("productionItems", "production_items");
+      resetTableIfFullAndProvided("productions", "productions");
+      resetTableIfFullAndProvided("productionV2Items", "production_v2_items");
+      resetTableIfFullAndProvided("productionV2Traces", "production_v2_traces");
+      resetTableIfFullAndProvided("productionsV2", "productions_v2");
+
+      resetTableIfFullAndProvided("supplierItems", "supplier_items");
+      resetTableIfFullAndProvided("suppliers", "suppliers");
+
+      resetTableIfFullAndProvided("componentItems", "component_items");
+      resetTableIfFullAndProvided("componentLotLogs", "component_lot_logs");
+      resetTableIfFullAndProvided("componentLots", "component_lots");
+      resetTableIfFullAndProvided("components", "components");
+
+      resetTableIfFullAndProvided("orders", "orders");
+      resetTableIfFullAndProvided("paymentTerms", "payment_terms");
+
       if (Array.isArray(data.carts) && data.carts.length > 0) {
         const stmt = this.prepare(cartUpsertSql);
         for (const c of data.carts) {
@@ -1242,13 +1336,20 @@ export class DatabaseService {
         }
       }
 
-      if (data.user) {
-        const u = data.user;
-        // Ensure only one user exists in the local database
+      const activeUser = data.user || data.primaryUser;
+      if (activeUser) {
+        // Ensure only one user exists in the local database (current session user)
         this.prepare("DELETE FROM user").run();
         this.prepare(userUpsertSql).run(
-          this.sanitize(buildUserUpsertParams(u)),
+          this.sanitize(buildUserUpsertParams(activeUser)),
         );
+      }
+
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        const stmt = this.prepare(usersUpsertSql);
+        for (const u of data.users) {
+          stmt.run(this.sanitize(buildUsersUpsertParams(u)));
+        }
       }
 
       if (Array.isArray(data.businesses) && data.businesses.length > 0) {
@@ -1256,6 +1357,34 @@ export class DatabaseService {
 
         for (const b of data.businesses) {
           stmt.run(this.sanitize(buildBusinessUpsertParams(b)));
+        }
+      }
+
+      if (Array.isArray(data.businessRoles) && data.businessRoles.length > 0) {
+        const stmt = this.prepare(businessRoleUpsertSql);
+        for (const br of data.businessRoles) {
+          stmt.run(this.sanitize(buildBusinessRoleUpsertParams(br)));
+        }
+      }
+
+      if (Array.isArray(data.businessUsers) && data.businessUsers.length > 0) {
+        const stmt = this.prepare(businessUserUpsertSql);
+        for (const bu of data.businessUsers) {
+          stmt.run(this.sanitize(buildBusinessUserUpsertParams(bu)));
+        }
+      }
+
+      if (
+        Array.isArray(data.businessUserRolesBusinessRole) &&
+        data.businessUserRolesBusinessRole.length > 0
+      ) {
+        const stmt = this.prepare(businessUserRolesBusinessRoleUpsertSql);
+        for (const burbr of data.businessUserRolesBusinessRole) {
+          stmt.run(
+            this.sanitize(
+              buildBusinessUserRolesBusinessRoleUpsertParams(burbr),
+            ),
+          );
         }
       }
 
@@ -1514,6 +1643,16 @@ export class DatabaseService {
         const stmt = this.prepare(componentLotLogUpsertSql);
         for (const cll of data.componentLotLogs) {
           stmt.run(this.sanitize(buildComponentLotLogUpsertParams(cll)));
+        }
+      }
+
+      if (
+        Array.isArray(data.systemDefaults) &&
+        data.systemDefaults.length > 0
+      ) {
+        const stmt = this.prepare(systemDefaultUpsertSql);
+        for (const sd of data.systemDefaults) {
+          stmt.run(this.sanitize(buildSystemDefaultUpsertParams(sd)));
         }
       }
 

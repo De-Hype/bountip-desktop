@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   User,
   PenLine,
@@ -19,23 +19,46 @@ import useActionMenuStore from "@/stores/rolesAndPermissionStore";
 import CreateRole from "@/features/roles-permissions/CreateRole";
 import CreateUser from "@/features/roles-permissions/CreateUser";
 import AssignPinModal from "@/features/roles-permissions/AssignPinModal";
+import { useBusinessStore } from "@/stores/useBusinessStore";
+import { Pagination } from "@/shared/Pagination/pagination";
+import EditUser from "@/features/roles-permissions/EditUser";
 
 const RolesAndPermissionPage = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const permissionTabs = [
-    "All",
-    "Cashier",
-    "Manager",
-    "Bakery Manager",
-    "Storekeeper",
-    "Production Manager",
-    "Front desk help",
-    "Admin Officer",
-  ];
-
+  const [dbRoles, setDbRoles] = useState<any[]>([]);
+  const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [activePermissionTab, setActivePermissionTab] = useState<string>("All");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [editingUser, setEditingUser] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    status: string;
+  } | null>(null);
+
+  // Pagination for Users (Vertical)
+  const [usersCurrentPage, setUsersCurrentPage] = useState(1);
+  const [usersItemsPerPage, setUsersItemsPerPage] = useState(10);
+
+  const { selectedOutletId } = useBusinessStore();
+
+  const permissionTabs = useMemo(() => {
+    const roleNames = dbRoles.map((r) => r.name);
+    return ["All", ...roleNames];
+  }, [dbRoles]);
+
+  const roleCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    dbUsers.forEach((user) => {
+      const roleName = user.roleName || "Unassigned";
+      counts[roleName] = (counts[roleName] || 0) + 1;
+    });
+    return counts;
+  }, [dbUsers]);
+
   const {
     openUserId,
     toggleMenu,
@@ -53,102 +76,50 @@ const RolesAndPermissionPage = () => {
 
   const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(true);
 
-  const roles = [
-    { id: "super-admin", name: "Super Admin" },
-    { id: "waiter", name: "Waiter" },
-    { id: "cashier", name: "Cashier" },
-    { id: "baker", name: "Baker" },
-  ];
-
-  const usersTable = [
-    {
-      id: 1,
-      name: "Darrell Steward",
-      role: "Cashier",
-      status: "Active",
-      initiator: "Brooklyn Simmons",
-      timestampDate: "2025-07-11",
-      timestampTime: "10:00 am",
-    },
-    {
-      id: 2,
-      name: "Darlene Robertson",
-      role: "Manager",
-      status: "Active",
-      initiator: "Bessie Cooper",
-      timestampDate: "2025-07-11",
-      timestampTime: "10:00 am",
-    },
-    {
-      id: 3,
-      name: "Guy Hawkins",
-      role: "Storekeeper",
-      status: "Active",
-      initiator: "Darrell Steward",
-      timestampDate: "2025-07-11",
-      timestampTime: "10:00 am",
-    },
-    {
-      id: 4,
-      name: "Cameron Williamson",
-      role: "Production Manager",
-      status: "Active",
-      initiator: "Marvin McKinney",
-      timestampDate: "2025-07-11",
-      timestampTime: "10:00 am",
-    },
-    {
-      id: 5,
-      name: "Kristin Watson",
-      role: "Front desk help",
-      status: "Active",
-      initiator: "Wade Warren",
-      timestampDate: "2025-07-11",
-      timestampTime: "10:00 am",
-    },
-    {
-      id: 6,
-      name: "Brooklyn Simmons",
-      role: "Super Admin",
-      status: "Active",
-      initiator: "Leslie Alexander",
-      timestampDate: "2025-07-11",
-      timestampTime: "10:00 am",
-    },
-    {
-      id: 7,
-      name: "Savannah Nguyen",
-      role: "Cashier",
-      status: "Active",
-      initiator: "Savannah Nguyen",
-      timestampDate: "2025-07-11",
-      timestampTime: "10:00 am",
-    },
-  ];
-
-  const statusStyles: Record<string, string> = {
-    Active: "bg-[#0087531A] text-[#15BA5C]",
-    Invited: "bg-blue-50 text-blue-700",
-    Suspended: "bg-red-50 text-red-700",
-  };
-
-  const handleScroll = (direction: "left" | "right") => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const amount = container.clientWidth * 0.6;
-    container.scrollBy({
-      left: direction === "left" ? -amount : amount,
-      behavior: "smooth",
-    });
+  const fetchRolesAndUsers = async () => {
+    try {
+      setIsLoadingUsers(true);
+      const rolesData = await (window as any).electronAPI.getBusinessRoles(
+        selectedOutletId,
+      );
+      const usersData = await (
+        window as any
+      ).electronAPI.getBusinessUsersWithRoles(selectedOutletId);
+      setDbRoles(rolesData || []);
+      setDbUsers(usersData || []);
+    } catch (error) {
+      console.error("Failed to fetch roles or users:", error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
   };
 
   useEffect(() => {
-    setIsLoadingUsers(true);
-    const id = setTimeout(() => {
-      setIsLoadingUsers(false);
-    }, 700);
-    return () => clearTimeout(id);
-  }, [activePermissionTab]);
+    fetchRolesAndUsers();
+  }, [selectedOutletId]);
+
+  const usersTable = useMemo(() => {
+    return dbUsers.map((u) => ({
+      id: u.id,
+      name: u.fullName || "Unknown User",
+      email: u.email || u.emailAddress || u.userEmail || "",
+      role: u.roleName || "Unassigned",
+      status:
+        u.status === "active"
+          ? "Active"
+          : u.status === "inactive"
+            ? "Inactive"
+            : u.status,
+      initiator: u.initiator || "System",
+      timestampDate: u.createdAt ? u.createdAt.split("T")[0] : "-",
+      timestampTime: u.createdAt
+        ? new Date(u.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "-",
+    }));
+  }, [dbUsers]);
 
   const filteredUsers = useMemo(
     () =>
@@ -156,8 +127,53 @@ const RolesAndPermissionPage = () => {
         (user) =>
           activePermissionTab === "All" || user.role === activePermissionTab,
       ),
-    [activePermissionTab],
+    [activePermissionTab, usersTable],
   );
+
+  const searchedUsers = useMemo(() => {
+    const q = userSearchQuery.trim().toLowerCase();
+    if (!q) return filteredUsers;
+
+    return filteredUsers.filter((user) => {
+      const haystack = [
+        user.name,
+        user.email,
+        user.role,
+        user.status,
+        user.initiator,
+        user.timestampDate,
+        user.timestampTime,
+      ]
+        .map((v) => String(v ?? "").toLowerCase())
+        .join(" ");
+
+      return haystack.includes(q);
+    });
+  }, [filteredUsers, userSearchQuery]);
+
+  const usersTotalItems = searchedUsers.length;
+  const usersTotalPages = Math.max(
+    1,
+    Math.ceil(usersTotalItems / usersItemsPerPage),
+  );
+  const usersStartIndex = (usersCurrentPage - 1) * usersItemsPerPage;
+  const paginatedUsers = searchedUsers.slice(
+    usersStartIndex,
+    usersStartIndex + usersItemsPerPage,
+  );
+
+  useEffect(() => {
+    setUsersCurrentPage((page) => Math.min(page, usersTotalPages));
+  }, [usersTotalPages]);
+
+  useEffect(() => {
+    setUsersCurrentPage(1);
+  }, [activePermissionTab, userSearchQuery]);
+
+  const statusStyles: Record<string, string> = {
+    Active: "bg-green-50 text-green-700",
+    Inactive: "bg-red-50 text-red-500",
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -219,8 +235,8 @@ const RolesAndPermissionPage = () => {
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <path
-                  fill-rule="evenodd"
-                  clip-rule="evenodd"
+                  fillRule="evenodd"
+                  clipRule="evenodd"
                   d="M12 2C10.8426 1.99976 9.70976 2.3343 8.73814 2.96329C7.76653 3.59229 6.99759 4.48888 6.524 5.545C6.45663 5.69641 6.38763 5.84708 6.317 5.997L6.297 5.998C6.233 6 6.146 6 6 6C4.93913 6 3.92172 6.42143 3.17157 7.17157C2.42143 7.92172 2 8.93913 2 10C2 11.0609 2.42143 12.0783 3.17157 12.8284C3.92172 13.5786 4.93913 14 6 14H6.172L8.172 12H6C5.46957 12 4.96086 11.7893 4.58579 11.4142C4.21071 11.0391 4 10.5304 4 10C4 9.46957 4.21071 8.96086 4.58579 8.58579C4.96086 8.21071 5.46957 8 6 8H6.064C6.272 8 6.514 8.001 6.714 7.96C6.96296 7.91742 7.20093 7.82563 7.414 7.69C7.655 7.534 7.821 7.34 7.947 7.163C8.0242 7.04899 8.09145 6.92854 8.148 6.803C8.20133 6.69167 8.26667 6.549 8.344 6.375L8.348 6.365C8.66342 5.66016 9.17607 5.06165 9.82408 4.6417C10.4721 4.22175 11.2278 3.99829 12 3.99829C12.7722 3.99829 13.5279 4.22175 14.1759 4.6417C14.8239 5.06165 15.3366 5.66016 15.652 6.365L15.657 6.375C15.7337 6.54833 15.7987 6.691 15.852 6.803C15.898 6.9 15.966 7.041 16.053 7.163C16.179 7.339 16.344 7.534 16.586 7.691C16.828 7.847 17.073 7.918 17.286 7.961C17.486 8.001 17.728 8.001 17.936 8.001L18 8C18.5304 8 19.0391 8.21071 19.4142 8.58579C19.7893 8.96086 20 9.46957 20 10C20 10.5304 19.7893 11.0391 19.4142 11.4142C19.0391 11.7893 18.5304 12 18 12H15.828L17.828 14H18C19.0609 14 20.0783 13.5786 20.8284 12.8284C21.5786 12.0783 22 11.0609 22 10C22 8.93913 21.5786 7.92172 20.8284 7.17157C20.0783 6.42143 19.0609 6 18 6C17.854 6 17.767 6 17.703 5.998H17.683L17.658 5.945C17.5961 5.81223 17.5354 5.67889 17.476 5.545C17.0024 4.48888 16.2335 3.59229 15.2619 2.96329C14.2902 2.3343 13.1574 1.99976 12 2Z"
                   fill="#15BA5C"
                 />
@@ -229,7 +245,6 @@ const RolesAndPermissionPage = () => {
                   fill="#15BA5C"
                 />
               </svg>
-
               <span>Staff Bulk Upload</span>
             </button>
             <button
@@ -241,20 +256,43 @@ const RolesAndPermissionPage = () => {
             </button>
           </div>
         </section>
+
         <section className="relative mt-6">
-          <button
-            type="button"
-            onClick={() => handleScroll("left")}
-            className="hidden lg:flex absolute -left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-md items-center justify-center text-gray-700 hover:bg-gray-50"
-            aria-label="Scroll roles left"
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex gap-2 items-end">
+              <button
+                type="button"
+                onClick={() =>
+                  scrollRef.current?.scrollBy({
+                    left: -320,
+                    behavior: "smooth",
+                  })
+                }
+                className="absolute -left-[20px] top-[50%]  -translate-y-[50%] cursor-pointer w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center text-gray-700 hover:bg-gray-50"
+                aria-label="Scroll roles left"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  scrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })
+                }
+                className="absolute -right-[20px] top-[50%]  -translate-y-[50%] cursor-pointer w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center text-gray-700 hover:bg-gray-50"
+                aria-label="Scroll roles right"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div
+            ref={scrollRef}
+            className="flex gap-4 overflow-x-auto py-2 pr-2 scroll-smooth snap-x snap-mandatory"
           >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div ref={scrollRef} className="flex gap-4 overflow-x-auto py-2 pr-2">
-            {roles.map((role) => (
+            {dbRoles.map((role) => (
               <div
                 key={role.id}
-                className="min-w-[240px] max-w-[280px] bg-[#1F2933] rounded-2xl overflow-hidden shrink-0"
+                className="min-w-[240px] max-w-[280px] bg-[#1F2933] rounded-2xl overflow-hidden shrink-0 snap-start"
               >
                 <div className="px-4 py-4 flex items-start justify-between">
                   <div>
@@ -262,7 +300,7 @@ const RolesAndPermissionPage = () => {
                       <div className="w-8 h-8 rounded-lg bg-[#2D3742] flex items-center justify-center">
                         <User className="w-4 h-4" />
                       </div>
-                      <span>0 User</span>
+                      <span>{roleCounts[role.name] || 0} Users</span>
                     </div>
                     <p className="mt-4 text-sm text-white">{role.name}</p>
                   </div>
@@ -287,14 +325,6 @@ const RolesAndPermissionPage = () => {
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => handleScroll("right")}
-            className="hidden lg:flex absolute -right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-md items-center justify-center text-gray-700 hover:bg-gray-50"
-            aria-label="Scroll roles right"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
         </section>
       </section>
       <section className="bg-white px-7 py-5">
@@ -304,13 +334,15 @@ const RolesAndPermissionPage = () => {
             <div className="flex w-full md:w-[260px] h-10 rounded-l-[10px] overflow-hidden border border-[#E5E7EB] bg-white">
               <input
                 type="text"
-                placeholder="Search"
+                placeholder="Search users"
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
                 className="flex-1 px-3 text-sm text-[#4B5563] outline-none border-none"
               />
               <button
                 type="button"
                 className="w-10 flex items-center justify-center bg-[#15BA5C] text-white hover:bg-green-600 transition-colors"
-                aria-label="Search roles"
+                aria-label="Search users"
               >
                 <Search className="w-4 h-4" />
               </button>
@@ -419,13 +451,7 @@ const RolesAndPermissionPage = () => {
                 </div>
               )}
 
-              {!isLoadingUsers && filteredUsers.length === 0 && (
-                <div className="px-6 py-10 my-5">
-                  <NotFound />
-                </div>
-              )}
-
-              {!isLoadingUsers &&
+              {/* {!isLoadingUsers &&
                 filteredUsers.length > 0 &&
                 filteredUsers.map((user) => (
                   <div
@@ -461,7 +487,7 @@ const RolesAndPermissionPage = () => {
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       {openUserId === user.id && (
-                        <div className="absolute right-0 bottom-full mb-2 z-1000000 w-44 rounded-[14px] bg-black py-2 shadow-lg">
+                        <div className="absolute right-0 bottom-full mb-2 z-[1000000] w-44 rounded-[14px] bg-black py-2 shadow-lg">
                           <button
                             type="button"
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-white hover:bg-[#111111]"
@@ -489,7 +515,112 @@ const RolesAndPermissionPage = () => {
                       )}
                     </div>
                   </div>
-                ))}
+                ))} */}
+
+              {!isLoadingUsers && searchedUsers.length === 0 && (
+                <div className="px-6 py-10 my-5">
+                  <NotFound />
+                </div>
+              )}
+
+              {!isLoadingUsers && searchedUsers.length > 0 && (
+                <>
+                  {paginatedUsers.map((user) => (
+                    <div
+                      key={user.id}
+                      className="grid grid-cols-12 gap-6 px-6 py-3 text-[14px] md:text-[15px] text-[#374151] border-t border-[#F3F4F6] items-center"
+                    >
+                      <div className="col-span-3 min-w-0">
+                        <span className="block truncate">{user.name}</span>
+                        <span className="block truncate text-[0.7rem] text-[#9CA3AF]">
+                          {user.email || "-"}
+                        </span>
+                      </div>
+                      <div className="truncate col-span-2">{user.role}</div>
+                      <div className="col-span-2">
+                        <span
+                          className={`inline-flex items-center px-2 py-[10px] rounded-[10px] text-[14px] md:text-[15px] font-normal ${
+                            statusStyles[user.status] ??
+                            "bg-gray-50 text-gray-700"
+                          }`}
+                        >
+                          {user.status}
+                        </span>
+                      </div>
+                      <div className="truncate col-span-2">
+                        {user.initiator}
+                      </div>
+                      <div className="truncate col-span-2">
+                        <span className="block">{user.timestampDate}</span>
+                        <span className="block text-[0.7rem] text-[#9CA3AF]">
+                          {user.timestampTime}
+                        </span>
+                      </div>
+                      <div className="relative flex items-center justify-end col-span-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleMenu(user.id)}
+                          className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
+                          aria-label="Open user actions"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                        {openUserId === user.id && (
+                          <div className="absolute right-0 bottom-full mb-2 z-1000000 w-44 rounded-[14px] bg-black py-2 shadow-lg">
+                            {/* <button
+                              type="button"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-white hover:bg-[#111111]"
+                            >
+                              <PenLine className="w-4 h-4" />
+                              <span>Edit User</span>
+                            </button> */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingUser(user);
+                                closeMenu();
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-white hover:bg-[#111111]"
+                            >
+                              <PenLine className="w-4 h-4" />
+                              <span>Edit User</span>
+                            </button>
+
+                            <div className="mx-4 my-1 h-px bg-[#3F3F3F]" />
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#FACC15] hover:bg-[#111111]"
+                            >
+                              <UserX className="w-4 h-4" />
+                              <span>Suspend User</span>
+                            </button>
+                            <div className="mx-4 my-1 h-px bg-[#3F3F3F]" />
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#F87171] hover:bg-[#111111]"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span>Delete User</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  <Pagination
+                    currentPage={usersCurrentPage}
+                    totalPages={usersTotalPages}
+                    onPageChange={setUsersCurrentPage}
+                    itemsPerPage={usersItemsPerPage}
+                    onItemsPerPageChange={(items) => {
+                      setUsersItemsPerPage(items);
+                      setUsersCurrentPage(1);
+                    }}
+                    totalItems={usersTotalItems}
+                  />
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -511,11 +642,9 @@ const RolesAndPermissionPage = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <div className="px-8 py-6 max-h-[70vh] overflow-y-auto">
               <CreateRole />
             </div>
-
             <div className="flex items-center justify-between gap-4 px-8 py-4">
               <button
                 type="button"
@@ -534,11 +663,18 @@ const RolesAndPermissionPage = () => {
           </div>
         </div>
       )}
+      {editingUser && (
+        <EditUser
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSuccess={fetchRolesAndUsers}
+        />
+      )}
 
       {isCreateUserOpen && (
         <div className="fixed inset-0 z-2000000 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-5xl bg-white rounded-[20px] shadow-xl">
-            <div className="flex items-center justify-between px-8 pt-6 pb-4 ">
+            <div className="flex items-center justify-between px-8 pt-6 pb-4">
               <h2 className="text-[20px] font-semibold text-[#111827]">
                 Add a User
               </h2>
@@ -551,7 +687,6 @@ const RolesAndPermissionPage = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <div className="px-8 py-6 max-h-[70vh] overflow-y-auto">
               <CreateUser />
             </div>

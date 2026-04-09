@@ -216,6 +216,7 @@ export class SyncService {
       this.db.applyPullData({
         currentTimestamp: json.currentTimestamp,
         data: json.data,
+        syncType: json.syncType,
       });
 
       // Update last sync timestamp

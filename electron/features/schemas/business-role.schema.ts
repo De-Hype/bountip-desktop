@@ -1,5 +1,50 @@
 import { TableSchema } from "./types";
 
+export type BusinessRoleUpsertParams = {
+  id: string;
+  name: string;
+  permissions: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  businessId: string;
+  version: number;
+};
+
+export const businessRoleUpsertSql = `
+  INSERT OR REPLACE INTO business_role (
+    id,
+    name,
+    permissions,
+    createdAt,
+    updatedAt,
+    businessId,
+    version
+  ) VALUES (
+    @id,
+    @name,
+    @permissions,
+    @createdAt,
+    @updatedAt,
+    @businessId,
+    @version
+  )
+`;
+
+export const buildBusinessRoleUpsertParams = (
+  r: any,
+): BusinessRoleUpsertParams => ({
+  id: r.id,
+  name: r.name,
+  permissions:
+    typeof r.permissions === "object"
+      ? JSON.stringify(r.permissions)
+      : r.permissions,
+  createdAt: r.createdAt || null,
+  updatedAt: r.updatedAt || null,
+  businessId: r.businessId,
+  version: Number(r.version || 0),
+});
+
 export const businessRoleSchema: TableSchema = {
   name: "business_role",
 

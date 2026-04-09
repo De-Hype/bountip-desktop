@@ -8,3 +8,8 @@ export type LocalUserProfile = {
   updatedAt: string | null;
   deviceId?: string | null;
 };
+
+export enum RoleStatus {
+  ACTIVE = "active",
+  LOCKED = "locked",
+}

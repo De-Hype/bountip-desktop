@@ -38,6 +38,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   savePaymentTerm: async (payload) => electron.ipcRenderer.invoke("db:savePaymentTerm", payload),
   deletePaymentTerm: async (id) => electron.ipcRenderer.invoke("db:deletePaymentTerm", id),
   getBusinesses: async () => electron.ipcRenderer.invoke("db:getBusinesses"),
+  getBusinessRoles: async (outletId) => electron.ipcRenderer.invoke("db:getBusinessRoles", outletId),
+  getBusinessUsersWithRoles: async (outletId) => electron.ipcRenderer.invoke("db:getBusinessUsersWithRoles", outletId),
   updateBusinessDetails: async (payload) => electron.ipcRenderer.invoke("db:updateBusinessDetails", payload),
   updatePaymentTier: async (payload) => electron.ipcRenderer.invoke("db:updatePaymentTier", payload),
   addPaymentTier: async (payload) => electron.ipcRenderer.invoke("db:addPaymentTier", payload),

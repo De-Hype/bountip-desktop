@@ -327,10 +327,7 @@ const CreateCustomer = ({
             const dial = normalizeDialCode(c?.dialCode || "");
             if (!dial) continue;
             if (normalized.startsWith(dial)) {
-              if (
-                !best ||
-                dial.length > normalizeDialCode(best.dialCode).length
-              ) {
+              if (!best || dial.length > normalizeDialCode(best.dialCode).length) {
                 best = c;
               }
             }

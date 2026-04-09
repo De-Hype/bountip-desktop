@@ -47,6 +47,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deletePaymentTerm: async (id: string) =>
     ipcRenderer.invoke("db:deletePaymentTerm", id),
   getBusinesses: async () => ipcRenderer.invoke("db:getBusinesses"),
+  getBusinessRoles: async (outletId?: string) =>
+    ipcRenderer.invoke("db:getBusinessRoles", outletId),
+  getBusinessUsersWithRoles: async (outletId?: string) =>
+    ipcRenderer.invoke("db:getBusinessUsersWithRoles", outletId),
   updateBusinessDetails: async (payload: any) =>
     ipcRenderer.invoke("db:updateBusinessDetails", payload),
   updatePaymentTier: async (payload: any) =>
