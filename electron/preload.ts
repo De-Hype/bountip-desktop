@@ -51,6 +51,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:getBusinessRoles", outletId),
   getBusinessUsersWithRoles: async (outletId?: string) =>
     ipcRenderer.invoke("db:getBusinessUsersWithRoles", outletId),
+  getUserById: async (userId: string) =>
+    ipcRenderer.invoke("db:getUserById", userId),
+  upsertBusinessUser: async (payload: any) =>
+    ipcRenderer.invoke("db:upsertBusinessUser", payload),
+  setUserStatus: async (payload: { userId: string; status: string }) =>
+    ipcRenderer.invoke("db:setUserStatus", payload),
+  upsertBusinessRole: async (payload: any) =>
+    ipcRenderer.invoke("db:upsertBusinessRole", payload),
   updateBusinessDetails: async (payload: any) =>
     ipcRenderer.invoke("db:updateBusinessDetails", payload),
   updatePaymentTier: async (payload: any) =>

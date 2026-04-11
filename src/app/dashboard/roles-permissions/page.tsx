@@ -8,7 +8,6 @@ import {
   SquarePen,
   Search,
   Plus,
-  Lock,
   MoreVertical,
   UserX,
   ChevronsUpDown,
@@ -70,7 +69,6 @@ const RolesAndPermissionPage = () => {
     openCreateUser,
     closeCreateUser,
     isAssignPinOpen,
-    openAssignPin,
     closeAssignPin,
   } = useActionMenuStore();
 
@@ -91,6 +89,22 @@ const RolesAndPermissionPage = () => {
       console.error("Failed to fetch roles or users:", error);
     } finally {
       setIsLoadingUsers(false);
+    }
+  };
+
+  const handleToggleSuspendUser = async (
+    userId: string,
+    currentStatus: string,
+  ) => {
+    try {
+      const nextStatus = currentStatus === "locked" ? "active" : "locked";
+      await (window as any).electronAPI.setUserStatus({
+        userId,
+        status: nextStatus,
+      });
+      await fetchRolesAndUsers();
+    } catch (error) {
+      console.error("Failed to update user status:", error);
     }
   };
 
@@ -172,7 +186,7 @@ const RolesAndPermissionPage = () => {
 
   const statusStyles: Record<string, string> = {
     Active: "bg-green-50 text-green-700",
-    Inactive: "bg-red-50 text-red-500",
+    locked: "bg-red-50 text-red-500",
   };
 
   useEffect(() => {
@@ -222,30 +236,6 @@ const RolesAndPermissionPage = () => {
                 />
               </svg>
               <span>Export</span>
-            </button>
-            <button
-              className="inline-flex items-center cursor-pointer gap-2 border border-[#15BA5C] text-nowrap px-4 py-2 rounded-[12px] text-sm font-medium text-[#15BA5C] bg-white hover:bg-green-50 transition-colors"
-              type="button"
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  fillRule="evenodd"
-                  clipRule="evenodd"
-                  d="M12 2C10.8426 1.99976 9.70976 2.3343 8.73814 2.96329C7.76653 3.59229 6.99759 4.48888 6.524 5.545C6.45663 5.69641 6.38763 5.84708 6.317 5.997L6.297 5.998C6.233 6 6.146 6 6 6C4.93913 6 3.92172 6.42143 3.17157 7.17157C2.42143 7.92172 2 8.93913 2 10C2 11.0609 2.42143 12.0783 3.17157 12.8284C3.92172 13.5786 4.93913 14 6 14H6.172L8.172 12H6C5.46957 12 4.96086 11.7893 4.58579 11.4142C4.21071 11.0391 4 10.5304 4 10C4 9.46957 4.21071 8.96086 4.58579 8.58579C4.96086 8.21071 5.46957 8 6 8H6.064C6.272 8 6.514 8.001 6.714 7.96C6.96296 7.91742 7.20093 7.82563 7.414 7.69C7.655 7.534 7.821 7.34 7.947 7.163C8.0242 7.04899 8.09145 6.92854 8.148 6.803C8.20133 6.69167 8.26667 6.549 8.344 6.375L8.348 6.365C8.66342 5.66016 9.17607 5.06165 9.82408 4.6417C10.4721 4.22175 11.2278 3.99829 12 3.99829C12.7722 3.99829 13.5279 4.22175 14.1759 4.6417C14.8239 5.06165 15.3366 5.66016 15.652 6.365L15.657 6.375C15.7337 6.54833 15.7987 6.691 15.852 6.803C15.898 6.9 15.966 7.041 16.053 7.163C16.179 7.339 16.344 7.534 16.586 7.691C16.828 7.847 17.073 7.918 17.286 7.961C17.486 8.001 17.728 8.001 17.936 8.001L18 8C18.5304 8 19.0391 8.21071 19.4142 8.58579C19.7893 8.96086 20 9.46957 20 10C20 10.5304 19.7893 11.0391 19.4142 11.4142C19.0391 11.7893 18.5304 12 18 12H15.828L17.828 14H18C19.0609 14 20.0783 13.5786 20.8284 12.8284C21.5786 12.0783 22 11.0609 22 10C22 8.93913 21.5786 7.92172 20.8284 7.17157C20.0783 6.42143 19.0609 6 18 6C17.854 6 17.767 6 17.703 5.998H17.683L17.658 5.945C17.5961 5.81223 17.5354 5.67889 17.476 5.545C17.0024 4.48888 16.2335 3.59229 15.2619 2.96329C14.2902 2.3343 13.1574 1.99976 12 2Z"
-                  fill="#15BA5C"
-                />
-                <path
-                  d="M12 11.9999L11.293 11.2929L12 10.5859L12.707 11.2929L12 11.9999ZM13 20.9999C13 21.2652 12.8946 21.5195 12.7071 21.707C12.5195 21.8946 12.2652 21.9999 12 21.9999C11.7348 21.9999 11.4804 21.8946 11.2929 21.707C11.1053 21.5195 11 21.2652 11 20.9999H13ZM7.29297 15.2929L11.293 11.2929L12.707 12.7069L8.70697 16.7069L7.29297 15.2929ZM12.707 11.2929L16.707 15.2929L15.293 16.7069L11.293 12.7069L12.707 11.2929ZM13 11.9999V20.9999H11V11.9999H13Z"
-                  fill="#15BA5C"
-                />
-              </svg>
-              <span>Staff Bulk Upload</span>
             </button>
             <button
               type="button"
@@ -356,12 +346,30 @@ const RolesAndPermissionPage = () => {
               <span>Add New Role</span>
             </button>
             <button
+              className="inline-flex items-center cursor-pointer gap-2 border border-[#15BA5C] text-nowrap px-4 py-2 rounded-[12px] text-sm font-medium text-[#15BA5C] bg-white hover:bg-green-50 transition-colors"
               type="button"
-              onClick={openAssignPin}
-              className="inline-flex items-center cursor-pointer gap-2 bg-[#15BA5C] text-white px-4 py-2.5 rounded-[10px] text-sm font-medium hover:bg-green-600 transition-colors whitespace-nowrap"
             >
-              <Lock className="w-4 h-4" />
-              <span>Assign User Pin</span>
+              <svg
+                width="21"
+                height="21"
+                viewBox="0 0 21 21"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M13.72 12.7636C16.7738 12.7636 19.25 10.2979 19.25 7.25638C19.25 4.21488 16.7738 1.75 13.72 1.75C10.6663 1.75 8.19263 4.21575 8.19263 7.25638C8.19263 8.66513 8.83488 9.68975 8.83488 9.68975L2.14813 16.3485C1.848 16.6478 1.428 17.4247 2.14813 18.1422L2.91988 18.9105C3.22 19.1669 3.97425 19.5256 4.59113 18.9105L5.49238 18.0145C6.39188 18.9105 7.42088 18.3986 7.80675 17.8859C8.449 16.9899 7.67813 16.093 7.67813 16.093L7.93538 15.8366C9.16913 17.0669 10.2498 16.3494 10.6356 15.8366C11.2788 14.9406 10.6356 14.0437 10.6356 14.0437C10.3784 13.5319 9.86388 13.5319 10.507 12.8914L11.2788 12.1231C11.8956 12.635 13.1644 12.7636 13.7218 12.7636H13.72Z"
+                  stroke="#15BA5C"
+                  stroke-width="1.3125"
+                  stroke-linejoin="round"
+                />
+                <path
+                  opacity="0.5"
+                  d="M15.6494 7.25744C15.6482 7.76783 15.4444 8.25687 15.0828 8.61703C14.7211 8.9772 14.2313 9.179 13.7209 9.17807C13.4681 9.17864 13.2177 9.12942 12.9839 9.03321C12.7501 8.937 12.5376 8.79569 12.3584 8.61734C12.1793 8.439 12.037 8.22711 11.9397 7.99378C11.8424 7.76044 11.7921 7.51024 11.7915 7.25744C11.792 7.00457 11.8422 6.75427 11.9395 6.52084C12.0367 6.28741 12.1789 6.07542 12.3581 5.89698C12.5373 5.71854 12.7498 5.57715 12.9837 5.48088C13.2175 5.38462 13.468 5.33537 13.7209 5.33594C13.9737 5.33548 14.2241 5.38482 14.4578 5.48113C14.6915 5.57745 14.904 5.71886 15.0831 5.89729C15.2622 6.07571 15.4043 6.28767 15.5015 6.52104C15.5987 6.75442 15.6489 7.00465 15.6494 7.25744Z"
+                  stroke="#15BA5C"
+                  stroke-width="1.3125"
+                />
+              </svg>
+              <span>Manage Permissions</span>
             </button>
           </div>
         </div>
@@ -451,72 +459,6 @@ const RolesAndPermissionPage = () => {
                 </div>
               )}
 
-              {/* {!isLoadingUsers &&
-                filteredUsers.length > 0 &&
-                filteredUsers.map((user) => (
-                  <div
-                    key={user.id}
-                    className="grid grid-cols-12 gap-6 px-6 py-3 text-[14px] md:text-[15px] text-[#374151] border-t border-[#F3F4F6] items-center"
-                  >
-                    <div className="truncate col-span-3">{user.name}</div>
-                    <div className="truncate col-span-2">{user.role}</div>
-                    <div className="col-span-2">
-                      <span
-                        className={`inline-flex items-center px-2 py-[10px] rounded-[10px] text-[14px] md:text-[15px] font-normal ${
-                          statusStyles[user.status] ??
-                          "bg-gray-50 text-gray-700"
-                        }`}
-                      >
-                        {user.status}
-                      </span>
-                    </div>
-                    <div className="truncate col-span-2">{user.initiator}</div>
-                    <div className="truncate col-span-2">
-                      <span className="block">{user.timestampDate}</span>
-                      <span className="block text-[0.7rem] text-[#9CA3AF]">
-                        {user.timestampTime}
-                      </span>
-                    </div>
-                    <div className="relative flex items-center justify-end col-span-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleMenu(user.id)}
-                        className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
-                        aria-label="Open user actions"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                      {openUserId === user.id && (
-                        <div className="absolute right-0 bottom-full mb-2 z-[1000000] w-44 rounded-[14px] bg-black py-2 shadow-lg">
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-white hover:bg-[#111111]"
-                          >
-                            <PenLine className="w-4 h-4" />
-                            <span>Edit User</span>
-                          </button>
-                          <div className="mx-4 my-1 h-px bg-[#3F3F3F]" />
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#FACC15] hover:bg-[#111111]"
-                          >
-                            <UserX className="w-4 h-4" />
-                            <span>Suspend User</span>
-                          </button>
-                          <div className="mx-4 my-1 h-px bg-[#3F3F3F]" />
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#F87171] hover:bg-[#111111]"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            <span>Delete User</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))} */}
-
               {!isLoadingUsers && searchedUsers.length === 0 && (
                 <div className="px-6 py-10 my-5">
                   <NotFound />
@@ -567,13 +509,6 @@ const RolesAndPermissionPage = () => {
                         </button>
                         {openUserId === user.id && (
                           <div className="absolute right-0 bottom-full mb-2 z-1000000 w-44 rounded-[14px] bg-black py-2 shadow-lg">
-                            {/* <button
-                              type="button"
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-white hover:bg-[#111111]"
-                            >
-                              <PenLine className="w-4 h-4" />
-                              <span>Edit User</span>
-                            </button> */}
                             <button
                               type="button"
                               onClick={() => {
@@ -589,18 +524,25 @@ const RolesAndPermissionPage = () => {
                             <div className="mx-4 my-1 h-px bg-[#3F3F3F]" />
                             <button
                               type="button"
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#FACC15] hover:bg-[#111111]"
+                              onClick={() => {
+                                handleToggleSuspendUser(
+                                  user.id,
+                                  String(user.status),
+                                );
+                                closeMenu();
+                              }}
+                              className={`flex w-full items-center gap-2 px-4 py-2 text-xs hover:bg-[#111111] ${
+                                user.status === "locked"
+                                  ? "text-[#15BA5C]"
+                                  : "text-[#FACC15]"
+                              }`}
                             >
                               <UserX className="w-4 h-4" />
-                              <span>Suspend User</span>
-                            </button>
-                            <div className="mx-4 my-1 h-px bg-[#3F3F3F]" />
-                            <button
-                              type="button"
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-[#F87171] hover:bg-[#111111]"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              <span>Delete User</span>
+                              <span>
+                                {user.status === "locked"
+                                  ? "Unsuspend User"
+                                  : "Suspend User"}
+                              </span>
                             </button>
                           </div>
                         )}
@@ -643,22 +585,7 @@ const RolesAndPermissionPage = () => {
               </button>
             </div>
             <div className="px-8 py-6 max-h-[70vh] overflow-y-auto">
-              <CreateRole />
-            </div>
-            <div className="flex items-center justify-between gap-4 px-8 py-4">
-              <button
-                type="button"
-                onClick={closeCreateRole}
-                className="cursor-pointer w-full items-center justify-center rounded-[10px] px-6 py-2.5 text-sm font-medium text-[#111827] bg-[#E5E7EB] hover:bg-[#D1D5DB]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="cursor-pointer w-full items-center justify-center rounded-[10px] px-8 py-2.5 text-sm font-medium text-white bg-[#15BA5C] hover:bg-green-600"
-              >
-                Create
-              </button>
+              <CreateRole onSuccess={fetchRolesAndUsers} />
             </div>
           </div>
         </div>
@@ -672,7 +599,7 @@ const RolesAndPermissionPage = () => {
       )}
 
       {isCreateUserOpen && (
-        <div className="fixed inset-0 z-2000000 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-9000 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-5xl bg-white rounded-[20px] shadow-xl">
             <div className="flex items-center justify-between px-8 pt-6 pb-4">
               <h2 className="text-[20px] font-semibold text-[#111827]">
@@ -688,7 +615,7 @@ const RolesAndPermissionPage = () => {
               </button>
             </div>
             <div className="px-8 py-6 max-h-[70vh] overflow-y-auto">
-              <CreateUser />
+              <CreateUser onSuccess={fetchRolesAndUsers} />
             </div>
           </div>
         </div>

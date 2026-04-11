@@ -595,14 +595,54 @@ export class SyncService {
       });
       console.log("Recordss stuff", records);
 
+      const tableInfoCache = new Map<
+        string,
+        { hasId: boolean; hasUpdatedAt: boolean; hasVersion: boolean }
+      >();
+      const getTableInfo = (tableName: string) => {
+        if (tableInfoCache.has(tableName))
+          return tableInfoCache.get(tableName)!;
+        if (!tableName || /[^a-zA-Z0-9_]/.test(tableName)) {
+          const info = { hasId: false, hasUpdatedAt: false, hasVersion: false };
+          tableInfoCache.set(tableName, info);
+          return info;
+        }
+        try {
+          const cols = this.db.query(
+            `PRAGMA table_info(${tableName})`,
+          ) as any[];
+          const info = {
+            hasId: cols.some((c: any) => c.name === "id"),
+            hasUpdatedAt: cols.some((c: any) => c.name === "updatedAt"),
+            hasVersion: cols.some((c: any) => c.name === "version"),
+          };
+          tableInfoCache.set(tableName, info);
+          return info;
+        } catch {
+          const info = { hasId: false, hasUpdatedAt: false, hasVersion: false };
+          tableInfoCache.set(tableName, info);
+          return info;
+        }
+      };
+
       // Re-fetch records if they might have been updated by image upload
       const finalizedRecords = records.map((record) => {
         // Increment the version in the database table before sync to ensure fresh versioning
         try {
-          this.db.run(
-            `UPDATE ${record.tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
-            [new Date().toISOString(), record.recordId],
-          );
+          const info = getTableInfo(record.tableName);
+          if (info.hasId && info.hasVersion) {
+            if (info.hasUpdatedAt) {
+              this.db.run(
+                `UPDATE ${record.tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
+                [new Date().toISOString(), record.recordId],
+              );
+            } else {
+              this.db.run(
+                `UPDATE ${record.tableName} SET version = COALESCE(version, 0) + 1 WHERE id = ?`,
+                [record.recordId],
+              );
+            }
+          }
         } catch (e) {
           // If update fails (e.g. table doesn't have version column), just proceed
           console.warn(
@@ -611,10 +651,10 @@ export class SyncService {
           );
         }
 
-        const currentData = this.db.getRecord(
-          record.tableName,
-          record.recordId,
-        );
+        const info = getTableInfo(record.tableName);
+        const currentData = info.hasId
+          ? this.db.getRecord(record.tableName, record.recordId)
+          : null;
 
         if (currentData) {
           // Re-sanitize the fresh data from DB
@@ -732,15 +772,43 @@ export class SyncService {
           "x-app-version": app.getVersion(),
         },
       });
-      console.log("This is the response", await response.json());
+      let responseText = "";
+      try {
+        responseText = await response.text();
+      } catch {}
+
+      let responseJson: any = null;
+      if (responseText) {
+        try {
+          responseJson = JSON.parse(responseText);
+        } catch {}
+      }
+
+      console.log(
+        "This is the response",
+        responseJson !== null ? responseJson : responseText,
+      );
+      if (responseJson?.data?.dbResults !== undefined) {
+        console.log("[SyncService] dbResults:");
+        try {
+          console.dir(responseJson.data.dbResults, { depth: null });
+        } catch {
+          console.log(
+            JSON.stringify(responseJson.data.dbResults, null, 2) || "",
+          );
+        }
+      }
 
       if (response.ok) {
         const ids = itemsToSync.map((i: any) => i.id);
         this.db.markAsSynced(ids);
         console.log(`[SyncService] Successfully synced ${ids.length} items.`);
       } else {
-        const txt = await response.text();
-        console.error(`[SyncService] Sync failed: ${response.status} ${txt}`);
+        console.error(
+          `[SyncService] Sync failed: ${response.status} ${
+            responseText || response.statusText
+          }`,
+        );
         // We don't mark individual items as failed here since it's a batch failure.
         // They remain pending and will be retried.
       }

@@ -4668,10 +4668,20 @@ class DatabaseService {
           `PRAGMA table_info(${tableName})`
         ).all();
         const hasVersion = tableInfo.some((col) => col.name === "version");
-        if (hasVersion) {
-          this.prepare(
-            `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`
-          ).run((/* @__PURE__ */ new Date()).toISOString(), recordId);
+        const hasUpdatedAt = tableInfo.some(
+          (col) => col.name === "updatedAt"
+        );
+        const hasId = tableInfo.some((col) => col.name === "id");
+        if (hasVersion && hasId) {
+          if (hasUpdatedAt) {
+            this.prepare(
+              `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`
+            ).run((/* @__PURE__ */ new Date()).toISOString(), recordId);
+          } else {
+            this.prepare(
+              `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1 WHERE id = ?`
+            ).run(recordId);
+          }
           const updatedRecord = this.prepare(
             `SELECT version FROM ${tableName} WHERE id = ?`
           ).get(recordId);
@@ -4723,6 +4733,15 @@ class DatabaseService {
   // System Default Methods
   getRecord(tableName, id) {
     if (/[^a-zA-Z0-9_]/.test(tableName)) return null;
+    try {
+      const cols = this.prepare(
+        `PRAGMA table_info(${tableName})`
+      ).all();
+      const hasId = cols.some((c) => c.name === "id");
+      if (!hasId) return null;
+    } catch {
+      return null;
+    }
     return this.prepare(`SELECT * FROM ${tableName} WHERE id = ?`).get(
       id
     );
@@ -23607,22 +23626,56 @@ ${signature}\r
         };
       });
       console.log("Recordss stuff", records);
+      const tableInfoCache = /* @__PURE__ */ new Map();
+      const getTableInfo = (tableName) => {
+        if (tableInfoCache.has(tableName))
+          return tableInfoCache.get(tableName);
+        if (!tableName || /[^a-zA-Z0-9_]/.test(tableName)) {
+          const info = { hasId: false, hasUpdatedAt: false, hasVersion: false };
+          tableInfoCache.set(tableName, info);
+          return info;
+        }
+        try {
+          const cols = this.db.query(
+            `PRAGMA table_info(${tableName})`
+          );
+          const info = {
+            hasId: cols.some((c) => c.name === "id"),
+            hasUpdatedAt: cols.some((c) => c.name === "updatedAt"),
+            hasVersion: cols.some((c) => c.name === "version")
+          };
+          tableInfoCache.set(tableName, info);
+          return info;
+        } catch {
+          const info = { hasId: false, hasUpdatedAt: false, hasVersion: false };
+          tableInfoCache.set(tableName, info);
+          return info;
+        }
+      };
       const finalizedRecords = records.map((record) => {
         try {
-          this.db.run(
-            `UPDATE ${record.tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
-            [(/* @__PURE__ */ new Date()).toISOString(), record.recordId]
-          );
+          const info2 = getTableInfo(record.tableName);
+          if (info2.hasId && info2.hasVersion) {
+            if (info2.hasUpdatedAt) {
+              this.db.run(
+                `UPDATE ${record.tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
+                [(/* @__PURE__ */ new Date()).toISOString(), record.recordId]
+              );
+            } else {
+              this.db.run(
+                `UPDATE ${record.tableName} SET version = COALESCE(version, 0) + 1 WHERE id = ?`,
+                [record.recordId]
+              );
+            }
+          }
         } catch (e) {
           console.warn(
             `[SyncService] Could not increment version for ${record.tableName}:`,
             e
           );
         }
-        const currentData = this.db.getRecord(
-          record.tableName,
-          record.recordId
-        );
+        const info = getTableInfo(record.tableName);
+        const currentData = info.hasId ? this.db.getRecord(record.tableName, record.recordId) : null;
         if (currentData) {
           const sanitizedPayload = { ...currentData };
           const booleanFields = [
@@ -23722,14 +23775,40 @@ ${signature}\r
           "x-app-version": app.getVersion()
         }
       });
-      console.log("This is the response", await response.json());
+      let responseText = "";
+      try {
+        responseText = await response.text();
+      } catch {
+      }
+      let responseJson = null;
+      if (responseText) {
+        try {
+          responseJson = JSON.parse(responseText);
+        } catch {
+        }
+      }
+      console.log(
+        "This is the response",
+        responseJson !== null ? responseJson : responseText
+      );
+      if (responseJson?.data?.dbResults !== void 0) {
+        console.log("[SyncService] dbResults:");
+        try {
+          console.dir(responseJson.data.dbResults, { depth: null });
+        } catch {
+          console.log(
+            JSON.stringify(responseJson.data.dbResults, null, 2) || ""
+          );
+        }
+      }
       if (response.ok) {
         const ids = itemsToSync.map((i) => i.id);
         this.db.markAsSynced(ids);
         console.log(`[SyncService] Successfully synced ${ids.length} items.`);
       } else {
-        const txt = await response.text();
-        console.error(`[SyncService] Sync failed: ${response.status} ${txt}`);
+        console.error(
+          `[SyncService] Sync failed: ${response.status} ${responseText || response.statusText}`
+        );
       }
     } catch (e) {
       console.error("[SyncService] Sync process error:", e);
@@ -24785,6 +24864,194 @@ const getBusinessUsersWithRoles = async (db, outletId) => {
   }
   return db.query(sql, params);
 };
+const getUserById = async (db, userId) => {
+  const rows = db.query("SELECT * FROM users WHERE id = ? LIMIT 1", [
+    userId
+  ]);
+  return rows[0] || null;
+};
+const upsertBusinessUser = async (db, payload) => {
+  const userId = payload.userId || payload.id || uuidExports.v4();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const tx = db.transaction(() => {
+    const outletRows = db.query(
+      "SELECT businessId FROM business_outlet WHERE id = ? LIMIT 1",
+      [payload.outletId]
+    );
+    const businessId = outletRows[0]?.businessId;
+    if (!businessId) throw new Error("Invalid outletId");
+    const existingUserRows = db.query("SELECT * FROM users WHERE id = ?", [
+      userId
+    ]);
+    const existingUser = existingUserRows[0] || null;
+    const fullName = `${payload.firstName} ${payload.lastName}`.trim();
+    const userRow = {
+      ...existingUser || {},
+      id: userId,
+      email: payload.email,
+      fullName,
+      updatedAt: now,
+      createdAt: existingUser?.createdAt || now,
+      status: existingUser?.status || "active",
+      version: existingUser?.version ?? 0
+    };
+    db.run(usersUpsertSql, db.sanitize(buildUsersUpsertParams(userRow)));
+    db.addToQueue({
+      table: "user",
+      action: existingUser ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
+      data: userRow,
+      id: userId
+    });
+    const roleName = payload.roleName;
+    let roleId = null;
+    if (roleName && roleName !== "Unassigned") {
+      const roleRows = businessId ? db.query(
+        "SELECT id FROM business_role WHERE name = ? AND businessId = ? LIMIT 1",
+        [roleName, businessId]
+      ) : db.query("SELECT id FROM business_role WHERE name = ? LIMIT 1", [
+        roleName
+      ]);
+      roleId = roleRows[0]?.id || null;
+    }
+    const existingBusinessUserRows = db.query(
+      "SELECT * FROM business_user WHERE userId = ? AND outletId = ? LIMIT 1",
+      [userId, payload.outletId]
+    );
+    const existingBusinessUser = existingBusinessUserRows[0] || null;
+    const businessUserId = existingBusinessUser?.id || uuidExports.v4();
+    const businessUserRow = {
+      ...existingBusinessUser || {},
+      id: businessUserId,
+      userId,
+      outletId: payload.outletId,
+      businessId: existingBusinessUser?.businessId || businessId,
+      roleId,
+      updatedAt: now,
+      createdAt: existingBusinessUser?.createdAt || now,
+      status: existingBusinessUser?.status || "active",
+      accessType: existingBusinessUser?.accessType || "super_admin",
+      version: existingBusinessUser?.version ?? 0
+    };
+    db.run(
+      businessUserUpsertSql,
+      db.sanitize(buildBusinessUserUpsertParams(businessUserRow))
+    );
+    db.addToQueue({
+      table: "business_user",
+      action: existingBusinessUser ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
+      data: businessUserRow,
+      id: businessUserId
+    });
+    const existingMappings = db.query(
+      "SELECT * FROM business_user_roles_business_role WHERE businessUserId = ?",
+      [businessUserId]
+    );
+    if (existingMappings.length > 0) {
+      db.run(
+        "DELETE FROM business_user_roles_business_role WHERE businessUserId = ?",
+        [businessUserId]
+      );
+      for (const m of existingMappings) {
+        db.addToQueue({
+          table: "business_user_roles_business_role",
+          action: SYNC_ACTIONS.DELETE,
+          data: m,
+          id: `${m.businessUserId}:${m.businessRoleId}`
+        });
+      }
+    }
+    if (roleId) {
+      const previous = existingMappings.find(
+        (m) => m.businessRoleId === roleId
+      );
+      const mappingRow = {
+        businessUserId,
+        businessRoleId: roleId,
+        version: Number(previous?.version ?? 0) + 1
+      };
+      db.run(
+        businessUserRolesBusinessRoleUpsertSql,
+        db.sanitize(buildBusinessUserRolesBusinessRoleUpsertParams(mappingRow))
+      );
+      db.addToQueue({
+        table: "business_user_roles_business_role",
+        action: previous ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
+        data: mappingRow,
+        id: `${businessUserId}:${roleId}`
+      });
+    }
+    return { userId, businessUserId };
+  });
+  return tx();
+};
+const setUserStatus = async (db, payload) => {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const tx = db.transaction(() => {
+    db.run("UPDATE users SET status = ?, updatedAt = ? WHERE id = ?", [
+      payload.status,
+      now,
+      payload.userId
+    ]);
+    const rows = db.query("SELECT * FROM users WHERE id = ? LIMIT 1", [
+      payload.userId
+    ]);
+    const updatedUser = rows[0] || null;
+    if (!updatedUser) throw new Error("User not found");
+    db.addToQueue({
+      table: "user",
+      action: SYNC_ACTIONS.UPDATE,
+      data: updatedUser,
+      id: payload.userId
+    });
+    return { userId: payload.userId };
+  });
+  return tx();
+};
+const upsertBusinessRole = async (db, payload) => {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const tx = db.transaction(() => {
+    const outletRows = db.query(
+      "SELECT businessId FROM business_outlet WHERE id = ? LIMIT 1",
+      [payload.outletId]
+    );
+    const businessId = outletRows[0]?.businessId;
+    if (!businessId) throw new Error("Invalid outletId");
+    const existingById = payload.id ? db.query("SELECT * FROM business_role WHERE id = ? LIMIT 1", [
+      payload.id
+    ])[0] || null : null;
+    const existingByName = !existingById ? db.query(
+      "SELECT * FROM business_role WHERE name = ? AND businessId = ? LIMIT 1",
+      [payload.name, businessId]
+    )[0] || null : null;
+    const existingRole = existingById || existingByName;
+    const id = existingRole?.id || payload.id || uuidExports.v4();
+    const roleRow = {
+      ...existingRole || {},
+      id,
+      name: payload.name,
+      permissions: payload.permissions ?? {
+        description: payload.description || "",
+        pages: []
+      },
+      createdAt: existingRole?.createdAt || now,
+      updatedAt: now,
+      businessId,
+      version: existingRole?.version ?? 0
+    };
+    db.run(
+      businessRoleUpsertSql,
+      db.sanitize(buildBusinessRoleUpsertParams(roleRow))
+    );
+    db.addToQueue({
+      table: "business_role",
+      action: existingRole ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
+      data: roleRow,
+      id
+    });
+    return { id };
+  });
+  return tx();
+};
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "asset",
@@ -24928,6 +25195,22 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "db:getBusinessUsersWithRoles",
     (_event, outletId) => getBusinessUsersWithRoles(dbService, outletId)
+  );
+  ipcMain.handle(
+    "db:getUserById",
+    (_event, userId) => getUserById(dbService, userId)
+  );
+  ipcMain.handle(
+    "db:upsertBusinessUser",
+    (_event, payload) => upsertBusinessUser(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:setUserStatus",
+    (_event, payload) => setUserStatus(dbService, payload)
+  );
+  ipcMain.handle(
+    "db:upsertBusinessRole",
+    (_event, payload) => upsertBusinessRole(dbService, payload)
   );
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle(

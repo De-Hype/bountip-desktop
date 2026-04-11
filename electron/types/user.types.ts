@@ -10,6 +10,6 @@ export type LocalUserProfile = {
 };
 
 export enum RoleStatus {
-  ACTIVE = "active",
+  ACTIVE = "Active",
   LOCKED = "locked",
 }

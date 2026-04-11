@@ -960,12 +960,22 @@ export class DatabaseService {
           `PRAGMA table_info(${tableName})`,
         ).all() as any[];
         const hasVersion = tableInfo.some((col: any) => col.name === "version");
+        const hasUpdatedAt = tableInfo.some(
+          (col: any) => col.name === "updatedAt",
+        );
+        const hasId = tableInfo.some((col: any) => col.name === "id");
 
-        if (hasVersion) {
+        if (hasVersion && hasId) {
           // 1. Increment version in the database table
-          this.prepare(
-            `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
-          ).run(new Date().toISOString(), recordId);
+          if (hasUpdatedAt) {
+            this.prepare(
+              `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
+            ).run(new Date().toISOString(), recordId);
+          } else {
+            this.prepare(
+              `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1 WHERE id = ?`,
+            ).run(recordId);
+          }
 
           // 2. Fetch the updated version to put into the payload
           const updatedRecord = this.prepare(
@@ -1030,6 +1040,15 @@ export class DatabaseService {
   // System Default Methods
   getRecord(tableName: string, id: string) {
     if (/[^a-zA-Z0-9_]/.test(tableName)) return null;
+    try {
+      const cols = this.prepare(
+        `PRAGMA table_info(${tableName})`,
+      ).all() as any[];
+      const hasId = cols.some((c: any) => c.name === "id");
+      if (!hasId) return null;
+    } catch {
+      return null;
+    }
     return this.prepare(`SELECT * FROM ${tableName} WHERE id = ?`).get(
       id,
     ) as any;

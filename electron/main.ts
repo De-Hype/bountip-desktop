@@ -64,6 +64,10 @@ import { getBusinesses } from "./features/business";
 import {
   getBusinessRoles,
   getBusinessUsersWithRoles,
+  getUserById,
+  upsertBusinessUser,
+  setUserStatus,
+  upsertBusinessRole,
 } from "./features/roles-permissions";
 
 // Register custom protocol privileges
@@ -235,6 +239,18 @@ app.whenReady().then(() => {
   );
   ipcMain.handle("db:getBusinessUsersWithRoles", (_event, outletId?: string) =>
     getBusinessUsersWithRoles(dbService, outletId),
+  );
+  ipcMain.handle("db:getUserById", (_event, userId: string) =>
+    getUserById(dbService, userId),
+  );
+  ipcMain.handle("db:upsertBusinessUser", (_event, payload) =>
+    upsertBusinessUser(dbService, payload),
+  );
+  ipcMain.handle("db:setUserStatus", (_event, payload) =>
+    setUserStatus(dbService, payload),
+  );
+  ipcMain.handle("db:upsertBusinessRole", (_event, payload) =>
+    upsertBusinessRole(dbService, payload),
   );
   ipcMain.handle("db:wipeData", () => dbService.wipeUserData());
   ipcMain.handle("db:updateBusinessDetails", (_event, payload) =>
