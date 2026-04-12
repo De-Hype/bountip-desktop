@@ -60,14 +60,17 @@ export class AuthService {
     const hash = crypto
       .pbkdf2Sync(password, salt, 1000, 64, "sha512")
       .toString("hex");
-    await saveLoginHash(this.db, `${salt}:${hash}`);
+    await saveLoginHash(this.db, email, `${salt}:${hash}`);
   }
 
   async verifyLoginHash(email: string, password: string): Promise<boolean> {
     const stored = await getLoginHash(this.db);
     if (!stored) return false;
 
-    const [salt, hash] = stored.split(":");
+    // Verify email matches the one stored in the hash
+    if (stored.email !== email.toLowerCase()) return false;
+
+    const [salt, hash] = stored.hash.split(":");
     const currentHash = crypto
       .pbkdf2Sync(password, salt, 1000, 64, "sha512")
       .toString("hex");
@@ -75,19 +78,22 @@ export class AuthService {
     return hash === currentHash;
   }
 
-  async savePinHash(pin: string) {
+  async savePinHash(email: string, pin: string) {
     const salt = crypto.randomBytes(16).toString("hex");
     const hash = crypto
       .pbkdf2Sync(pin, salt, 1000, 64, "sha512")
       .toString("hex");
-    await savePinHash(this.db, `${salt}:${hash}`);
+    await savePinHash(this.db, email, `${salt}:${hash}`);
   }
 
-  async verifyPinHash(pin: string): Promise<boolean> {
+  async verifyPinHash(email: string, pin: string): Promise<boolean> {
     const stored = await getPinHash(this.db);
     if (!stored) return false;
 
-    const [salt, hash] = stored.split(":");
+    // Verify email matches the one stored in the hash
+    if (stored.email !== email.toLowerCase()) return false;
+
+    const [salt, hash] = stored.hash.split(":");
     const currentHash = crypto
       .pbkdf2Sync(pin, salt, 1000, 64, "sha512")
       .toString("hex");

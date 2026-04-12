@@ -198,12 +198,11 @@ app.whenReady().then(() => {
       authService.verifyLoginHash(email, password),
   );
 
-  ipcMain.handle("auth:savePinHash", (_event, pin: string) =>
-    authService.savePinHash(pin),
+  ipcMain.handle("auth:savePinHash", (_event, email, pin) =>
+    authService.savePinHash(email, pin),
   );
-
-  ipcMain.handle("auth:verifyPinHash", (_event, pin: string) =>
-    authService.verifyPinHash(pin),
+  ipcMain.handle("auth:verifyPinHash", (_event, email, pin) =>
+    authService.verifyPinHash(email, pin),
   );
 
   ipcMain.handle("db:getUser", () => authService.getUser());

@@ -67,96 +67,21 @@ type ChangePasswordPayload = {
 };
 
 class AuthService {
-  private async verifyLocalLogin(email: string, password: string) {
-    if (typeof window === "undefined") return false;
-    const w = window as unknown as {
-      electronAPI?: {
-        verifyLoginHash?: (email: string, password: string) => Promise<boolean>;
-      };
-    };
-    const api = w.electronAPI;
-    if (!api || !api.verifyLoginHash) return false;
-    try {
-      return await api.verifyLoginHash(email, password);
-    } catch {
-      return false;
-    }
-  }
-
-  private async saveLocalLogin(email: string, password: string) {
-    if (typeof window === "undefined") return;
-    const w = window as unknown as {
-      electronAPI?: {
-        saveLoginHash?: (email: string, password: string) => Promise<void>;
-      };
-    };
-    const api = w.electronAPI;
-    if (!api || !api.saveLoginHash) return;
-    try {
-      await api.saveLoginHash(email, password);
-    } catch {
-      // ignore
-    }
-  }
-
   async signup(data: SignupData) {
     return httpService.post<AuthTokensResponse>("/auth/signup", data, false);
   }
 
   async signin(data: SigninData) {
-    const canLoginLocally = await this.verifyLocalLogin(
-      data.email,
-      data.password,
+    return httpService.post<AuthTokensResponse>(
+      "/auth/login",
+      {
+        email: data.email,
+        passCode: data.password,
+        mode: "password",
+      },
+      false,
+      true,
     );
-    if (canLoginLocally) {
-      const stored = await userStorage.loadUser();
-      const user = {
-        id: String(stored?.id ?? ""),
-        email: stored?.email ?? data.email,
-        fullName: stored?.name ?? stored?.email ?? data.email,
-        status: stored?.status ?? "active",
-        isEmailVerified: stored?.isEmailVerified ?? true,
-        createdAt: stored?.createdAt,
-        updatedAt: stored?.updatedAt,
-      } as AuthUserApi;
-
-      const tokens = {
-        access_token: "",
-        refresh_token: "",
-        accessToken: "",
-        refreshToken: "",
-      };
-
-      return {
-        status: true,
-        message: "Logged in locally",
-        data: {
-          tokens,
-          user,
-        },
-      } satisfies AuthTokensResponse;
-    }
-
-    return httpService
-      .post<AuthTokensResponse>(
-        "/auth/login",
-        {
-          email: data.email,
-          passCode: data.password,
-          mode: "password",
-        },
-        false,
-        true,
-      )
-      .then(async (res) => {
-        try {
-          if (res?.data?.user) {
-            await this.saveLocalLogin(data.email, data.password);
-            await userStorage.saveUserFromApi(res.data.user);
-          }
-        } catch {}
-        return res;
-      });
   }
 
   // Verify email with OTP code

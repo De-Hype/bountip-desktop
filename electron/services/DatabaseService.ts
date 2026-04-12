@@ -1742,10 +1742,10 @@ export class DatabaseService {
       this.prepare("DELETE FROM sync_queue").run();
       this.prepare("DELETE FROM image_upload_queue").run();
 
-      // 3. Clear cache and identity (except for device-specific stuff if needed)
-      // We keep deviceId if it exists in identity, but wipe user-specific keys
+      // 3. Clear cache and identity (except for device-specific stuff and user profile)
+      // We keep deviceId, hashes, and user_identity for offline support
       this.prepare(
-        "DELETE FROM identity WHERE key NOT IN ('device_id', 'pin_hash', 'login_hash')",
+        "DELETE FROM identity WHERE key NOT IN ('device_id', 'pin_hash', 'login_hash', 'user_identity')",
       ).run();
       this.prepare("DELETE FROM cache").run();
     });

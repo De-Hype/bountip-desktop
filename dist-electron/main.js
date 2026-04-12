@@ -5267,7 +5267,7 @@ class DatabaseService {
       this.prepare("DELETE FROM sync_queue").run();
       this.prepare("DELETE FROM image_upload_queue").run();
       this.prepare(
-        "DELETE FROM identity WHERE key NOT IN ('device_id', 'pin_hash', 'login_hash')"
+        "DELETE FROM identity WHERE key NOT IN ('device_id', 'pin_hash', 'login_hash', 'user_identity')"
       ).run();
       this.prepare("DELETE FROM cache").run();
     });
@@ -5280,10 +5280,10 @@ class DatabaseService {
     }
   }
 }
-const saveLoginHash = async (db, hash) => {
+const saveLoginHash = async (db, email, hash) => {
   db.run("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)", [
     "login_hash",
-    JSON.stringify({ hash })
+    JSON.stringify({ email: email.toLowerCase(), hash })
   ]);
 };
 const getLoginHash = async (db) => {
@@ -5293,15 +5293,16 @@ const getLoginHash = async (db) => {
   if (!row) return null;
   try {
     const parsed = JSON.parse(row.value);
-    return parsed.hash ?? null;
+    if (!parsed.email || !parsed.hash) return null;
+    return { email: parsed.email, hash: parsed.hash };
   } catch {
     return null;
   }
 };
-const savePinHash = async (db, hash) => {
+const savePinHash = async (db, email, hash) => {
   db.run("INSERT OR REPLACE INTO identity (key, value) VALUES (?, ?)", [
     "pin_hash",
-    JSON.stringify({ hash })
+    JSON.stringify({ email: email.toLowerCase(), hash })
   ]);
 };
 const getPinHash = async (db) => {
@@ -5311,7 +5312,8 @@ const getPinHash = async (db) => {
   if (!row) return null;
   try {
     const parsed = JSON.parse(row.value);
-    return parsed.hash ?? null;
+    if (!parsed.email || !parsed.hash) return null;
+    return { email: parsed.email, hash: parsed.hash };
   } catch {
     return null;
   }
@@ -5356,24 +5358,26 @@ class AuthService {
   async saveLoginHash(email, password) {
     const salt = crypto.randomBytes(16).toString("hex");
     const hash = crypto.pbkdf2Sync(password, salt, 1e3, 64, "sha512").toString("hex");
-    await saveLoginHash(this.db, `${salt}:${hash}`);
+    await saveLoginHash(this.db, email, `${salt}:${hash}`);
   }
   async verifyLoginHash(email, password) {
     const stored = await getLoginHash(this.db);
     if (!stored) return false;
-    const [salt, hash] = stored.split(":");
+    if (stored.email !== email.toLowerCase()) return false;
+    const [salt, hash] = stored.hash.split(":");
     const currentHash = crypto.pbkdf2Sync(password, salt, 1e3, 64, "sha512").toString("hex");
     return hash === currentHash;
   }
-  async savePinHash(pin) {
+  async savePinHash(email, pin) {
     const salt = crypto.randomBytes(16).toString("hex");
     const hash = crypto.pbkdf2Sync(pin, salt, 1e3, 64, "sha512").toString("hex");
-    await savePinHash(this.db, `${salt}:${hash}`);
+    await savePinHash(this.db, email, `${salt}:${hash}`);
   }
-  async verifyPinHash(pin) {
+  async verifyPinHash(email, pin) {
     const stored = await getPinHash(this.db);
     if (!stored) return false;
-    const [salt, hash] = stored.split(":");
+    if (stored.email !== email.toLowerCase()) return false;
+    const [salt, hash] = stored.hash.split(":");
     const currentHash = crypto.pbkdf2Sync(pin, salt, 1e3, 64, "sha512").toString("hex");
     return hash === currentHash;
   }
@@ -25136,11 +25140,11 @@ app.whenReady().then(() => {
   );
   ipcMain.handle(
     "auth:savePinHash",
-    (_event, pin) => authService.savePinHash(pin)
+    (_event, email, pin) => authService.savePinHash(email, pin)
   );
   ipcMain.handle(
     "auth:verifyPinHash",
-    (_event, pin) => authService.verifyPinHash(pin)
+    (_event, email, pin) => authService.verifyPinHash(email, pin)
   );
   ipcMain.handle("db:getUser", () => authService.getUser());
   ipcMain.handle("db:saveUser", (_event, payload) => {

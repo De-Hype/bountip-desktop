@@ -65,7 +65,8 @@ export interface ElectronAPI {
     useAuth?: boolean;
   }) => Promise<void>;
 
-  savePinHash: (pin: string) => Promise<void>;
+  savePinHash: (email: string, pin: string) => Promise<void>;
+  verifyPinHash: (email: string, pin: string) => Promise<boolean>;
 
   storeTokens: (payload: any) => void;
   clearTokens: () => void;

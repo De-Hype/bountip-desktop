@@ -17,10 +17,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("auth:saveLoginHash", email, password),
   verifyLoginHash: async (email: string, password: string) =>
     ipcRenderer.invoke("auth:verifyLoginHash", email, password),
-  savePinHash: async (pin: string) =>
-    ipcRenderer.invoke("auth:savePinHash", pin),
-  verifyPinHash: async (pin: string) =>
-    ipcRenderer.invoke("auth:verifyPinHash", pin),
+  savePinHash: async (email: string, pin: string) =>
+    ipcRenderer.invoke("auth:savePinHash", email, pin),
+  verifyPinHash: async (email: string, pin: string) =>
+    ipcRenderer.invoke("auth:verifyPinHash", email, pin),
   saveUser: async (user: any) => {
     try {
       return await ipcRenderer.invoke("db:saveUser", user);

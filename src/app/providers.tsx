@@ -40,6 +40,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     fetchBusinessData,
     isLoading: businessLoading,
     hasInitialized,
+    selectedOutlet,
   } = useBusinessStore();
   const toast = useToastStore();
 
@@ -72,8 +73,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const isSplashVisible =
+    isBootstrapping ||
+    isInitialSyncing ||
+    (isAuthenticated && !hasInitialized) ||
+    (isAuthenticated && !selectedOutlet);
+
   useEffect(() => {
-    if (!isInitialSyncing) return;
+    if (!isSplashVisible) return;
     setSyncSplashIndex(0);
     setSyncSplashProgress(18);
 
@@ -92,7 +99,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       window.clearInterval(messageTimer);
       window.clearInterval(progressTimer);
     };
-  }, [isInitialSyncing, syncSplashMessages.length]);
+  }, [isSplashVisible, syncSplashMessages.length]);
 
   /**
    * ------------------------------------------------------
@@ -151,11 +158,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isAuthenticated) {
       (async () => {
-        // 1. Initial load from local DB
-        await fetchBusinessData();
-
         const api = (window as any).electronAPI;
         if (!api) return;
+
+        // 0. Ensure user still exists in DB (handle potential data wipe or session loss)
+        const currentUser = await api.getUser();
+
+        // Only clear auth if we are NOT in the middle of bootstrapping or initial sync
+        // and the user is truly missing from the database.
+        if (
+          !isBootstrapping &&
+          !isInitialSyncing &&
+          (!currentUser || !currentUser.id)
+        ) {
+          console.warn(
+            "[Providers] Authenticated but no user found in DB. Clearing auth...",
+          );
+          clearAuth();
+          return;
+        }
+
+        // 1. Initial load from local DB
+        await fetchBusinessData();
 
         // 2. Check if we need a sync pull
         const { outlets } = useBusinessStore.getState();
@@ -276,11 +300,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
    * SPLASH SCREEN (NEVER RETURN NULL)
    * ------------------------------------------------------
    */
-  if (
-    isBootstrapping ||
-    isInitialSyncing ||
-    (isAuthenticated && !hasInitialized)
-  ) {
+  if (isSplashVisible) {
     const splash = syncSplashMessages[syncSplashIndex] || syncSplashMessages[0];
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
@@ -289,23 +309,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
           alt="Bountip"
           className="w-36 animate-pulse"
         />
-        {isInitialSyncing && (
-          <div className="mt-8 w-full max-w-[520px] px-6 flex flex-col items-center">
-            <div className="text-[22px] font-bold text-[#111827] text-center">
-              {splash.title}
-            </div>
-            <div className="mt-3 text-[14px] text-[#6B7280] text-center">
-              {splash.subtitle}
-            </div>
-
-            <div className="mt-7 h-3 w-full rounded-full bg-[#E5E7EB] overflow-hidden">
-              <div
-                className="h-full bg-[#15BA5C] transition-[width] duration-300 ease-out"
-                style={{ width: `${syncSplashProgress}%` }}
-              />
-            </div>
+        <div className="mt-8 w-full max-w-[520px] px-6 flex flex-col items-center">
+          <div className="text-[22px] font-bold text-[#111827] text-center">
+            {splash.title}
           </div>
-        )}
+          <div className="mt-3 text-[14px] text-[#6B7280] text-center">
+            {splash.subtitle}
+          </div>
+
+          <div className="mt-7 h-3 w-full rounded-full bg-[#E5E7EB] overflow-hidden">
+            <div
+              className="h-full bg-[#15BA5C] transition-[width] duration-300 ease-out"
+              style={{ width: `${syncSplashProgress}%` }}
+            />
+          </div>
+        </div>
       </div>
     );
   }

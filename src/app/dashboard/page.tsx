@@ -2,12 +2,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, LogOut } from "lucide-react";
 import AssetsFiles from "@/assets";
 import { useAuthStore } from "@/stores/authStore";
 import { performLogout } from "@/services/authSession";
+import { useBusinessStore } from "@/stores/useBusinessStore";
+import { usePermission } from "@/hooks/usePermission";
 
 const DashboardCard = ({
   icon: Icon,
@@ -150,91 +152,117 @@ const Dashboard = () => {
     };
   }, []);
 
-  const menuItems = [
-    {
-      icon: AssetsFiles.dashboard,
-      title: "Dashboard",
-      path: "/dashboard",
-      available: true,
-    },
-    {
-      icon: AssetsFiles.product,
-      title: "Product Management",
-      path: "/dashboard/product-management",
-      // badge: "Coming Soon",
-      available: true,
-    },
+  const { selectedOutlet } = useBusinessStore();
+  const { hasPermission, isSuperAdmin, userPermissions } = usePermission();
 
-    {
-      icon: AssetsFiles.cardpos,
-      title: "Point of Sale (POS)",
-      path: "/dashboard/pos",
-      // badge: "Coming Soon",
-      // available: false,
-    },
-    {
-      icon: AssetsFiles.productionbelt,
-      title: "Production Management",
-      path: "/dashboard/production-management",
-      // badge: "Coming Soon",
-      // available: false,
-    },
-    {
-      icon: AssetsFiles.phusers,
-      title: "Customer Management",
-      path: "/dashboard/customer-management",
-      // badge: "Coming Soon",
-     // available: true,
-    },
+  const menuItems = useMemo(() => {
+    const items: Array<{
+      icon: any;
+      title: string;
+      path: string;
+      available: boolean;
+      permissionKey: string;
+      badge?: string;
+      cardClassName?: string;
+      iconContainerClassName?: string;
+      iconClassName?: string;
+      titleClassName?: string;
+      buttonClassName?: string;
+      buttonIconClassName?: string;
+      badgeContainerClassName?: string;
+      badgeImageClassName?: string;
+      badgeTextClassName?: string;
+    }> = [
+      {
+        icon: AssetsFiles.dashboard,
+        title: "Dashboard",
+        path: "/dashboard",
+        available: true,
+        permissionKey: "dashboard",
+      },
+      {
+        icon: AssetsFiles.product,
+        title: "Product Management",
+        path: "/dashboard/product-management",
+        available: true,
+        permissionKey: "productManagement",
+      },
+      {
+        icon: AssetsFiles.cardpos,
+        title: "Point of Sale (POS)",
+        path: "/dashboard/pos",
+        available: true,
+        permissionKey: "pos",
+      },
+      {
+        icon: AssetsFiles.productionbelt,
+        title: "Production Management",
+        path: "/dashboard/production-management",
+        available: true,
+        permissionKey: "production",
+      },
+      {
+        icon: AssetsFiles.phusers,
+        title: "Customer Management",
+        path: "/dashboard/customer-management",
+        available: true,
+        permissionKey: "customerManagement",
+      },
+      {
+        icon: AssetsFiles.noodlebowl,
+        title: "Recipe Management",
+        path: "/dashboard/recipe-management",
+        available: true,
+        permissionKey: "recipeManagement",
+      },
+      {
+        icon: AssetsFiles.inventory,
+        title: "Inventory",
+        path: "/dashboard/inventory",
+        available: true,
+        permissionKey: "inventory",
+      },
+      {
+        icon: AssetsFiles.analytics,
+        title: "Report & Analysis",
+        path: "/dashboard/report-analysis",
+        available: true,
+        permissionKey: "reportAnalytics",
+      },
+      {
+        icon: AssetsFiles.phusers,
+        title: "Roles & Permissions",
+        path: "/dashboard/roles-permissions",
+        available: true,
+        permissionKey: "rolesPermissions",
+      },
+      {
+        icon: AssetsFiles.settings,
+        title: "Settings",
+        path: "/dashboard/settings",
+        available: true,
+        permissionKey: "settings",
+      },
+    ];
 
-    {
-      icon: AssetsFiles.noodlebowl,
-      title: "Recipe Management",
-      path: "/dashboard/recipe-management",
-      // badge: "Coming Soon",
-      // available: false,
-    },
-    {
-      icon: AssetsFiles.inventory,
-      title: "Inventory",
-      path: "/dashboard/inventory",
-      // badge: "Coming Soon",
-      // available: false,
-    },
+    // 1. Super Admin sees everything
+    if (isSuperAdmin) return items;
 
-    {
-      icon: AssetsFiles.analytics,
-      title: "Report & Analysis",
-      path: "/dashboard/report-analysis",
-      badge: "Coming Soon",
-      available: false,
-    },
-    {
-      icon: AssetsFiles.phusers,
-      title: "Roles & Permissions",
-      path: "/dashboard/roles-permissions",
-      // badge: "Coming Soon",
-      // available: false,
-    },
-    {
-      icon: AssetsFiles.settings,
-      title: "Settings",
-      path: "/dashboard/settings",
-      available: true,
-    },
+    // 2. If no permissions found yet, default to items
+    if (!userPermissions) return items;
+
+    // 3. Filter based on permissions using the hook's logic
+    return items.filter((item) => hasPermission(item.permissionKey, "VIEW"));
+  }, [userPermissions, isSuperAdmin, hasPermission]);
+
+  const allItems = [
+    ...menuItems,
     {
       icon: AssetsFiles.settings,
       title: "Database Viewer",
       path: "/dashboard/debug/database",
       available: true,
     },
-    // {
-    //   icon: AssetsFiles.DistributionIcon,
-    //   title: "Distribution",
-    //   path: "/distribution",
-    //   badge: "Coming Soon",
-    //   available: false,
-    // },
     {
       icon: AssetsFiles.rocket,
       title: "Upgrade",
@@ -322,7 +350,7 @@ const Dashboard = () => {
 
         {/* Dashboard Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-8">
-          {menuItems.map((item, index) => (
+          {allItems.map((item, index) => (
             <DashboardCard
               key={index}
               icon={item.icon}

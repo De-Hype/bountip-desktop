@@ -116,53 +116,55 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   };
 
   const handleSignin = async (data: SigninFormValues) => {
-    // Offline Login Check
     const api = (window as any).electronAPI;
 
-    if (!isOnline) {
-      if (api?.verifyLoginHash) {
-        try {
-          const isValid = await api.verifyLoginHash(data.email, data.password);
-          if (isValid) {
-            const user = await api.getUser();
-            if (user) {
-              setAuth({
-                user: {
-                  id: user.id,
-                  email: user.email,
-                  name: user.name,
-                  status: user.status,
-                  isEmailVerified: user.isEmailVerified,
-                },
-                tokens: { accessToken: "offline", refreshToken: "offline" },
-              });
+    // 1. Stage 1: Try Local/Offline Login First
+    // Verify the inputted email+password with the email + password hash we have on the localdb.
+    if (api?.verifyLoginHash && api?.getUser) {
+      try {
+        const isValid = await api.verifyLoginHash(data.email, data.password);
+        const localUser = await api.getUser();
 
-              // Check if there is a 'from' path in location state
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const state = (window.history.state as any)?.usr?.state as {
-                from?: string;
-              } | null;
-              if (state?.from) {
-                navigate(state.from);
-              } else {
-                navigate("/dashboard");
-              }
-              return;
-            }
-          }
-          showToast("error", "Sign in failed", "Invalid credentials (Offline)");
-          return;
-        } catch (err) {
-          console.error("Offline login verification failed", err);
-          showToast("error", "Sign in failed", "Offline login unavailable");
+        // If it is a match (valid password AND matches the local user's email), log them in.
+        if (
+          isValid &&
+          localUser &&
+          localUser.email.toLowerCase() === data.email.toLowerCase()
+        ) {
+          setAuth({
+            user: {
+              id: localUser.id,
+              email: localUser.email,
+              name: localUser.name,
+              status: localUser.status,
+              isEmailVerified: localUser.isEmailVerified,
+            },
+            tokens: { accessToken: "offline", refreshToken: "offline" },
+          });
+
+          const state = (window.history.state as any)?.usr?.state as {
+            from?: string;
+          } | null;
+          navigate(state?.from || "/dashboard");
           return;
         }
-      } else {
-        showToast("error", "Offline", "Connect to the internet to sign in.");
-        return;
+      } catch (err) {
+        console.warn("Local hash verification failed", err);
       }
     }
 
+    // 2. Stage 2: If it is not a match, check the online status.
+    if (!isOnline) {
+      // If the system is not online, tell them an error.
+      showToast(
+        "error",
+        "Offline Login Failed",
+        "Invalid credentials or connection required to log in as a different user.",
+      );
+      return;
+    }
+
+    // 3. Stage 3: If the system is online, use the login api.
     if (isLocked) {
       showToast(
         "error",
@@ -171,8 +173,26 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       );
       return;
     }
+
     setIsLoading(true);
     try {
+      // Check if we are switching users to trigger data wipe
+      const localUserBefore = await api?.getUser?.();
+      const isSwitchingUser =
+        localUserBefore &&
+        localUserBefore.email &&
+        localUserBefore.email.toLowerCase() !== data.email.toLowerCase();
+
+      // If switching users, flush any pending syncs and wipe data first
+      if (isSwitchingUser && api?.flushSync && api?.wipeData) {
+        try {
+          await api.flushSync();
+        } catch (err) {
+          console.error("Failed to flush sync before user switch", err);
+        }
+        await api.wipeData();
+      }
+
       const response = await authService.signin({
         email: data.email,
         password: data.password,
@@ -180,8 +200,9 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
 
       const { tokens, user } = response.data;
 
-      // Wipe any existing data before syncing to prevent cross-user leakage
-      if (api?.wipeData) {
+      // If it comes back as a good response on the api, use the new details
+      // Wipe data again to ensure clean state for the new user
+      if (isSwitchingUser && api?.wipeData) {
         await api.wipeData();
       }
 
@@ -192,6 +213,16 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       if (api?.cacheDelete) {
         await api.cacheDelete("bountip_login_lock");
       }
+
+      // Save user data to local DB
+      await userStorage.saveUserFromApi(user);
+
+      // Save Login hash for future local/offline logins
+      if (api?.saveLoginHash) {
+        await api.saveLoginHash(data.email, data.password);
+      }
+
+      // Update auth state
       setAuth({
         user: {
           id: user?.id,
@@ -203,69 +234,33 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         tokens,
       });
 
-      // Save Login hash for future offline login
-      if (api?.saveLoginHash) {
-        api.saveLoginHash(data.email, data.password);
-      }
-
-      // Flush previous user's queue if online before wiping data
-      if (isOnline && api?.flushSync) {
-        try {
-          await api.flushSync();
-        } catch (err) {
-          console.error("Failed to flush sync queue before user switch", err);
-        }
-      }
-
-      // Wipe any existing data before syncing to prevent cross-user leakage
-      if (api?.wipeData) {
-        // await api.wipeData();
-      }
-
-      // Save user to local storage and DB after wipe
-      await userStorage.saveUserFromApi(user);
-
-      // Force a sync to pull business data for the newly logged in user
+      // 4. Fetch the sync of the logged in user
       if (api?.triggerSync) {
-        await api.triggerSync();
+        // Force a full pull for new users/switched users to ensure all data is fetched
+        await api.triggerSync(isSwitchingUser);
       }
 
-      // Retry check for business and outlets to handle sync time lapse
+      // 5. Verification and Navigation
       const checkOnboardingStatus = async (retries = 5, delay = 2000) => {
         for (let i = 0; i < retries; i++) {
           const [outlets, businesses] = await Promise.all([
             api?.getOutlets?.() || [],
             api?.getBusinesses?.() || [],
           ]);
-
-          console.log(
-            `[Login] Attempt ${i + 1} - Outlets: ${outlets.length}, Businesses: ${businesses.length}`,
-          );
-
           if (outlets.length > 0 && businesses.length > 0) {
             return { hasOutlets: true, hasBusiness: true };
           }
-
-          // If it's not the last retry, wait
-          if (i < retries - 1) {
+          if (i < retries - 1)
             await new Promise((resolve) => setTimeout(resolve, delay));
-          }
         }
-
-        const [finalOutlets, finalBusinesses] = await Promise.all([
+        const [fo, fb] = await Promise.all([
           api?.getOutlets?.() || [],
           api?.getBusinesses?.() || [],
         ]);
-
-        return {
-          hasOutlets: finalOutlets.length > 0,
-          hasBusiness: finalBusinesses.length > 0,
-        };
+        return { hasOutlets: fo.length > 0, hasBusiness: fb.length > 0 };
       };
 
       const status = await checkOnboardingStatus();
-
-      // Refresh the business store state to update UI (like the UserProfile outlet list)
       await fetchBusinessData();
 
       if (!status.hasBusiness || !status.hasOutlets) {
@@ -273,66 +268,35 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
         return;
       }
 
-      // Check if there is a 'from' path in location state
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const state = (window.history.state as any)?.usr?.state as {
         from?: string;
       } | null;
-      if (state?.from) {
-        navigate(state.from);
-      } else {
-        navigate("/dashboard");
-      }
+      navigate(state?.from || "/dashboard");
     } catch (error: any) {
-      console.log(error, "This is the error");
-
+      console.error("Login error:", error);
       const apiError = error as any;
       const data = apiError?.response?.data;
       const status = apiError?.response?.status;
-      const backendLockMessage =
-        typeof data?.message === "string" &&
-        data.message.toLowerCase().includes("account locked");
 
-      if (status === 401 && backendLockMessage) {
+      if (
+        status === 401 &&
+        data?.message?.toLowerCase().includes("account locked")
+      ) {
         const lockMs = 5 * 60 * 1000;
         const until = Date.now() + lockMs;
         setLockUntil(until);
         setFailedAttempts(0);
-        if (api?.cachePut) {
-          api.cachePut("bountip_login_lock", { until });
-        }
-        showToast(
-          "error",
-          "Account locked",
-          data?.message ??
-            "Account locked due to too many failed attempts. Please try again after 5 minutes.",
-        );
-        return;
-      }
-
-      if (apiError?.code === "OFFLINE" || apiError?.message === "offline") {
-        showToast("error", "Offline", "Connect to the internet to sign in.");
+        if (api?.cachePut) api.cachePut("bountip_login_lock", { until });
+        showToast("error", "Account locked", data?.message);
         return;
       }
 
       if (apiError.message === "INACTIVE_ACCOUNT") {
-        // Access name and email from response.data
         const userName = apiError.response?.data?.name;
         const userEmail = apiError.response?.data?.email;
-
-        console.log("User Name:", userName);
-        console.log("User Email:", userEmail);
-
-        showToast(
-          "error",
-          "Account Inactive",
-          "Your account is inactive. Please verify your email address.",
-        );
-
+        showToast("error", "Account Inactive", "Please verify your email.");
         navigate(
-          `/verify?name=${encodeURIComponent(
-            userName,
-          )}&email=${encodeURIComponent(userEmail)}`,
+          `/verify?name=${encodeURIComponent(userName)}&email=${encodeURIComponent(userEmail)}`,
         );
         return;
       }
@@ -343,21 +307,18 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
           const lockMs = 5 * 60 * 1000;
           const until = Date.now() + lockMs;
           setLockUntil(until);
-          if (api?.cachePut) {
-            api.cachePut("bountip_login_lock", { until });
-          }
-          showToast(
-            "error",
-            "Account locked",
-            "Account locked due to too many failed attempts. Please try again after 5 minutes.",
-          );
+          if (api?.cachePut) api.cachePut("bountip_login_lock", { until });
+          showToast("error", "Account locked", "Too many failed attempts.");
           return 0;
         }
         return next;
       });
 
-      const message = (error as Error).message || "Unable to sign in.";
-      showToast("error", "Sign in failed", message);
+      showToast(
+        "error",
+        "Sign in failed",
+        (error as Error).message || "Unable to sign in.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -369,10 +330,15 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     // Offline Login Check
     const electronApi = (window as any).electronAPI;
 
+    let email = "";
+    if (electronApi?.cacheGet) {
+      email = await electronApi.cacheGet(COOKIE_NAMES.TOKEN_USER_EMAIL);
+    }
+
     if (!isOnline) {
-      if (electronApi?.verifyPinHash) {
+      if (electronApi?.verifyPinHash && email) {
         try {
-          const isValid = await electronApi.verifyPinHash(pin);
+          const isValid = await electronApi.verifyPinHash(email, pin);
           if (isValid) {
             // Get cached user and tokens if possible, or just user
             // Ideally we need tokens to be authenticated, but offline we might just need user data
@@ -408,11 +374,6 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     }
 
     if (pin.length < 4) return;
-    let email = "";
-
-    if (electronApi?.cacheGet) {
-      email = await electronApi.cacheGet(COOKIE_NAMES.TOKEN_USER_EMAIL);
-    }
 
     if (!email) {
       showToast(
@@ -446,19 +407,14 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
       });
 
       // Save PIN hash for future offline login
-      if (electronApi?.savePinHash) {
-        electronApi.savePinHash(pin);
+      if (electronApi?.savePinHash && email) {
+        await electronApi.savePinHash(email, pin);
       }
       if (electronApi?.saveUser) {
-        electronApi.saveUser(user);
+        await electronApi.saveUser(user);
       }
 
-      // try {
-      //   await businessService.loadAllOutlet();
-      // } catch {}
-
       // Check if there is a 'from' path in location state
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const state = (window.history.state as any)?.usr?.state as {
         from?: string;
       } | null;
@@ -478,6 +434,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
   const isSubmitDisabled = () => {
     if (isLoading) return true;
     if (isLocked) return true;
+    if (pinLogin && pin.length < 4) return true;
     return false;
   };
 
@@ -485,7 +442,7 @@ export const LoginForm = ({ onToggleMode }: LoginFormProps) => {
     if (isLoading) return "Loading...";
     if (isLocked) return `Locked (${formatRemaining()})`;
 
-    return "Sign In";
+    return pinLogin ? "Sign In with PIN" : "Sign In";
   };
 
   return (

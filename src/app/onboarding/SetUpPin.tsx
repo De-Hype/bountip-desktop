@@ -8,7 +8,7 @@ import PinInput from "./PinInput";
 import useToastStore from "@/stores/toastStore";
 
 type ElectronAPI = {
-  savePinHash: (pin: string) => Promise<void>;
+  savePinHash: (email: string, pin: string) => Promise<void>;
   triggerSync: (forceFullPull?: boolean) => Promise<void>;
 };
 
@@ -20,7 +20,10 @@ const getElectronAPI = (): ElectronAPI | null => {
 
 const SetUpPin = () => {
   const navigate = useNavigate();
-  const pin = useAuthStore((state) => state.pin);
+  const { pin, user } = useAuthStore((state) => ({
+    pin: state.pin,
+    user: state.user,
+  }));
   const [setPin] = useSetPinMutation();
   const { showToast } = useToastStore();
 
@@ -36,8 +39,8 @@ const SetUpPin = () => {
 
         // Save PIN hash locally for offline login
         const api = getElectronAPI();
-        if (api) {
-          await api.savePinHash(pin);
+        if (api && user?.email) {
+          await api.savePinHash(user.email, pin);
           if (api.triggerSync) {
             await api.triggerSync(true);
           }

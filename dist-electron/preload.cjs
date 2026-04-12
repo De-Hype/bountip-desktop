@@ -14,8 +14,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   },
   saveLoginHash: async (email, password) => electron.ipcRenderer.invoke("auth:saveLoginHash", email, password),
   verifyLoginHash: async (email, password) => electron.ipcRenderer.invoke("auth:verifyLoginHash", email, password),
-  savePinHash: async (pin) => electron.ipcRenderer.invoke("auth:savePinHash", pin),
-  verifyPinHash: async (pin) => electron.ipcRenderer.invoke("auth:verifyPinHash", pin),
+  savePinHash: async (email, pin) => electron.ipcRenderer.invoke("auth:savePinHash", email, pin),
+  verifyPinHash: async (email, pin) => electron.ipcRenderer.invoke("auth:verifyPinHash", email, pin),
   saveUser: async (user) => {
     try {
       return await electron.ipcRenderer.invoke("db:saveUser", user);
