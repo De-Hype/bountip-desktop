@@ -4664,8 +4664,9 @@ class DatabaseService {
     op.data || op.payload || {};
     if (tableName && recordId) {
       try {
+        const quotedTableName = `"${tableName}"`;
         const tableInfo = this.prepare(
-          `PRAGMA table_info(${tableName})`
+          `PRAGMA table_info(${quotedTableName})`
         ).all();
         const hasVersion = tableInfo.some((col) => col.name === "version");
         const hasUpdatedAt = tableInfo.some(
@@ -4675,15 +4676,15 @@ class DatabaseService {
         if (hasVersion && hasId) {
           if (hasUpdatedAt) {
             this.prepare(
-              `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`
+              `UPDATE ${quotedTableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`
             ).run((/* @__PURE__ */ new Date()).toISOString(), recordId);
           } else {
             this.prepare(
-              `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1 WHERE id = ?`
+              `UPDATE ${quotedTableName} SET version = COALESCE(version, 0) + 1 WHERE id = ?`
             ).run(recordId);
           }
           const updatedRecord = this.prepare(
-            `SELECT version FROM ${tableName} WHERE id = ?`
+            `SELECT version FROM ${quotedTableName} WHERE id = ?`
           ).get(recordId);
           if (updatedRecord) {
             if (op.data) op.data.version = updatedRecord.version;
@@ -24484,7 +24485,7 @@ const createInventoryItem = async (db, payload) => {
       db.sanitize(buildItemMasterUpsertParams(itemMaster))
     );
     db.addToQueue({
-      table: "item_master",
+      table: "item-master",
       action: SYNC_ACTIONS.CREATE,
       data: itemMaster,
       id: itemMasterId
@@ -24539,7 +24540,7 @@ const createInventoryItem = async (db, payload) => {
       db.sanitize(buildInventoryItemUpsertParams(inventoryItem))
     );
     db.addToQueue({
-      table: "inventory_item",
+      table: "inventory-item",
       action: SYNC_ACTIONS.CREATE,
       data: inventoryItem,
       id: inventoryItemId
@@ -24951,14 +24952,6 @@ const upsertBusinessUser = async (db, payload) => {
         "DELETE FROM business_user_roles_business_role WHERE businessUserId = ?",
         [businessUserId]
       );
-      for (const m of existingMappings) {
-        db.addToQueue({
-          table: "business_user_roles_business_role",
-          action: SYNC_ACTIONS.DELETE,
-          data: m,
-          id: `${m.businessUserId}:${m.businessRoleId}`
-        });
-      }
     }
     if (roleId) {
       const previous = existingMappings.find(
@@ -24973,12 +24966,6 @@ const upsertBusinessUser = async (db, payload) => {
         businessUserRolesBusinessRoleUpsertSql,
         db.sanitize(buildBusinessUserRolesBusinessRoleUpsertParams(mappingRow))
       );
-      db.addToQueue({
-        table: "business_user_roles_business_role",
-        action: previous ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
-        data: mappingRow,
-        id: `${businessUserId}:${roleId}`
-      });
     }
     return { userId, businessUserId };
   });
@@ -25029,10 +25016,7 @@ const upsertBusinessRole = async (db, payload) => {
       ...existingRole || {},
       id,
       name: payload.name,
-      permissions: payload.permissions ?? {
-        description: payload.description || "",
-        pages: []
-      },
+      permissions: payload.permissions ?? {},
       createdAt: existingRole?.createdAt || now,
       updatedAt: now,
       businessId,

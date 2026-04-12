@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import {
   User,
   PenLine,
@@ -18,6 +19,8 @@ import useActionMenuStore from "@/stores/rolesAndPermissionStore";
 import CreateRole from "@/features/roles-permissions/CreateRole";
 import CreateUser from "@/features/roles-permissions/CreateUser";
 import AssignPinModal from "@/features/roles-permissions/AssignPinModal";
+import ManagePermission from "@/features/roles-permissions/ManagePermission";
+import EditRole from "@/features/roles-permissions/EditRole";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { Pagination } from "@/shared/Pagination/pagination";
 import EditUser from "@/features/roles-permissions/EditUser";
@@ -70,6 +73,12 @@ const RolesAndPermissionPage = () => {
     closeCreateUser,
     isAssignPinOpen,
     closeAssignPin,
+    isManagePermissionOpen,
+    openManagePermission,
+    closeManagePermission,
+    isEditRoleOpen,
+    openEditRole,
+    closeEditRole,
   } = useActionMenuStore();
 
   const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(true);
@@ -105,6 +114,46 @@ const RolesAndPermissionPage = () => {
       await fetchRolesAndUsers();
     } catch (error) {
       console.error("Failed to update user status:", error);
+    }
+  };
+
+  const handleExportUsers = () => {
+    if (searchedUsers.length === 0) return;
+
+    try {
+      // Prepare data for export
+      const exportData = searchedUsers.map((user) => ({
+        Name: user.name,
+        Email: user.email,
+        Role: user.role,
+        Status: user.status,
+        Initiator: user.initiator,
+        Date: user.timestampDate,
+        Time: user.timestampTime,
+      }));
+
+      // Create workbook and worksheet
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Users");
+
+      // Generate buffer and download
+      const excelBuffer = XLSX.write(workbook, {
+        bookType: "xlsx",
+        type: "array",
+      });
+      const data = new Blob([excelBuffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const url = window.URL.createObjectURL(data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Users_Export_${new Date().toISOString().split("T")[0]}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to export users:", error);
     }
   };
 
@@ -220,6 +269,7 @@ const RolesAndPermissionPage = () => {
           </div>
           <div className="flex items-center gap-3 self-start md:self-auto">
             <button
+              onClick={handleExportUsers}
               className="inline-flex items-center cursor-pointer gap-2 border border-[#15BA5C] text-nowrap px-4 py-2 rounded-[12px] text-sm font-medium text-[#15BA5C] bg-white hover:bg-green-50 transition-colors"
               type="button"
             >
@@ -297,17 +347,11 @@ const RolesAndPermissionPage = () => {
                   <div className="flex items-center gap-2 pt-1">
                     <button
                       type="button"
+                      onClick={() => openEditRole(role)}
                       className="w-7 h-7 rounded-full bg-[#15BA5C] flex items-center justify-center hover:bg-green-500"
                       aria-label={`Edit ${role.name}`}
                     >
                       <SquarePen className="w-3.5 h-3.5 text-white" />
-                    </button>
-                    <button
-                      type="button"
-                      className="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center hover:bg-red-600"
-                      aria-label={`Delete ${role.name}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-white" />
                     </button>
                   </div>
                 </div>
@@ -346,6 +390,7 @@ const RolesAndPermissionPage = () => {
               <span>Add New Role</span>
             </button>
             <button
+              onClick={openManagePermission}
               className="inline-flex items-center cursor-pointer gap-2 border border-[#15BA5C] text-nowrap px-4 py-2 rounded-[12px] text-sm font-medium text-[#15BA5C] bg-white hover:bg-green-50 transition-colors"
               type="button"
             >
@@ -622,6 +667,12 @@ const RolesAndPermissionPage = () => {
       )}
 
       <AssignPinModal isOpen={isAssignPinOpen} onClose={closeAssignPin} />
+
+      {isManagePermissionOpen && (
+        <ManagePermission onSuccess={fetchRolesAndUsers} />
+      )}
+
+      {isEditRoleOpen && <EditRole onSuccess={fetchRolesAndUsers} />}
     </section>
   );
 };

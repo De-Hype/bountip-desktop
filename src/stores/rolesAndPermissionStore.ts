@@ -14,6 +14,13 @@ type ActionMenuState = {
   isAssignPinOpen: boolean;
   openAssignPin: () => void;
   closeAssignPin: () => void;
+  isManagePermissionOpen: boolean;
+  openManagePermission: () => void;
+  closeManagePermission: () => void;
+  isEditRoleOpen: boolean;
+  editingRole: any | null;
+  openEditRole: (role: any) => void;
+  closeEditRole: () => void;
 };
 
 const useActionMenuStore = create<ActionMenuState>((set) => ({
@@ -21,6 +28,9 @@ const useActionMenuStore = create<ActionMenuState>((set) => ({
   isCreateRoleOpen: false,
   isCreateUserOpen: false,
   isAssignPinOpen: false,
+  isManagePermissionOpen: false,
+  isEditRoleOpen: false,
+  editingRole: null,
   openMenu: (id) => set({ openUserId: id }),
   closeMenu: () => set({ openUserId: null }),
   toggleMenu: (id) =>
@@ -55,6 +65,28 @@ const useActionMenuStore = create<ActionMenuState>((set) => ({
   closeAssignPin: () =>
     set({
       isAssignPinOpen: false,
+      openUserId: null,
+    }),
+  openManagePermission: () =>
+    set({
+      isManagePermissionOpen: true,
+      openUserId: null,
+    }),
+  closeManagePermission: () =>
+    set({
+      isManagePermissionOpen: false,
+      openUserId: null,
+    }),
+  openEditRole: (role) =>
+    set({
+      isEditRoleOpen: true,
+      editingRole: role,
+      openUserId: null,
+    }),
+  closeEditRole: () =>
+    set({
+      isEditRoleOpen: false,
+      editingRole: null,
       openUserId: null,
     }),
 }));

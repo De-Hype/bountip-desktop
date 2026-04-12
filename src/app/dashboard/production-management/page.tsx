@@ -10,6 +10,7 @@ import SubmittedProductionModal from "@/features/production-management/tabs/Subm
 import ScheduledProductionModal from "@/features/production-management/tabs/ScheduledProductionModal";
 import QualityControlModal from "@/features/production-management/tabs/QualityControlModal";
 import ReadyModal from "@/features/production-management/tabs/ReadyModal";
+import DraftModal from "@/features/production-management/tabs/DraftModal";
 
 const ProductionManagementPage = () => {
   const { productions, fetchProductions } = useProductionStore();
@@ -19,27 +20,50 @@ const ProductionManagementPage = () => {
   React.useEffect(() => {
     fetchProductions(selectedOutlet?.id);
     fetchOrders(selectedOutlet?.id);
+
+    // Refresh data every 5 seconds for "real-time" updates
+    const interval = setInterval(() => {
+      fetchProductions(selectedOutlet?.id);
+      fetchOrders(selectedOutlet?.id);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [fetchProductions, fetchOrders, selectedOutlet?.id]);
 
   const chips = React.useMemo(() => {
     const toBeProduced =
-      orders.filter((o) => o.status === "To be produced").length || 0;
+      orders.filter((o) => {
+        const s = (o.status || "").toLowerCase();
+        return (
+          s === "to be produced" ||
+          s === "to-be-produced" ||
+          s === "confirmed" ||
+          s === OrderStatus.TO_BE_PRODUCED.toLowerCase()
+        );
+      }).length || 0;
     const draft =
-      productions.filter((p) => (p.status || "").toLowerCase() === "draft")
-        .length || 0;
+      orders.filter((o) => (o.status || "").toLowerCase() === "draft").length ||
+      0;
     const submitted =
       productions.filter((p) => (p.status || "").toLowerCase() === "submitted")
         .length || 0;
     const scheduled =
-      productions.filter(
-        (p) => p.status === OrderStatus.SCHEDULED_FOR_PRODUCTION,
-      ).length || 0;
+      productions.filter((p) => {
+        const s = (p.status || "").toLowerCase();
+        return (
+          s === "scheduled for production" ||
+          s === OrderStatus.SCHEDULED_FOR_PRODUCTION.toLowerCase()
+        );
+      }).length || 0;
     const qualityControl =
       productions.filter(
         (p) => (p.status || "").toLowerCase() === "quality control",
       ).length || 0;
     const ready =
-      productions.filter((p) => p.status === OrderStatus.READY).length || 0;
+      productions.filter((p) => {
+        const s = (p.status || "").toLowerCase();
+        return s === "ready" || s === OrderStatus.READY.toLowerCase();
+      }).length || 0;
 
     return [
       {
@@ -123,6 +147,8 @@ const ProductionManagementPage = () => {
       {/* Orders Section */}
       {activeTab === "To be Produced" ? (
         <ToBeProducedList />
+      ) : activeTab === "Draft" ? (
+        <DraftModal />
       ) : activeTab === "Submitted" ? (
         <SubmittedProductionModal />
       ) : activeTab === "Scheduled for production" ? (

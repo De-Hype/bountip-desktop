@@ -17,7 +17,6 @@ const CreateRole = ({ onSuccess }: CreateRoleProps) => {
   const { showToast } = useToastStore();
 
   const [roleName, setRoleName] = useState("");
-  const [description, setDescription] = useState("");
   const [permissions, setPermissions] = useState<RolePagePermission[]>();
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -26,7 +25,6 @@ const CreateRole = ({ onSuccess }: CreateRoleProps) => {
     () =>
       z.object({
         roleName: z.string().trim().min(1, "Role name is required"),
-        description: z.string().trim().optional(),
       }),
     [],
   );
@@ -35,9 +33,8 @@ const CreateRole = ({ onSuccess }: CreateRoleProps) => {
     () =>
       schema.safeParse({
         roleName,
-        description,
       }),
-    [description, roleName, schema],
+    [roleName, schema],
   );
 
   const errors = useMemo(() => {
@@ -64,14 +61,38 @@ const CreateRole = ({ onSuccess }: CreateRoleProps) => {
 
     try {
       setIsCreating(true);
+
+      const pageToKey: Record<string, string> = {
+        Dashboard: "dashboard",
+        Settings: "settings",
+        "Product module": "productManagement",
+        "Point of Sale": "pos",
+        "Production Module": "production",
+        "Report & Analysis": "reportAnalytics",
+        "Roles & Permissions": "rolesPermissions",
+        Inventory: "inventory",
+        "Customer Management": "customerManagement",
+      };
+
+      const formattedPermissions: Record<string, string[]> = {};
+      if (permissions) {
+        for (const p of permissions) {
+          const key = pageToKey[p.page] || p.page.toLowerCase();
+          const perms: string[] = [];
+          if (p.canView) perms.push("VIEW");
+          if (p.canReport) perms.push("REPORT");
+          if (p.canManage) perms.push("MANAGE");
+
+          if (perms.length > 0) {
+            formattedPermissions[key] = perms;
+          }
+        }
+      }
+
       await (window as any).electronAPI.upsertBusinessRole({
         outletId: selectedOutletId,
         name: validation.data.roleName,
-        description: validation.data.description || "",
-        permissions: {
-          description: validation.data.description || "",
-          pages: permissions || [],
-        },
+        permissions: formattedPermissions,
       });
       await onSuccess?.();
       showToast("success", "Success", "Role created successfully");
@@ -85,7 +106,7 @@ const CreateRole = ({ onSuccess }: CreateRoleProps) => {
 
   return (
     <section className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <div>
           <label className="block text-base font-medium text-[#1C1B20] mb-2">
             Role Name
@@ -107,18 +128,6 @@ const CreateRole = ({ onSuccess }: CreateRoleProps) => {
             </span>
           )}
         </div>
-        <div>
-          <label className="block text-base font-medium text-[#1C1B20] mb-2">
-            Description
-          </label>
-          <input
-            type="text"
-            placeholder="Describe the role"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full rounded-[10px] bg-[#FAFAFC] border border-[#D1D1D1] px-4.5 py-2.5 text-sm text-[#111827] placeholder-[#A6A6A6] outline-none focus:border-[#15BA5C] focus:ring-1 focus:ring-[#15BA5C]"
-          />
-        </div>
       </div>
 
       <RolePagesPermissions value={permissions} onChange={setPermissions} />
@@ -135,7 +144,7 @@ const CreateRole = ({ onSuccess }: CreateRoleProps) => {
           type="button"
           onClick={handleCreate}
           disabled={isCreating || !validation.success}
-          className="w-full items-center justify-center rounded-[10px] px-8 py-2.5 text-sm font-medium text-white bg-[#15BA5C] hover:bg-green-600 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full items-center cursor-pointer justify-center rounded-[10px] px-8 py-2.5 text-sm font-medium text-white bg-[#15BA5C] hover:bg-green-600 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isCreating ? "Creating..." : "Create"}
         </button>

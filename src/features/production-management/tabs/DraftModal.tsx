@@ -1,17 +1,26 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { MoreVertical, Search, SlidersHorizontal } from "lucide-react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  MoreVertical,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Send,
+} from "lucide-react";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { Pagination } from "@/shared/Pagination/pagination";
 import { format } from "date-fns";
-import CreateProductionSchedule from "../orders/CreateProductionSchedule";
-import ViewProductionSchedule from "../orders/ViewProductionSchedule";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import NotFound from "@/features/inventory/NotFound";
-import { OrderStatus } from "../../../../electron/types/order.types";
 
-const ToBeProducedList: React.FC = () => {
+const DraftModal: React.FC = () => {
   const { selectedOutlet } = useBusinessStore();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -19,8 +28,6 @@ const ToBeProducedList: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isCreateScheduleOpen, setIsCreateScheduleOpen] = useState(false);
-  const [isViewScheduleOpen, setIsViewScheduleOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -42,10 +49,10 @@ const ToBeProducedList: React.FC = () => {
             FROM orders
             WHERE outletId = ?
               AND (deletedAt IS NULL OR deletedAt = '')
-              AND LOWER(status) = LOWER(?)
+              AND LOWER(status) = 'draft'
             ORDER BY initiator ASC
           `,
-          [selectedOutlet.id, OrderStatus.TO_BE_PRODUCED],
+          [selectedOutlet.id],
         );
         setInitiators(
           (list || [])
@@ -62,88 +69,85 @@ const ToBeProducedList: React.FC = () => {
     ? getCurrencySymbol(selectedOutlet.currency)
     : "₦";
 
-  const fetchPage = useMemo(
-    () => async () => {
-      if (!selectedOutlet?.id) return;
-      const api: any = (window as any).electronAPI;
-      if (!api?.dbQuery) return;
+  const fetchPage = useCallback(async () => {
+    if (!selectedOutlet?.id) return;
+    const api: any = (window as any).electronAPI;
+    if (!api?.dbQuery) return;
 
-      setIsLoading(true);
-      try {
-        const where: string[] = [
-          "outletId = ?",
-          "(deletedAt IS NULL OR deletedAt = '')",
-          "LOWER(status) = LOWER(?)",
-        ];
-        const params: any[] = [selectedOutlet.id, OrderStatus.TO_BE_PRODUCED];
+    setIsLoading(true);
+    try {
+      const where: string[] = [
+        "outletId = ?",
+        "(deletedAt IS NULL OR deletedAt = '')",
+        "LOWER(COALESCE(status, '')) = 'draft'",
+      ];
+      const params: any[] = [selectedOutlet.id];
 
-        if (searchTerm.trim()) {
-          const pattern = `%${searchTerm.trim()}%`;
-          where.push("(id LIKE ? OR initiator LIKE ?)");
-          params.push(pattern, pattern);
-        }
-        if (initiatorFilter && initiatorFilter !== "All") {
-          where.push("initiator = ?");
-          params.push(initiatorFilter);
-        }
-        if (dateFrom) {
-          where.push("createdAt >= ?");
-          params.push(dateFrom);
-        }
-        if (dateTo) {
-          where.push("createdAt <= ?");
-          params.push(dateTo);
-        }
-        const whereClause = `WHERE ${where.join(" AND ")}`;
-
-        const countRows = await api.dbQuery(
-          `
-            SELECT COUNT(*) as count
-            FROM orders
-            ${whereClause}
-          `,
-          params,
-        );
-        const count = Number(countRows?.[0]?.count || 0);
-        setTotalCount(count);
-
-        const totalPagesLocal = Math.max(
-          1,
-          Math.ceil(count / Math.max(1, itemsPerPage)),
-        );
-        const safePage = Math.min(Math.max(1, currentPage), totalPagesLocal);
-        const offset = (safePage - 1) * itemsPerPage;
-
-        const rows = await api.dbQuery(
-          `
-            SELECT id, total, createdAt, initiator, reference, externalReference
-            FROM orders
-            ${whereClause}
-            ORDER BY createdAt DESC
-            LIMIT ? OFFSET ?
-          `,
-          [...params, itemsPerPage, offset],
-        );
-        setRows(rows || []);
-        if (safePage !== currentPage) setCurrentPage(safePage);
-      } catch (e) {
-        console.error("Failed to fetch to-be-produced orders:", e);
-        setRows([]);
-        setTotalCount(0);
-      } finally {
-        setIsLoading(false);
+      if (searchTerm.trim()) {
+        const pattern = `%${searchTerm.trim()}%`;
+        where.push("(id LIKE ? OR initiator LIKE ? OR reference LIKE ?)");
+        params.push(pattern, pattern, pattern);
       }
-    },
-    [
-      currentPage,
-      dateFrom,
-      dateTo,
-      initiatorFilter,
-      itemsPerPage,
-      searchTerm,
-      selectedOutlet?.id,
-    ],
-  );
+      if (initiatorFilter && initiatorFilter !== "All") {
+        where.push("initiator = ?");
+        params.push(initiatorFilter);
+      }
+      if (dateFrom) {
+        where.push("createdAt >= ?");
+        params.push(dateFrom);
+      }
+      if (dateTo) {
+        where.push("createdAt <= ?");
+        params.push(dateTo);
+      }
+      const whereClause = `WHERE ${where.join(" AND ")}`;
+
+      const countRows = await api.dbQuery(
+        `
+          SELECT COUNT(*) as count
+          FROM orders
+          ${whereClause}
+        `,
+        params,
+      );
+      const count = Number(countRows?.[0]?.count || 0);
+      setTotalCount(count);
+
+      const totalPagesLocal = Math.max(
+        1,
+        Math.ceil(count / Math.max(1, itemsPerPage)),
+      );
+      const safePage = Math.min(Math.max(1, currentPage), totalPagesLocal);
+      const offset = (safePage - 1) * itemsPerPage;
+
+      const rows = await api.dbQuery(
+        `
+          SELECT id, total, createdAt, initiator, reference, externalReference, status
+          FROM orders
+          ${whereClause}
+          ORDER BY createdAt DESC
+          LIMIT ? OFFSET ?
+        `,
+        [...params, itemsPerPage, offset],
+      );
+      setRows(rows || []);
+      if (safePage !== currentPage) setCurrentPage(safePage);
+    } catch (e) {
+      console.error("Failed to fetch draft orders:", e);
+      setRows([]);
+      setTotalCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    currentPage,
+    dateFrom,
+    dateTo,
+    initiatorFilter,
+    itemsPerPage,
+    searchTerm,
+    selectedOutlet?.id,
+  ]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -152,6 +156,52 @@ const ToBeProducedList: React.FC = () => {
   useEffect(() => {
     fetchPage();
   }, [fetchPage]);
+
+  const deleteDraft = async (orderId: string) => {
+    if (!confirm("Are you sure you want to delete this draft?")) return;
+    const api: any = (window as any).electronAPI;
+    try {
+      await api.dbQuery("DELETE FROM orders WHERE id = ?", [orderId]);
+      if (api.queueAdd) {
+        await api.queueAdd({
+          table: "orders",
+          action: "DELETE",
+          data: { id: orderId },
+          id: orderId,
+        });
+      }
+      fetchPage();
+    } catch (e) {
+      console.error("Failed to delete draft", e);
+    }
+  };
+
+  const submitDraft = async (orderId: string) => {
+    const api: any = (window as any).electronAPI;
+    try {
+      const now = new Date().toISOString();
+      await api.dbQuery(
+        "UPDATE orders SET status = 'Submitted', updatedAt = ? WHERE id = ?",
+        [now, orderId],
+      );
+      if (api.queueAdd) {
+        const rec = await api.dbQuery("SELECT * FROM orders WHERE id = ?", [
+          orderId,
+        ]);
+        if (rec?.[0]) {
+          await api.queueAdd({
+            table: "orders",
+            action: "UPDATE",
+            data: rec[0],
+            id: orderId,
+          });
+        }
+      }
+      fetchPage();
+    } catch (e) {
+      console.error("Failed to submit draft", e);
+    }
+  };
 
   const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
 
@@ -169,20 +219,17 @@ const ToBeProducedList: React.FC = () => {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [isFilterOpen]);
 
-  const statusBadge =
-    "px-3 py-1 rounded-full text-[12px] font-medium bg-[#FFEDD5] text-[#F97316]";
-
   return (
     <div className="p-4 sm:p-6 bg-white rounded-[12px]">
       <div className="flex items-center justify-between mb-6 relative">
-        <h2 className="text-xl font-bold text-[#1C1B20]">Confirmed Orders</h2>
+        <h2 className="text-xl font-bold text-[#1C1B20]">Draft Schedules</h2>
         <div className="flex items-center gap-3">
           <div className="flex items-center">
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search"
+              placeholder="Search drafts"
               className="w-[280px] h-11 px-4 bg-white border border-gray-200 rounded-l-[10px] outline-none focus:border-[#15BA5C] transition-all text-sm placeholder:text-gray-400"
             />
             <button
@@ -204,7 +251,7 @@ const ToBeProducedList: React.FC = () => {
           {isFilterOpen && (
             <div
               ref={filterRef}
-              className="absolute right-4 top-full mt-2 w-[360px] bg-white rounded-[12px] border border-gray-200 shadow-xl p-4 z-[1000]"
+              className="absolute right-0 top-full mt-2 w-[360px] bg-white rounded-[12px] border border-gray-200 shadow-xl p-4 z-[1000]"
             >
               <div className="space-y-3">
                 <div className="space-y-2">
@@ -274,22 +321,6 @@ const ToBeProducedList: React.FC = () => {
               </div>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={() => setIsViewScheduleOpen(true)}
-            className="h-11 px-5 bg-white border border-[#15BA5C] text-[#15BA5C] rounded-[10px] text-[14px] font-medium hover:bg-green-50 transition-all cursor-pointer"
-          >
-            View Production Schedule
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsCreateScheduleOpen(true)}
-            className="h-11 px-5 bg-[#15BA5C] text-white rounded-[10px] text-[14px] font-medium hover:bg-[#119E4D] transition-all cursor-pointer"
-          >
-            Create Production Schedule
-          </button>
         </div>
       </div>
 
@@ -315,7 +346,7 @@ const ToBeProducedList: React.FC = () => {
               <th className="px-4 py-4 text-[13px] font-medium text-gray-500">
                 Initiator
               </th>
-              <th className="px-4 py-4 text-[13px] font-medium text-gray-500">
+              <th className="px-4 py-4 text-[13px] font-medium text-gray-500 text-center">
                 Action
               </th>
             </tr>
@@ -358,18 +389,38 @@ const ToBeProducedList: React.FC = () => {
                           : "-"}
                       </td>
                       <td className="px-4 py-5">
-                        <span className={statusBadge}>To be Produced</span>
+                        <span className="px-3 py-1 rounded-full text-[12px] font-medium bg-gray-100 text-gray-500">
+                          Draft
+                        </span>
                       </td>
                       <td className="px-4 py-5 text-sm text-[#1C1B20] font-medium">
                         {order.initiator || "—"}
                       </td>
                       <td className="px-4 py-5">
-                        <button
-                          type="button"
-                          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                        >
-                          <MoreVertical className="size-4 text-gray-400" />
-                        </button>
+                        <div className="flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => submitDraft(order.id)}
+                            className="h-9 px-4 rounded-lg bg-[#15BA5C] text-white text-[13px] font-medium hover:bg-[#119E4D] transition-colors flex items-center gap-2 cursor-pointer"
+                          >
+                            <Send className="size-3.5" />
+                            Submit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteDraft(order.id)}
+                            className="h-9 px-4 rounded-lg bg-[#FEE2E2] text-[#EF4444] text-[13px] font-medium hover:bg-red-100 transition-colors flex items-center gap-2 cursor-pointer"
+                          >
+                            <Trash2 className="size-3.5" />
+                            Delete
+                          </button>
+                          <button
+                            type="button"
+                            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                          >
+                            <MoreVertical className="size-4 text-gray-400" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -381,8 +432,8 @@ const ToBeProducedList: React.FC = () => {
       {!isLoading && rows.length === 0 && (
         <div className="px-6 py-8">
           <NotFound
-            title="No Orders"
-            description="You don’t have any orders to be produced yet."
+            title="No Drafts"
+            description="You don’t have any draft schedules yet."
           />
         </div>
       )}
@@ -397,22 +448,8 @@ const ToBeProducedList: React.FC = () => {
           totalItems={totalCount}
         />
       </div>
-
-      <CreateProductionSchedule
-        isOpen={isCreateScheduleOpen}
-        onClose={() => setIsCreateScheduleOpen(false)}
-        orders={rows}
-        onCreated={() => {
-          setIsCreateScheduleOpen(false);
-        }}
-      />
-
-      <ViewProductionSchedule
-        isOpen={isViewScheduleOpen}
-        onClose={() => setIsViewScheduleOpen(false)}
-      />
     </div>
   );
 };
 
-export default ToBeProducedList;
+export default DraftModal;

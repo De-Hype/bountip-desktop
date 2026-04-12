@@ -179,14 +179,14 @@ export const upsertBusinessUser = async (
         [businessUserId],
       );
 
-      for (const m of existingMappings) {
-        db.addToQueue({
-          table: "business_user_roles_business_role",
-          action: SYNC_ACTIONS.DELETE,
-          data: m,
-          id: `${m.businessUserId}:${m.businessRoleId}`,
-        });
-      }
+      // for (const m of existingMappings) {
+      //   db.addToQueue({
+      //     table: "business_user_roles_business_role",
+      //     action: SYNC_ACTIONS.DELETE,
+      //     data: m,
+      //     id: `${m.businessUserId}:${m.businessRoleId}`,
+      //   });
+      // }
     }
 
     if (roleId) {
@@ -204,12 +204,12 @@ export const upsertBusinessUser = async (
         db.sanitize(buildBusinessUserRolesBusinessRoleUpsertParams(mappingRow)),
       );
 
-      db.addToQueue({
-        table: "business_user_roles_business_role",
-        action: previous ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
-        data: mappingRow,
-        id: `${businessUserId}:${roleId}`,
-      });
+      // db.addToQueue({
+      //   table: "business_user_roles_business_role",
+      //   action: previous ? SYNC_ACTIONS.UPDATE : SYNC_ACTIONS.CREATE,
+      //   data: mappingRow,
+      //   id: `${businessUserId}:${roleId}`,
+      // });
     }
 
     return { userId, businessUserId };
@@ -294,12 +294,7 @@ export const upsertBusinessRole = async (
       ...(existingRole || {}),
       id,
       name: payload.name,
-      permissions:
-        payload.permissions ??
-        ({
-          description: payload.description || "",
-          pages: [],
-        } as any),
+      permissions: payload.permissions ?? {},
       createdAt: existingRole?.createdAt || now,
       updatedAt: now,
       businessId,

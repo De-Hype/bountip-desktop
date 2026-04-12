@@ -956,8 +956,11 @@ export class DatabaseService {
     // Automatically increment version in the database and in the payload
     if (tableName && recordId) {
       try {
+        // Use double quotes for table name to handle hyphens (e.g., "item-master")
+        const quotedTableName = `"${tableName}"`;
+
         const tableInfo = this.prepare(
-          `PRAGMA table_info(${tableName})`,
+          `PRAGMA table_info(${quotedTableName})`,
         ).all() as any[];
         const hasVersion = tableInfo.some((col: any) => col.name === "version");
         const hasUpdatedAt = tableInfo.some(
@@ -969,17 +972,17 @@ export class DatabaseService {
           // 1. Increment version in the database table
           if (hasUpdatedAt) {
             this.prepare(
-              `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
+              `UPDATE ${quotedTableName} SET version = COALESCE(version, 0) + 1, updatedAt = ? WHERE id = ?`,
             ).run(new Date().toISOString(), recordId);
           } else {
             this.prepare(
-              `UPDATE ${tableName} SET version = COALESCE(version, 0) + 1 WHERE id = ?`,
+              `UPDATE ${quotedTableName} SET version = COALESCE(version, 0) + 1 WHERE id = ?`,
             ).run(recordId);
           }
 
           // 2. Fetch the updated version to put into the payload
           const updatedRecord = this.prepare(
-            `SELECT version FROM ${tableName} WHERE id = ?`,
+            `SELECT version FROM ${quotedTableName} WHERE id = ?`,
           ).get(recordId) as { version: number } | undefined;
 
           if (updatedRecord) {

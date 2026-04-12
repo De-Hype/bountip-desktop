@@ -59,7 +59,7 @@ export const createInventoryItem = async (
       db.sanitize(buildItemMasterUpsertParams(itemMaster)),
     );
     db.addToQueue({
-      table: "item_master",
+      table: "item-master",
       action: SYNC_ACTIONS.CREATE,
       data: itemMaster,
       id: itemMasterId,
@@ -122,7 +122,7 @@ export const createInventoryItem = async (
       db.sanitize(buildInventoryItemUpsertParams(inventoryItem)),
     );
     db.addToQueue({
-      table: "inventory_item",
+      table: "inventory-item",
       action: SYNC_ACTIONS.CREATE,
       data: inventoryItem,
       id: inventoryItemId,
