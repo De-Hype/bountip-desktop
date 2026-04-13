@@ -1,6 +1,7 @@
 import React from "react";
 import { Camera } from "lucide-react";
 import { useBusinessStore } from "@/stores/useBusinessStore";
+import { getCurrencySymbolByCountry } from "@/utils/getCurrencySymbol";
 
 interface LabelPreviewFormDataSelectedColumns {
   orderName?: boolean;
@@ -63,9 +64,56 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
   type = "receipt",
 }) => {
   const { selectedOutlet } = useBusinessStore();
-  const outlet = selectedOutlet as unknown as {
+  const store = selectedOutlet as unknown as {
     logoUrl?: string | null;
+    name?: string | null;
+    address?: string | null;
+    country?: string | null;
   } | null;
+
+  const currencySign = store?.country
+    ? getCurrencySymbolByCountry(store.country) || "$"
+    : "$";
+
+  const formatDateTime = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+
+    let hours = date.getHours();
+    const amPm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    const formattedHours = String(hours).padStart(2, "0");
+
+    return `${year}-${month}-${day}; ${formattedHours}:${minutes}:${seconds} ${amPm}`;
+  };
+
+  const formatDate = (date: Date) => {
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return `${day}/${month}/${year}`;
+  };
+
+  const [currentDateTime, setCurrentDateTime] = React.useState(() =>
+    formatDateTime(new Date()),
+  );
+  const [currentDate, setCurrentDate] = React.useState(() =>
+    formatDate(new Date()),
+  );
+
+  React.useEffect(() => {
+    const intervalId = setInterval(() => {
+      const now = new Date();
+      setCurrentDateTime(formatDateTime(now));
+      setCurrentDate(formatDate(now));
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Helper function to safely get nested properties
   const getNestedValue = (
@@ -144,12 +192,12 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
     >
       {/* Logo/Image Section */}
       <div className="text-center mb-6">
-        {imageUrl || outlet?.logoUrl ? (
+        {imageUrl || store?.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             width={100}
             height={100}
-            src={imageUrl || outlet?.logoUrl || ""}
+            src={imageUrl || store?.logoUrl || ""}
             alt="Business Logo"
             className="h-16 w-16 mx-auto mb-4 object-contain"
           />
@@ -162,13 +210,13 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
 
         {getBusinessNameDisplay() && (
           <h2 className="text-xl font-bold text-gray-900 mb-1">
-            Business Name
+            {store?.name || "Business Name"}
           </h2>
         )}
 
         {(formData.showActivateAddress || type === "invoice") && (
           <p className="text-sm text-gray-500">
-            8502 Preston Rd. Inglewood, Maine 98380
+            {store?.address || "8502 Preston Rd. Inglewood, Maine 98380"}
           </p>
         )}
 
@@ -200,7 +248,7 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
               {type === "invoice" ? "Issue Date" : "Date & Time"}
             </span>
             <span className="text-sm font-medium text-gray-900">
-              {type === "invoice" ? "20/10/2025" : "2025-10-25; 09:10:45 AM"}
+              {type === "invoice" ? currentDate : currentDateTime}
             </span>
           </div>
         )}
@@ -218,7 +266,7 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
           <div className="flex justify-between">
             <span className="text-sm text-gray-500">Client Name</span>
             <span className="text-sm font-medium text-gray-900">
-              Jacob Jones
+              {store?.name || "Sarah Doe"}
             </span>
           </div>
         )}
@@ -227,7 +275,8 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
           <div className="flex justify-between">
             <span className="text-sm text-gray-500">Client Address</span>
             <span className="text-sm font-medium text-gray-900 text-right">
-              2972 Westheimer Rd. Santa Ana, Illinois 85486
+              {store?.address ||
+                "2972 Westheimer Rd. Santa Ana, Illinois 85486"}
             </span>
           </div>
         )}
@@ -290,8 +339,14 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
           <span>Muffins</span>
           <span>SKU2348</span>
           <span>1</span>
-          <span>$10</span>
-          <span>$50</span>
+          <span>
+            {currencySign}
+            10
+          </span>
+          <span>
+            {currencySign}
+            50
+          </span>
         </div>
 
         {/* Show modifiers below items if enabled */}
@@ -329,13 +384,17 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
         {formData.showDeliveryFee && (
           <div className="flex justify-between">
             <span className="text-sm text-gray-500">Delivery Fee</span>
-            <span className="text-sm font-medium text-gray-900">$5</span>
+            <span className="text-sm font-medium text-gray-900">
+              {currencySign}5
+            </span>
           </div>
         )}
 
         <div className="flex justify-between">
           <span className="text-sm text-gray-500">Sub total</span>
-          <span className="text-sm font-medium text-gray-900">$50</span>
+          <span className="text-sm font-medium text-gray-900">
+            {currencySign}50
+          </span>
         </div>
 
         {formData.showPaymentStatus && (
@@ -350,7 +409,9 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
       <div className="border-t border-gray-200 pt-4 mb-6">
         <div className="flex justify-between">
           <span className="text-lg font-medium text-gray-900">Total</span>
-          <span className="text-lg font-bold text-gray-900">$55</span>
+          <span className="text-lg font-bold text-gray-900">
+            {currencySign}55
+          </span>
         </div>
       </div>
 
@@ -397,12 +458,12 @@ const LabelPreview: React.FC<LabelPreviewProps> = ({
     >
       {/* Logo/Image Section */}
       <div className="text-center mb-6">
-        {imageUrl || outlet?.logoUrl ? (
+        {imageUrl || store?.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             width={100}
             height={100}
-            src={imageUrl || outlet?.logoUrl || ""}
+            src={imageUrl || store?.logoUrl || ""}
             alt="Business Logo"
             className="h-16 w-16 mx-auto mb-4 object-contain"
           />

@@ -7,8 +7,10 @@ import { useState } from "react";
 import useBusinessStore from "@/stores/useBusinessStore";
 import useToastStore from "@/stores/toastStore";
 import * as XLSX from "xlsx";
+import { usePermission } from "@/hooks/usePermission";
 
 const ProductManagementPage = () => {
+  const { hasPermission } = usePermission();
   const [activeTab, setActiveTab] = useState<"catalogue" | "basket">(
     "catalogue",
   );
@@ -109,7 +111,7 @@ const ProductManagementPage = () => {
 
       // Export file
       XLSX.writeFile(workbook, filename);
-      console.log(products)
+      console.log(products);
       showToast(
         "success",
         "Export Successful",
@@ -226,14 +228,17 @@ const ProductManagementPage = () => {
               <span className="text-[#1C1B20]">Export</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsCreateProductOpen(true)}
-              className="inline-flex cursor-pointer h-11 items-center gap-2 rounded-[10px] bg-[#15BA5C] px-4 py-2 text-sm font-medium text-white hover:bg-[#13A652] transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add a Product</span>
-            </button>
+            {(hasPermission("productManagement", "MANAGE") ||
+              hasPermission("productManagement", "REPORT")) && (
+              <button
+                type="button"
+                onClick={() => setIsCreateProductOpen(true)}
+                className="inline-flex cursor-pointer h-11 items-center gap-2 rounded-[10px] bg-[#15BA5C] px-4 py-2 text-sm font-medium text-white hover:bg-[#13A652] transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add a Product</span>
+              </button>
+            )}
           </div>
         )}
       </div>
