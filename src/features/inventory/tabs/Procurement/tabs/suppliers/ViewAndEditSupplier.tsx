@@ -9,12 +9,50 @@ import {
   Search,
   X,
   Trash2,
+  Info,
 } from "lucide-react";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import useBusinessStore from "@/stores/useBusinessStore";
 import { useAuthStore } from "@/stores/authStore";
 import useToastStore from "@/stores/toastStore";
 import NotFound from "@/features/inventory/NotFound";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { PhoneInput } from "@/features/settings/ui/PhoneInput";
+import { getPhoneCountries } from "@/utils/getPhoneCountries";
+
+const supplierSchema = z.object({
+  supplierName: z.string().min(1, "Supplier Name is required"),
+  representatives: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Representative Name is required"),
+      }),
+    )
+    .min(1, "At least one representative is required"),
+  phoneNumbers: z
+    .array(
+      z.object({
+        number: z.string().min(1, "Phone Number is required"),
+        country: z.any(),
+      }),
+    )
+    .min(1, "At least one phone number is required"),
+  emails: z
+    .array(
+      z.object({
+        email: z.string().email("Invalid email address"),
+      }),
+    )
+    .min(1, "At least one email is required"),
+  address: z.string().min(1, "Address is required"),
+  taxNumber: z.string().min(1, "Tax Number is required"),
+  notes: z.string().optional(),
+  linkedItems: z.array(z.any()),
+});
+
+type SupplierFormValues = z.infer<typeof supplierSchema>;
 
 type SupplierRow = {
   id: string;
@@ -169,11 +207,11 @@ const ViewAndEditSupplier = ({
   const { selectedOutlet } = useBusinessStore();
   const authUser = useAuthStore((s) => s.user);
   const { showToast } = useToastStore();
+  const phoneCountries = useMemo(() => getPhoneCountries(), []);
 
   const [isLoading, setIsLoading] = useState(false);
   const [supplier, setSupplier] = useState<SupplierRow | null>(null);
   const [itemsToSupply, setItemsToSupply] = useState<SupplierItemRow[]>([]);
-  const [linkedItems, setLinkedItems] = useState<InventoryPick[]>([]);
   const [inventoryOptions, setInventoryOptions] = useState<InventoryPick[]>([]);
   const [itemSearchTerm, setItemSearchTerm] = useState("");
   const [isLoadingItems, setIsLoadingItems] = useState(false);
@@ -182,24 +220,77 @@ const ViewAndEditSupplier = ({
   const [mode, setMode] = useState<"view" | "edit">("view");
   const [activeTab, setActiveTab] = useState<"basic" | "items">("basic");
 
-  const [supplierName, setSupplierName] = useState("");
-  const [representatives, setRepresentatives] = useState<string[]>([]);
-  const [phoneNumbers, setPhoneNumbers] = useState<string[]>([]);
-  const [emails, setEmails] = useState<string[]>([]);
-  const [address, setAddress] = useState("");
-  const [taxNumber, setTaxNumber] = useState("");
-  const [notes, setNotes] = useState("");
-
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdateConfirmOpen, setIsUpdateConfirmOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isValid },
+    watch,
+    setValue,
+  } = useForm<SupplierFormValues>({
+    resolver: zodResolver(supplierSchema),
+    mode: "onChange",
+    defaultValues: {
+      supplierName: "",
+      representatives: [{ name: "" }],
+      phoneNumbers: [{ number: "", country: phoneCountries[0] }],
+      emails: [{ email: "" }],
+      address: "",
+      taxNumber: "",
+      notes: "",
+      linkedItems: [],
+    },
+  });
+
+  const {
+    fields: representativeFields,
+    append: appendRepresentative,
+    remove: removeRepresentative,
+  } = useFieldArray({
+    control,
+    name: "representatives",
+  });
+
+  const {
+    fields: phoneFields,
+    append: appendPhone,
+    remove: removePhone,
+  } = useFieldArray({
+    control,
+    name: "phoneNumbers",
+  });
+
+  const {
+    fields: emailFields,
+    append: appendEmail,
+    remove: removeEmail,
+  } = useFieldArray({
+    control,
+    name: "emails",
+  });
+
+  const linkedItems = watch("linkedItems");
+
   useEffect(() => {
     if (!isOpen) {
       setSupplier(null);
       setItemsToSupply([]);
-      setLinkedItems([]);
+      reset({
+        supplierName: "",
+        representatives: [{ name: "" }],
+        phoneNumbers: [{ number: "", country: phoneCountries[0] }],
+        emails: [{ email: "" }],
+        address: "",
+        taxNumber: "",
+        notes: "",
+        linkedItems: [],
+      });
       setInventoryOptions([]);
       setItemSearchTerm("");
       setIsLoadingItems(false);
@@ -211,7 +302,7 @@ const ViewAndEditSupplier = ({
       setIsDeleteConfirmOpen(false);
       return;
     }
-  }, [isOpen]);
+  }, [isOpen, phoneCountries, reset]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -240,14 +331,6 @@ const ViewAndEditSupplier = ({
         const s = rows?.[0] as SupplierRow | undefined;
         if (!s) return;
         setSupplier(s);
-
-        setSupplierName(String(s.name || ""));
-        setRepresentatives(safeJsonArray(s.representativeName));
-        setPhoneNumbers(safeJsonArray(s.phoneNumbers));
-        setEmails(safeJsonArray(s.emailAddress));
-        setAddress(String(s.address || ""));
-        setTaxNumber(String(s.taxNumber || ""));
-        setNotes(String(s.notes || ""));
 
         const [itemsRows, invRows] = await Promise.all([
           api.dbQuery(
@@ -281,22 +364,42 @@ const ViewAndEditSupplier = ({
           ),
         ]);
 
+        const phoneNumbersRaw = safeJsonArray(s.phoneNumbers);
+        const phonesWithCountries = phoneNumbersRaw.map((num) => {
+          // Attempt to match country or fallback to first
+          return { number: num, country: phoneCountries[0] };
+        });
+
+        const representativesRaw = safeJsonArray(s.representativeName);
+        const emailsRaw = safeJsonArray(s.emailAddress);
+
+        reset({
+          supplierName: String(s.name || ""),
+          representatives: representativesRaw.length
+            ? representativesRaw.map((name) => ({ name }))
+            : [{ name: "" }],
+          phoneNumbers: phonesWithCountries.length
+            ? phonesWithCountries
+            : [{ number: "", country: phoneCountries[0] }],
+          emails: emailsRaw.length
+            ? emailsRaw.map((email) => ({ email }))
+            : [{ email: "" }],
+          address: String(s.address || ""),
+          taxNumber: String(s.taxNumber || ""),
+          notes: String(s.notes || ""),
+          linkedItems: (itemsRows || []).map((r: any) => ({
+            inventoryItemId: String(r.itemId || ""),
+            itemName: String(r.itemName || ""),
+            category: r.category != null ? String(r.category) : null,
+          })),
+        });
+
         setItemsToSupply(
           (itemsRows || []).map((r: any) => ({
             itemId: String(r.itemId || ""),
             itemName: r.itemName != null ? String(r.itemName) : null,
             category: r.category != null ? String(r.category) : null,
           })),
-        );
-
-        setLinkedItems(
-          (itemsRows || [])
-            .map((r: any) => ({
-              inventoryItemId: String(r.itemId || ""),
-              itemName: String(r.itemName || ""),
-              category: r.category != null ? String(r.category) : null,
-            }))
-            .filter((x: any) => x.inventoryItemId && x.itemName),
         );
 
         setInventoryOptions(
@@ -313,7 +416,7 @@ const ViewAndEditSupplier = ({
         setIsLoadingItems(false);
       }
     })();
-  }, [isOpen, supplierId, selectedOutlet?.id]);
+  }, [isOpen, supplierId, selectedOutlet?.id, phoneCountries, reset]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -335,23 +438,25 @@ const ViewAndEditSupplier = ({
       .filter((it) => (it.itemName || "").toLowerCase().includes(q))
       .filter(
         (it) =>
-          !linkedItems.some((s) => s.inventoryItemId === it.inventoryItemId),
+          !linkedItems.some(
+            (s: any) => s.inventoryItemId === it.inventoryItemId,
+          ),
       )
       .slice(0, 8);
   }, [inventoryOptions, itemSearchTerm, linkedItems]);
 
   const addSupplyItem = (it: InventoryPick) => {
-    setLinkedItems((prev) => {
-      if (prev.some((x) => x.inventoryItemId === it.inventoryItemId))
-        return prev;
-      return [...prev, it];
-    });
+    if (linkedItems.some((x: any) => x.inventoryItemId === it.inventoryItemId))
+      return;
+    setValue("linkedItems", [...linkedItems, it], { shouldValidate: true });
     setItemSearchTerm("");
   };
 
   const removeSupplyItem = (inventoryItemId: string) => {
-    setLinkedItems((prev) =>
-      prev.filter((x) => x.inventoryItemId !== inventoryItemId),
+    setValue(
+      "linkedItems",
+      linkedItems.filter((x: any) => x.inventoryItemId !== inventoryItemId),
+      { shouldValidate: true },
     );
   };
 
@@ -373,23 +478,20 @@ const ViewAndEditSupplier = ({
     }`;
   }, [authUser?.name, supplier?.createdAt, supplier?.updatedAt]);
 
-  const isFormValid =
-    supplierName.trim() !== "" &&
-    representatives.length > 0 &&
-    phoneNumbers.length > 0 &&
-    emails.length > 0 &&
-    address.trim() !== "" &&
-    taxNumber.trim() !== "";
-
   const handleUpdate = async () => {
+    const data = watch();
     if (!supplierId || !selectedOutlet?.id) return;
-    if (!isFormValid || isSaving) return;
+    if (!isValid || isSaving) return;
     const api = (window as any).electronAPI;
     if (!api?.dbQuery) return;
 
     setIsSaving(true);
     try {
       const now = new Date().toISOString();
+      const phoneNumbersToSave = data.phoneNumbers.map((p) => p.number);
+      const representativesToSave = data.representatives.map((r) => r.name);
+      const emailsToSave = data.emails.map((e) => e.email);
+
       await api.dbQuery(
         `
           UPDATE suppliers
@@ -406,13 +508,13 @@ const ViewAndEditSupplier = ({
           WHERE id = ? AND outletId = ? AND deletedAt IS NULL
         `,
         [
-          supplierName.trim(),
-          JSON.stringify(representatives),
-          JSON.stringify(phoneNumbers),
-          JSON.stringify(emails),
-          address.trim(),
-          notes,
-          taxNumber.trim(),
+          data.supplierName.trim(),
+          JSON.stringify(representativesToSave),
+          JSON.stringify(phoneNumbersToSave),
+          JSON.stringify(emailsToSave),
+          data.address.trim(),
+          data.notes || "",
+          data.taxNumber.trim(),
           now,
           supplierId,
           selectedOutlet.id,
@@ -437,7 +539,7 @@ const ViewAndEditSupplier = ({
       }
 
       const nextItemIds = new Set(
-        linkedItems.map((x) => String(x.inventoryItemId)).filter(Boolean),
+        linkedItems.map((x: any) => String(x.inventoryItemId)).filter(Boolean),
       );
       const createdIds: string[] = [];
       const deletedIds: string[] = [];
@@ -660,7 +762,10 @@ const ViewAndEditSupplier = ({
                   Basic Information
                 </h2>
                 <div className="border border-gray-200 rounded-[14px] overflow-hidden bg-white">
-                  <PillRow label="Supplier Name" value={supplierName || "-"} />
+                  <PillRow
+                    label="Supplier Name"
+                    value={supplier?.name || "-"}
+                  />
                   <PillRow
                     label="Representative Name(s)"
                     value={
@@ -680,9 +785,12 @@ const ViewAndEditSupplier = ({
                       safeJsonArray(supplier.emailAddress).join(", ") || "-"
                     }
                   />
-                  <PillRow label="Address" value={address || "-"} />
-                  <PillRow label="Tax Number" value={taxNumber || "-"} />
-                  <PillRow label="Notes" value={notes || "-"} />
+                  <PillRow label="Address" value={supplier.address || "-"} />
+                  <PillRow
+                    label="Tax Number"
+                    value={supplier.taxNumber || "-"}
+                  />
+                  <PillRow label="Notes" value={supplier.notes || "-"} />
                 </div>
               </div>
 
@@ -732,82 +840,239 @@ const ViewAndEditSupplier = ({
             </div>
           ) : activeTab === "basic" ? (
             <div className="space-y-8">
-              <div className="grid grid-cols-2 gap-x-10 gap-y-8">
-                <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-x-10 gap-y-20">
+                <div className="space-y-4">
                   <label className="text-sm font-semibold text-[#1C1B20]">
                     Supplier Name<span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={supplierName}
-                    onChange={(e) => setSupplierName(e.target.value)}
-                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
+                    {...register("supplierName")}
+                    className={`w-full h-12 px-4 border ${
+                      errors.supplierName
+                        ? "border-red-500"
+                        : "border-[#E5E7EB]"
+                    } rounded-xl outline-none focus:border-[#15BA5C] transition-all`}
                   />
+                  {errors.supplierName && (
+                    <p className="text-red-500 text-xs">
+                      {errors.supplierName.message}
+                    </p>
+                  )}
                 </div>
 
-                <ChipInput
-                  label="Representative Name (s)"
-                  required
-                  values={representatives}
-                  onChange={setRepresentatives}
-                  placeholder="Type a name and press Enter"
-                  helper="If there are more than 1, click ‘Enter’ after each"
-                />
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-[#1C1B20]">
+                    Representative Name (s){" "}
+                    <span className="text-red-500">*</span>
+                  </label>
+                  {representativeFields.map((field, index) => (
+                    <div key={field.id} className="flex flex-col gap-1">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Enter representative Name"
+                          {...register(`representatives.${index}.name`)}
+                          className={`flex-1 h-12 px-4 border ${
+                            errors.representatives?.[index]?.name
+                              ? "border-red-500"
+                              : "border-[#E5E7EB]"
+                          } rounded-xl outline-none focus:border-[#15BA5C] transition-all`}
+                        />
+                        {representativeFields.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeRepresentative(index)}
+                            className="p-3 cursor-pointer hover:bg-red-50 rounded-xl text-red-500 transition-colors border border-[#E5E7EB]"
+                          >
+                            <Trash2 className="size-5" />
+                          </button>
+                        )}
+                      </div>
+                      {errors.representatives?.[index]?.name && (
+                        <p className="text-red-500 text-xs">
+                          {errors.representatives[index]?.name?.message}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex items-center gap-1.5 text-[#15BA5C]">
+                      <Info className="size-3.5" />
+                      <span>
+                        If there are more than 1, click 'Add Another' after each
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => appendRepresentative({ name: "" })}
+                      className="text-[#15BA5C] font-semibold hover:underline"
+                    >
+                      Add Another
+                    </button>
+                  </div>
+                </div>
 
-                <ChipInput
-                  label="Phone Number (s)"
-                  required
-                  values={phoneNumbers}
-                  onChange={setPhoneNumbers}
-                  placeholder="Type a phone and press Enter"
-                  helper="If there are more than 1, click ‘Enter’ after each"
-                  inputType="tel"
-                />
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-[#1C1B20]">
+                    Phone Number (s) <span className="text-red-500">*</span>
+                  </label>
+                  {phoneFields.map((field, index) => (
+                    <div key={field.id} className="flex flex-col gap-1">
+                      <div className="flex gap-2">
+                        <Controller
+                          control={control}
+                          name={`phoneNumbers.${index}.number`}
+                          render={({ field: phoneField }) => (
+                            <PhoneInput
+                              value={phoneField.value}
+                              onChange={phoneField.onChange}
+                              selectedCountry={watch(
+                                `phoneNumbers.${index}.country`,
+                              )}
+                              onCountryChange={(country) =>
+                                setValue(
+                                  `phoneNumbers.${index}.country`,
+                                  country,
+                                )
+                              }
+                              className="flex-1"
+                              placeholder="Enter Phone Number"
+                            />
+                          )}
+                        />
+                        {phoneFields.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePhone(index)}
+                            className="p-3 cursor-pointer hover:bg-red-50 rounded-xl text-red-500 transition-colors border border-[#E5E7EB]"
+                          >
+                            <Trash2 className="size-5" />
+                          </button>
+                        )}
+                      </div>
+                      {errors.phoneNumbers?.[index]?.number && (
+                        <p className="text-red-500 text-xs">
+                          {errors.phoneNumbers[index]?.number?.message}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex items-center gap-1.5 text-[#15BA5C]">
+                      <Info className="size-3.5" />
+                      <span>
+                        If there are more than 1, click 'Add Another' after each
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        appendPhone({ number: "", country: phoneCountries[0] })
+                      }
+                      className="text-[#15BA5C] font-semibold hover:underline"
+                    >
+                      Add Another
+                    </button>
+                  </div>
+                </div>
 
-                <ChipInput
-                  label="Email Address (s)"
-                  required
-                  values={emails}
-                  onChange={setEmails}
-                  placeholder="Type an email and press Enter"
-                  helper="If there are more than 1, click ‘Enter’ after each"
-                  inputType="email"
-                />
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-[#1C1B20]">
+                    Email Address (s) <span className="text-red-500">*</span>
+                  </label>
+                  {emailFields.map((field, index) => (
+                    <div key={field.id} className="flex flex-col gap-1">
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          placeholder="Enter Email address"
+                          {...register(`emails.${index}.email`)}
+                          className={`flex-1 h-12 px-4 border ${
+                            errors.emails?.[index]?.email
+                              ? "border-red-500"
+                              : "border-[#E5E7EB]"
+                          } rounded-xl outline-none focus:border-[#15BA5C] transition-all`}
+                        />
+                        {emailFields.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeEmail(index)}
+                            className="p-3 cursor-pointer hover:bg-red-50 rounded-xl text-red-500 transition-colors border border-[#E5E7EB]"
+                          >
+                            <Trash2 className="size-5" />
+                          </button>
+                        )}
+                      </div>
+                      {errors.emails?.[index]?.email && (
+                        <p className="text-red-500 text-xs">
+                          {errors.emails[index]?.email?.message}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex items-center gap-1.5 text-[#15BA5C]">
+                      <Info className="size-3.5" />
+                      <span>
+                        If there are more than 1, click 'Add Another' after each
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => appendEmail({ email: "" })}
+                      className="text-[#15BA5C] font-semibold hover:underline"
+                    >
+                      Add Another
+                    </button>
+                  </div>
+                </div>
 
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <label className="text-sm font-semibold text-[#1C1B20]">
                     Address<span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
+                    {...register("address")}
                     placeholder="Address"
-                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
+                    className={`w-full h-12 px-4 border ${
+                      errors.address ? "border-red-500" : "border-[#E5E7EB]"
+                    } rounded-xl outline-none focus:border-[#15BA5C] transition-all`}
                   />
+                  {errors.address && (
+                    <p className="text-red-500 text-xs">
+                      {errors.address.message}
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <label className="text-sm font-semibold text-[#1C1B20]">
                     Tax Number<span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={taxNumber}
-                    onChange={(e) => setTaxNumber(e.target.value)}
+                    {...register("taxNumber")}
                     placeholder="Enter Tax Number"
-                    className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
+                    className={`w-full h-12 px-4 border ${
+                      errors.taxNumber ? "border-red-500" : "border-[#E5E7EB]"
+                    } rounded-xl outline-none focus:border-[#15BA5C] transition-all`}
                   />
+                  {errors.taxNumber && (
+                    <p className="text-red-500 text-xs">
+                      {errors.taxNumber.message}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <label className="text-sm font-semibold text-[#1C1B20]">
                   Notes
                 </label>
                 <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  {...register("notes")}
                   placeholder="Leave a note"
                   className="w-full h-28 p-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all resize-none"
                 />
@@ -931,13 +1196,11 @@ const ViewAndEditSupplier = ({
                 }
                 setIsUpdateConfirmOpen(true);
               }}
-              disabled={
-                isSaving || isDeleting || (mode === "edit" && !isFormValid)
-              }
+              disabled={isSaving || isDeleting || (mode === "edit" && !isValid)}
               className={`h-14 flex-1 rounded-[12px] font-bold text-[16px] transition-colors flex items-center justify-center ${
                 mode === "view"
                   ? "bg-[#15BA5C] text-white hover:bg-[#13A652] cursor-pointer"
-                  : !isFormValid || isSaving || isDeleting
+                  : !isValid || isSaving || isDeleting
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                     : "bg-[#15BA5C] text-white hover:bg-[#13A652] cursor-pointer"
               }`}

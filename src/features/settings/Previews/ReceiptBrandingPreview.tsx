@@ -52,6 +52,34 @@ const ReceiptBrandingPreview: React.FC<ReceiptBrandingPreviewProps> = ({
   console.log("Store:", store);
   console.log("Form Data:", formData);
 
+  const formatDateTime = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+
+    let hours = date.getHours();
+    const amPm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    const formattedHours = String(hours).padStart(2, "0");
+
+    return `${year}-${month}-${day}; ${formattedHours}:${minutes}:${seconds} ${amPm}`;
+  };
+
+  const [currentDateTime, setCurrentDateTime] = React.useState(() =>
+    formatDateTime(new Date()),
+  );
+
+  React.useEffect(() => {
+    const intervalId = setInterval(() => {
+      setCurrentDateTime(formatDateTime(new Date()));
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
   // Fallback currency sign if store or country is missing
   const currencySign = store?.country
     ? getCurrencySymbolByCountry(store.country) || "$"
@@ -107,7 +135,7 @@ const ReceiptBrandingPreview: React.FC<ReceiptBrandingPreviewProps> = ({
                   Customer Name
                 </h3>
                 <h3 className="text-[15px] font-medium text-[#1C1B20]">
-                  Jacob Jones
+                  {store?.name || "Sarah Doe"}
                 </h3>
               </section>
             )}
@@ -127,7 +155,7 @@ const ReceiptBrandingPreview: React.FC<ReceiptBrandingPreviewProps> = ({
                   Date & Time
                 </h3>
                 <h3 className="text-[15px] font-medium text-[#1C1B20]">
-                  2025-10-25; 09:10:45 AM
+                  {currentDateTime}
                 </h3>
               </section>
             )}
@@ -137,7 +165,7 @@ const ReceiptBrandingPreview: React.FC<ReceiptBrandingPreviewProps> = ({
                   Cashier Name
                 </h3>
                 <h3 className="text-[15px] font-medium text-[#1C1B20]">
-                  Claire Simmons
+                  {store?.name || "John Doe"}
                 </h3>
               </section>
             )}

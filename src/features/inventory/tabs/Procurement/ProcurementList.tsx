@@ -177,9 +177,9 @@ const ProcurementList = () => {
           1,
           supplierData.supplierName,
           JSON.stringify(
-            (supplierData.representatives || []).filter(
-              (r: string) => String(r).trim() !== "",
-            ),
+            (supplierData.representatives || [])
+              .map((r: any) => r.name)
+              .filter((name: string) => String(name).trim() !== ""),
           ),
           JSON.stringify(
             (supplierData.phoneNumbers || [])
@@ -187,9 +187,9 @@ const ProcurementList = () => {
               .map((p: any) => `${p.country.dialCode}${p.number}`),
           ),
           JSON.stringify(
-            (supplierData.emails || []).filter(
-              (e: string) => String(e).trim() !== "",
-            ),
+            (supplierData.emails || [])
+              .map((e: any) => e.email)
+              .filter((email: string) => String(email).trim() !== ""),
           ),
           supplierData.address,
           null,
@@ -202,6 +202,64 @@ const ProcurementList = () => {
           null,
           1,
         ]);
+
+        // Link items to supply if any
+        if (
+          supplierData.itemsToSupply &&
+          Array.isArray(supplierData.itemsToSupply)
+        ) {
+          for (const item of supplierData.itemsToSupply) {
+            const siId = crypto.randomUUID();
+            await api.dbQuery(
+              `
+                INSERT INTO supplier_items (
+                  id, totalSupplied, createdAt, updatedAt, deletedAt, supplierId, itemId, recordId, version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
+              [
+                siId,
+                0,
+                now,
+                now,
+                null,
+                id,
+                item.inventoryItemId,
+                null,
+                1,
+              ],
+            );
+
+            if (api.queueAdd) {
+              const siRow = await api.dbQuery(
+                "SELECT * FROM supplier_items WHERE id = ?",
+                [siId],
+              );
+              if (siRow?.[0]) {
+                await api.queueAdd({
+                  table: "supplier_items",
+                  action: "CREATE",
+                  data: siRow[0],
+                  id: siId,
+                });
+              }
+            }
+          }
+        }
+
+        if (api.queueAdd) {
+          const supplierRow = await api.dbQuery(
+            "SELECT * FROM suppliers WHERE id = ?",
+            [id],
+          );
+          if (supplierRow?.[0]) {
+            await api.queueAdd({
+              table: "suppliers",
+              action: "CREATE",
+              data: supplierRow[0],
+              id,
+            });
+          }
+        }
 
         showToast("success", "Success", "Supplier added successfully");
         setRefreshNonce((n) => n + 1);

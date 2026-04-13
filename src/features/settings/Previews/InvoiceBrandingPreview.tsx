@@ -55,6 +55,25 @@ const InvoiceBrandingPreview: React.FC<InvoiceBrandingPreviewProps> = ({
   console.log("Invoice Preview - Store:", store);
   console.log("Invoice Preview - Form Data:", formData);
 
+  const formatDate = (date: Date) => {
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return `${day}/${month}/${year}`;
+  };
+
+  const [currentDate, setCurrentDate] = React.useState(() =>
+    formatDate(new Date()),
+  );
+
+  React.useEffect(() => {
+    const intervalId = setInterval(() => {
+      setCurrentDate(formatDate(new Date()));
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
   // Fallback currency sign if store or country is missing
   const currencySign = store?.country
     ? getCurrencySymbolByCountry(store.country) || "$"
@@ -116,7 +135,7 @@ const InvoiceBrandingPreview: React.FC<InvoiceBrandingPreviewProps> = ({
                   Issue Date
                 </h3>
                 <h3 className="text-[15px] font-medium text-[#1C1B20]">
-                  20/10/2025
+                  {currentDate}
                 </h3>
               </section>
             )}
@@ -126,7 +145,7 @@ const InvoiceBrandingPreview: React.FC<InvoiceBrandingPreviewProps> = ({
                   Due Date
                 </h3>
                 <h3 className="text-[15px] font-medium text-[#1C1B20]">
-                  20/10/2025
+                  {currentDate}
                 </h3>
               </section>
             )}
@@ -136,7 +155,7 @@ const InvoiceBrandingPreview: React.FC<InvoiceBrandingPreviewProps> = ({
                   Client Name
                 </h3>
                 <h3 className="text-[15px] font-medium text-[#1C1B20]">
-                  Jacob Jones
+                  {store?.name || "Sarah Doe"}
                 </h3>
               </section>
             )}
@@ -146,7 +165,8 @@ const InvoiceBrandingPreview: React.FC<InvoiceBrandingPreviewProps> = ({
                   Client Address
                 </h3>
                 <h3 className="text-[15px] truncate font-medium text-[#1C1B20]">
-                  2972 Westheimer Rd. Santa Ana, Illinois 85486
+                  {store?.address ||
+                    "2972 Westheimer Rd. Santa Ana, Illinois 85486"}
                 </h3>
               </section>
             )}
