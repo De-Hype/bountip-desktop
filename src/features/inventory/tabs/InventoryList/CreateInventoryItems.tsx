@@ -61,11 +61,12 @@ const CreateInventoryItems = ({
   >([]);
   const [units, setUnits] = useState<{ value: string; label: string }[]>([]);
   const [suppliers, setSuppliers] = useState<
-    { value: string; label: string }[]
+    { value: string; label: string; meta?: { supplierCode?: string | null } }[]
   >([]);
 
   const [isDefaultModalOpen, setIsDefaultModalOpen] = useState(false);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [lotSupplierId, setLotSupplierId] = useState("");
   const [modalConfig, setModalConfig] = useState({
     title: "",
     inputLabel: "",
@@ -92,10 +93,14 @@ const CreateInventoryItems = ({
       const api = (window as any).electronAPI;
       if (!api?.dbQuery || !selectedOutlet?.id) return;
       const supplierSql =
-        "SELECT id, name FROM suppliers WHERE outletId = ? AND deletedAt IS NULL ORDER BY name ASC";
+        "SELECT id, name, supplierCode FROM suppliers WHERE outletId = ? AND deletedAt IS NULL ORDER BY name ASC";
       const supplierRes = await api.dbQuery(supplierSql, [selectedOutlet.id]);
       setSuppliers(
-        supplierRes.map((s: any) => ({ value: s.id, label: s.name })),
+        (supplierRes || []).map((s: any) => ({
+          value: String(s.id),
+          label: String(s.name || ""),
+          meta: { supplierCode: s.supplierCode },
+        })),
       );
     } catch (err) {
       console.error("Failed to fetch suppliers:", err);
@@ -112,23 +117,33 @@ const CreateInventoryItems = ({
         selectedOutlet.id,
       );
 
-      const allCategories = results.flatMap((row: any) => {
+      const options = (results || []).flatMap((row: any) => {
+        const systemDefaultId = String(row?.id || "");
+        let data: any[] = [];
         try {
-          const data =
+          const parsed =
             typeof row.data === "string" ? JSON.parse(row.data) : row.data;
-          return Array.isArray(data) ? data : [data];
-        } catch (e) {
-          return [];
+          data = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          data = [];
         }
+
+        return data
+          .map((c: any) => c?.name ?? c)
+          .map((value: any) => String(value || "").trim())
+          .filter(Boolean)
+          .map((value: string) => ({
+            value,
+            label: value,
+            id: `${systemDefaultId}:${value}`,
+            meta: {
+              systemDefaultId,
+              systemDefaultKey: SystemDefaultType.ITEM_CATEGORY,
+            },
+          }));
       });
 
-      setCategories(
-        allCategories.map((c: any) => ({
-          value: c.name || c,
-          label: c.name || c,
-          id: results[0]?.id, // Store the row ID for deletion if needed
-        })),
-      );
+      setCategories(options);
     } catch (err) {
       console.error("Failed to fetch categories:", err);
     }
@@ -144,23 +159,33 @@ const CreateInventoryItems = ({
         selectedOutlet.id,
       );
 
-      const allUnits = results.flatMap((row: any) => {
+      const options = (results || []).flatMap((row: any) => {
+        const systemDefaultId = String(row?.id || "");
+        let data: any[] = [];
         try {
-          const data =
+          const parsed =
             typeof row.data === "string" ? JSON.parse(row.data) : row.data;
-          return Array.isArray(data) ? data : [data];
-        } catch (e) {
-          return [];
+          data = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          data = [];
         }
+
+        return data
+          .map((u: any) => u?.name ?? u)
+          .map((value: any) => String(value || "").trim())
+          .filter(Boolean)
+          .map((value: string) => ({
+            value,
+            label: value,
+            id: `${systemDefaultId}:${value}`,
+            meta: {
+              systemDefaultId,
+              systemDefaultKey: SystemDefaultType.INVENTORY_UNIT,
+            },
+          }));
       });
 
-      setUnits(
-        allUnits.map((u: any) => ({
-          value: u.name || u,
-          label: u.name || u,
-          id: results[0]?.id, // Store the row ID for deletion if needed
-        })),
-      );
+      setUnits(options);
     } catch (err) {
       console.error("Failed to fetch units:", err);
     }
@@ -169,14 +194,40 @@ const CreateInventoryItems = ({
   const handleDeleteDefault = async (option: any) => {
     try {
       const api = (window as any).electronAPI;
-      if (!api?.deleteSystemDefault || !option.id) return;
+      if (!api?.deleteSystemDefault) return;
 
-      await api.deleteSystemDefault(option.id, option.value);
+      const systemDefaultId =
+        option?.meta?.systemDefaultId ||
+        (typeof option?.id === "string" ? option.id.split(":")[0] : option.id);
+      if (!systemDefaultId) return;
+
+      await api.deleteSystemDefault(systemDefaultId, option.value);
       showToast("success", "Success", "Item removed successfully");
 
-      // Refetch the appropriate list
-      await fetchCategories();
-      await fetchUnits();
+      if (option.value === formData.itemCategory) {
+        handleInputChange("itemCategory", "");
+      }
+      if (option.value === formData.unitOfPurchase) {
+        handleInputChange("unitOfPurchase", "");
+      }
+      if (option.value === formData.unitOfTransfer) {
+        handleInputChange("unitOfTransfer", "");
+      }
+      if (option.value === formData.unitOfConsumption) {
+        handleInputChange("unitOfConsumption", "");
+      }
+      if (option.value === formData.displayedUnitOfMeasure) {
+        handleInputChange("displayedUnitOfMeasure", "");
+      }
+
+      const systemDefaultKey = option?.meta?.systemDefaultKey;
+      if (systemDefaultKey === SystemDefaultType.ITEM_CATEGORY) {
+        await fetchCategories();
+      } else if (systemDefaultKey === SystemDefaultType.INVENTORY_UNIT) {
+        await fetchUnits();
+      } else {
+        await Promise.all([fetchCategories(), fetchUnits()]);
+      }
     } catch (err) {
       console.error("Failed to delete system default:", err);
       showToast("error", "Error", "Failed to remove item");
@@ -230,7 +281,10 @@ const CreateInventoryItems = ({
           supplierCode, notes, taxNumber, createdAt, updatedAt, deletedAt, outletId, recordId, version
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      const id = crypto.randomUUID();
+      const id =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : String(Date.now());
       const now = new Date().toISOString();
 
       await api.dbQuery(sql, [
@@ -238,18 +292,22 @@ const CreateInventoryItems = ({
         1,
         supplierData.supplierName,
         JSON.stringify(
-          supplierData.representatives.filter((r: string) => r.trim() !== ""),
+          (supplierData.representatives || [])
+            .map((r: any) => r?.name)
+            .filter((name: string) => String(name || "").trim() !== ""),
         ),
         JSON.stringify(
-          supplierData.phoneNumbers
-            .filter((p: any) => p.number.trim() !== "")
+          (supplierData.phoneNumbers || [])
+            .filter((p: any) => String(p?.number || "").trim() !== "")
             .map((p: any) => `${p.country.dialCode}${p.number}`),
         ),
         JSON.stringify(
-          supplierData.emails.filter((e: string) => e.trim() !== ""),
+          (supplierData.emails || [])
+            .map((e: any) => e?.email)
+            .filter((email: string) => String(email || "").trim() !== ""),
         ),
         supplierData.address,
-        null, // supplierCode
+        id,
         supplierData.notes, // notes
         supplierData.taxNumber,
         now,
@@ -260,12 +318,119 @@ const CreateInventoryItems = ({
         1,
       ]);
 
+      if (api.queueAdd) {
+        const supplierRow = await api.dbQuery(
+          "SELECT * FROM suppliers WHERE id = ?",
+          [id],
+        );
+        if (supplierRow?.[0]) {
+          await api.queueAdd({
+            table: "suppliers",
+            action: "CREATE",
+            data: supplierRow[0],
+            id,
+          });
+        }
+      }
+
+      if (
+        supplierData.itemsToSupply &&
+        Array.isArray(supplierData.itemsToSupply)
+      ) {
+        for (const item of supplierData.itemsToSupply) {
+          const supplierItemId =
+            typeof crypto !== "undefined" &&
+            typeof crypto.randomUUID === "function"
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          await api.dbQuery(
+            `
+              INSERT INTO supplier_items (
+                id, totalSupplied, createdAt, updatedAt, deletedAt, supplierId, itemId, recordId, version
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            [
+              supplierItemId,
+              0,
+              now,
+              now,
+              null,
+              id,
+              item.inventoryItemId,
+              null,
+              1,
+            ],
+          );
+
+          if (api.queueAdd) {
+            const siRow = await api.dbQuery(
+              "SELECT * FROM supplier_items WHERE id = ?",
+              [supplierItemId],
+            );
+            if (siRow?.[0]) {
+              await api.queueAdd({
+                table: "supplier_items",
+                action: "CREATE",
+                data: siRow[0],
+                id: supplierItemId,
+              });
+            }
+          }
+        }
+      }
+
       showToast("success", "Success", "Supplier added successfully");
 
       await fetchSuppliers();
       setIsSupplierModalOpen(false);
     } catch (err) {
       console.error("Failed to save supplier:", err);
+      showToast("error", "Error", "Failed to save supplier");
+    }
+  };
+
+  const handleDeleteSupplier = async (option: {
+    value: string;
+    label: string;
+  }) => {
+    try {
+      const api = (window as any).electronAPI;
+      if (!api?.dbQuery || !selectedOutlet?.id) return;
+
+      const now = new Date().toISOString();
+      await api.dbQuery(
+        `
+          UPDATE suppliers
+          SET deletedAt = ?, updatedAt = ?, version = COALESCE(version, 0) + 1
+          WHERE id = ? AND outletId = ? AND deletedAt IS NULL
+        `,
+        [now, now, option.value, selectedOutlet.id],
+      );
+
+      if (api.queueAdd) {
+        const row = await api.dbQuery("SELECT * FROM suppliers WHERE id = ?", [
+          option.value,
+        ]);
+        if (row?.[0]) {
+          await api.queueAdd({
+            table: "suppliers",
+            action: "UPDATE",
+            data: row[0],
+            id: option.value,
+          });
+        }
+      }
+
+      const nextSelected = (formData.suppliers || []).filter(
+        (id) => id !== option.value,
+      );
+      handleInputChange("suppliers", nextSelected);
+
+      showToast("success", "Success", "Supplier deleted");
+      await fetchSuppliers();
+    } catch (err) {
+      console.error("Failed to delete supplier:", err);
+      showToast("error", "Error", "Failed to delete supplier");
     }
   };
 
@@ -543,7 +708,12 @@ const CreateInventoryItems = ({
                         (key) => newValues[key],
                       );
                       handleInputChange("suppliers", selected);
+                      if (lotSupplierId && !selected.includes(lotSupplierId)) {
+                        setLotSupplierId("");
+                        handleInputChange("supplierBarcode", "");
+                      }
                     }}
+                    onDeleteOption={handleDeleteSupplier}
                     className="flex-1"
                   />
                   <button
@@ -885,17 +1055,27 @@ const CreateInventoryItems = ({
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-[#1C1B20]">
-                      Supplier Barcode Number{" "}
+                      Main Supplier for this Lot{" "}
                       <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Enter Supplier Barcode"
-                      value={formData.supplierBarcode}
-                      onChange={(e) =>
-                        handleInputChange("supplierBarcode", e.target.value)
-                      }
-                      className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none"
+                    <Dropdown
+                      mode="select"
+                      placeholder="Select Supplier"
+                      options={suppliers.filter((s) =>
+                        (formData.suppliers || []).includes(s.value),
+                      )}
+                      selectedValue={lotSupplierId}
+                      onChange={(val) => {
+                        setLotSupplierId(val);
+                        const selectedSupplier = suppliers.find(
+                          (s) => s.value === val,
+                        );
+                        handleInputChange(
+                          "supplierBarcode",
+                          selectedSupplier?.meta?.supplierCode || val,
+                        );
+                      }}
+                      className="w-full"
                     />
                   </div>
                 </div>
@@ -932,6 +1112,11 @@ const CreateInventoryItems = ({
                     Expiry Date <span className="text-red-500">*</span>
                   </label>
                   <DatePicker
+                    disabledDates={(date) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return date < today;
+                    }}
                     date={formData.expiryDate}
                     onDateChange={(date) =>
                       handleInputChange("expiryDate", date)

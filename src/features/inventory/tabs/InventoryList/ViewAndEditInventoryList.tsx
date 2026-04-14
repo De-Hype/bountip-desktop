@@ -293,23 +293,33 @@ const ViewAndEditInventoryList = ({
         selectedOutlet.id,
       );
 
-      const allCategories = results.flatMap((row: any) => {
+      const options = (results || []).flatMap((row: any) => {
+        const systemDefaultId = String(row?.id || "");
+        let data: any[] = [];
         try {
-          const data =
+          const parsed =
             typeof row.data === "string" ? JSON.parse(row.data) : row.data;
-          return Array.isArray(data) ? data : [data];
+          data = Array.isArray(parsed) ? parsed : [parsed];
         } catch {
-          return [];
+          data = [];
         }
+
+        return data
+          .map((c: any) => c?.name ?? c)
+          .map((value: any) => String(value || "").trim())
+          .filter(Boolean)
+          .map((value: string) => ({
+            value,
+            label: value,
+            id: `${systemDefaultId}:${value}`,
+            meta: {
+              systemDefaultId,
+              systemDefaultKey: SystemDefaultType.ITEM_CATEGORY,
+            },
+          }));
       });
 
-      setCategories(
-        allCategories.map((c: any) => ({
-          value: c.name || c,
-          label: c.name || c,
-          id: results[0]?.id,
-        })),
-      );
+      setCategories(options);
     } catch (err) {
       console.error("Failed to fetch categories:", err);
     }
@@ -325,23 +335,33 @@ const ViewAndEditInventoryList = ({
         selectedOutlet.id,
       );
 
-      const allUnits = results.flatMap((row: any) => {
+      const options = (results || []).flatMap((row: any) => {
+        const systemDefaultId = String(row?.id || "");
+        let data: any[] = [];
         try {
-          const data =
+          const parsed =
             typeof row.data === "string" ? JSON.parse(row.data) : row.data;
-          return Array.isArray(data) ? data : [data];
+          data = Array.isArray(parsed) ? parsed : [parsed];
         } catch {
-          return [];
+          data = [];
         }
+
+        return data
+          .map((u: any) => u?.name ?? u)
+          .map((value: any) => String(value || "").trim())
+          .filter(Boolean)
+          .map((value: string) => ({
+            value,
+            label: value,
+            id: `${systemDefaultId}:${value}`,
+            meta: {
+              systemDefaultId,
+              systemDefaultKey: SystemDefaultType.INVENTORY_UNIT,
+            },
+          }));
       });
 
-      setUnits(
-        allUnits.map((u: any) => ({
-          value: u.name || u,
-          label: u.name || u,
-          id: results[0]?.id,
-        })),
-      );
+      setUnits(options);
     } catch (err) {
       console.error("Failed to fetch units:", err);
     }
@@ -350,14 +370,40 @@ const ViewAndEditInventoryList = ({
   const handleDeleteDefault = async (option: any) => {
     try {
       const api = (window as any).electronAPI;
-      if (!api?.deleteSystemDefault || !option.id) return;
+      if (!api?.deleteSystemDefault) return;
 
-      await api.deleteSystemDefault(option.id, option.value);
+      const systemDefaultId =
+        option?.meta?.systemDefaultId ||
+        (typeof option?.id === "string" ? option.id.split(":")[0] : option.id);
+      if (!systemDefaultId) return;
+
+      await api.deleteSystemDefault(systemDefaultId, option.value);
       showToast("success", "Success", "Item removed successfully");
 
-      // Refetch lists
-      await fetchCategories();
-      await fetchUnits();
+      if (option.value === formData.itemCategory) {
+        handleInputChange("itemCategory", "");
+      }
+      if (option.value === formData.unitOfPurchase) {
+        handleInputChange("unitOfPurchase", "");
+      }
+      if (option.value === formData.unitOfTransfer) {
+        handleInputChange("unitOfTransfer", "");
+      }
+      if (option.value === formData.unitOfConsumption) {
+        handleInputChange("unitOfConsumption", "");
+      }
+      if (option.value === formData.displayedUnitOfMeasure) {
+        handleInputChange("displayedUnitOfMeasure", "");
+      }
+
+      const systemDefaultKey = option?.meta?.systemDefaultKey;
+      if (systemDefaultKey === SystemDefaultType.ITEM_CATEGORY) {
+        await fetchCategories();
+      } else if (systemDefaultKey === SystemDefaultType.INVENTORY_UNIT) {
+        await fetchUnits();
+      } else {
+        await Promise.all([fetchCategories(), fetchUnits()]);
+      }
     } catch (err) {
       console.error("Failed to delete system default:", err);
       showToast("error", "Error", "Failed to remove item");
@@ -404,7 +450,10 @@ const ViewAndEditInventoryList = ({
           supplierCode, notes, taxNumber, createdAt, updatedAt, deletedAt, outletId, recordId, version
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      const id = crypto.randomUUID();
+      const id =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : String(Date.now());
       const now = new Date().toISOString();
 
       await api.dbQuery(sql, [
@@ -412,19 +461,23 @@ const ViewAndEditInventoryList = ({
         1,
         supplierData.supplierName,
         JSON.stringify(
-          supplierData.representatives.filter((r: string) => r.trim() !== ""),
+          (supplierData.representatives || [])
+            .map((r: any) => r?.name)
+            .filter((name: string) => String(name || "").trim() !== ""),
         ),
         JSON.stringify(
-          supplierData.phoneNumbers
-            .filter((p: any) => p.number.trim() !== "")
+          (supplierData.phoneNumbers || [])
+            .filter((p: any) => String(p?.number || "").trim() !== "")
             .map((p: any) => `${p.country.dialCode}${p.number}`),
         ),
         JSON.stringify(
-          supplierData.emails.filter((e: string) => e.trim() !== ""),
+          (supplierData.emails || [])
+            .map((e: any) => e?.email)
+            .filter((email: string) => String(email || "").trim() !== ""),
         ),
         supplierData.address,
+        id,
         supplierData.notes,
-        null,
         supplierData.taxNumber,
         now,
         now,
@@ -433,6 +486,21 @@ const ViewAndEditInventoryList = ({
         null,
         1,
       ]);
+
+      if (api.queueAdd) {
+        const supplierRow = await api.dbQuery(
+          "SELECT * FROM suppliers WHERE id = ?",
+          [id],
+        );
+        if (supplierRow?.[0]) {
+          await api.queueAdd({
+            table: "suppliers",
+            action: "CREATE",
+            data: supplierRow[0],
+            id,
+          });
+        }
+      }
 
       showToast("success", "Success", "Supplier added successfully");
       await fetchSuppliers();
