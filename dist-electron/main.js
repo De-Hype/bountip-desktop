@@ -384,7 +384,7 @@ const userCreateSql = `
   );
 `;
 const userUpsertSql = `
-  INSERT OR REPLACE INTO user (
+  INSERT INTO user (
     id,
     email,
     fullName,
@@ -433,6 +433,32 @@ const userUpsertSql = `
     @lastSyncedAt,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    email = excluded.email,
+    fullName = excluded.fullName,
+    password = excluded.password,
+    pin = excluded.pin,
+    otpCodeHash = excluded.otpCodeHash,
+    otpCodeExpiry = excluded.otpCodeExpiry,
+    failedLoginCount = excluded.failedLoginCount,
+    failedLoginRetryTime = excluded.failedLoginRetryTime,
+    lastFailedLogin = excluded.lastFailedLogin,
+    isEmailVerified = excluded.isEmailVerified,
+    isPin = excluded.isPin,
+    isDeleted = excluded.isDeleted,
+    lastLoginAt = excluded.lastLoginAt,
+    status = excluded.status,
+    authProvider = excluded.authProvider,
+    providerId = excluded.providerId,
+    publicId = excluded.publicId,
+    providerData = excluded.providerData,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    version = excluded.version
+  WHERE excluded.version >= user.version
+     OR excluded.updatedAt >= user.updatedAt
+     OR user.updatedAt IS NULL
 `;
 const buildUserUpsertParams = (u) => ({
   id: u.id,
@@ -496,7 +522,7 @@ const usersCreateSql = `
   );
 `;
 const usersUpsertSql = `
-  INSERT OR REPLACE INTO users (
+  INSERT INTO users (
     id,
     email,
     fullName,
@@ -545,6 +571,32 @@ const usersUpsertSql = `
     @lastSyncedAt,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    email = excluded.email,
+    fullName = excluded.fullName,
+    password = excluded.password,
+    pin = excluded.pin,
+    otpCodeHash = excluded.otpCodeHash,
+    otpCodeExpiry = excluded.otpCodeExpiry,
+    failedLoginCount = excluded.failedLoginCount,
+    failedLoginRetryTime = excluded.failedLoginRetryTime,
+    lastFailedLogin = excluded.lastFailedLogin,
+    isEmailVerified = excluded.isEmailVerified,
+    isPin = excluded.isPin,
+    isDeleted = excluded.isDeleted,
+    lastLoginAt = excluded.lastLoginAt,
+    status = excluded.status,
+    authProvider = excluded.authProvider,
+    providerId = excluded.providerId,
+    publicId = excluded.publicId,
+    providerData = excluded.providerData,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    version = excluded.version
+  WHERE excluded.version >= users.version
+     OR excluded.updatedAt >= users.updatedAt
+     OR users.updatedAt IS NULL
 `;
 const buildUsersUpsertParams = (u) => ({
   id: u.id,
@@ -610,7 +662,7 @@ const productCreateSql = `
   );
 `;
 const productUpsertSql = `
-  INSERT OR REPLACE INTO product (
+  INSERT INTO product (
     id,
     name,
     isActive,
@@ -663,6 +715,34 @@ const productUpsertSql = `
     @outletId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    isActive = excluded.isActive,
+    description = excluded.description,
+    category = excluded.category,
+    price = excluded.price,
+    preparationArea = excluded.preparationArea,
+    weight = excluded.weight,
+    productCode = excluded.productCode,
+    weightScale = excluded.weightScale,
+    productAvailableStock = excluded.productAvailableStock,
+    packagingMethod = excluded.packagingMethod,
+    priceTierId = excluded.priceTierId,
+    allergenList = excluded.allergenList,
+    logoUrl = excluded.logoUrl,
+    logoHash = excluded.logoHash,
+    leadTime = excluded.leadTime,
+    availableAtStorefront = excluded.availableAtStorefront,
+    createdAtStorefront = excluded.createdAtStorefront,
+    isDeleted = excluded.isDeleted,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    outletId = excluded.outletId,
+    version = excluded.version
+  WHERE excluded.version >= product.version
+     OR excluded.updatedAt >= product.updatedAt
+     OR product.updatedAt IS NULL
 `;
 const buildProductUpsertParams = (p) => ({
   id: p.id,
@@ -949,7 +1029,7 @@ const businessCreateSql = `
   );
 `;
 const businessUpsertSql = `
-  INSERT OR REPLACE INTO business (
+  INSERT INTO business (
     id,
     name,
     slug,
@@ -982,6 +1062,24 @@ const businessUpsertSql = `
     @ownerId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    slug = excluded.slug,
+    status = excluded.status,
+    logoUrl = excluded.logoUrl,
+    country = excluded.country,
+    businessType = excluded.businessType,
+    address = excluded.address,
+    currency = excluded.currency,
+    revenueRange = excluded.revenueRange,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    ownerId = excluded.ownerId,
+    version = excluded.version
+  WHERE excluded.version >= business.version
+     OR excluded.updatedAt >= business.updatedAt
+     OR business.updatedAt IS NULL
 `;
 const buildBusinessUpsertParams = (b) => ({
   id: b.id,
@@ -1011,7 +1109,7 @@ const businessSchema = {
   ]
 };
 const businessRoleUpsertSql = `
-  INSERT OR REPLACE INTO business_role (
+  INSERT INTO business_role (
     id,
     name,
     permissions,
@@ -1028,6 +1126,16 @@ const businessRoleUpsertSql = `
     @businessId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    permissions = excluded.permissions,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    businessId = excluded.businessId,
+    version = excluded.version
+  WHERE excluded.version >= business_role.version
+     OR excluded.updatedAt >= business_role.updatedAt
+     OR business_role.updatedAt IS NULL
 `;
 const buildBusinessRoleUpsertParams = (r) => ({
   id: r.id,
@@ -1061,7 +1169,7 @@ const businessRoleSchema = {
   ]
 };
 const businessUserUpsertSql = `
-  INSERT OR REPLACE INTO business_user (
+  INSERT INTO business_user (
     id,
     accessType,
     permissions,
@@ -1096,6 +1204,25 @@ const businessUserUpsertSql = `
     @createdBy,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    accessType = excluded.accessType,
+    permissions = excluded.permissions,
+    status = excluded.status,
+    invitedBy = excluded.invitedBy,
+    invitationToken = excluded.invitationToken,
+    invitationExpiry = excluded.invitationExpiry,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    userId = excluded.userId,
+    outletId = excluded.outletId,
+    businessId = excluded.businessId,
+    roleId = excluded.roleId,
+    createdBy = excluded.createdBy,
+    version = excluded.version
+  WHERE excluded.version >= business_user.version
+     OR excluded.updatedAt >= business_user.updatedAt
+     OR business_user.updatedAt IS NULL
 `;
 const buildBusinessUserUpsertParams = (bu) => ({
   id: bu.id,
@@ -1139,7 +1266,7 @@ const businessUserSchema = {
   `
 };
 const businessUserRolesBusinessRoleUpsertSql = `
-  INSERT OR REPLACE INTO business_user_roles_business_role (
+  INSERT INTO business_user_roles_business_role (
     businessUserId,
     businessRoleId,
     version
@@ -1148,6 +1275,9 @@ const businessUserRolesBusinessRoleUpsertSql = `
     @businessRoleId,
     @version
   )
+  ON CONFLICT(businessUserId, businessRoleId) DO UPDATE SET
+    version = excluded.version
+  WHERE excluded.version >= business_user_roles_business_role.version
 `;
 const buildBusinessUserRolesBusinessRoleUpsertParams = (r) => ({
   businessUserId: r.businessUserId,
@@ -1166,7 +1296,7 @@ const businessUserRolesBusinessRoleSchema = {
   `
 };
 const customerUpsertSql = `
-  INSERT OR REPLACE INTO customers (
+  INSERT INTO customers (
     id,
     email,
     name,
@@ -1223,6 +1353,36 @@ const customerUpsertSql = `
     @recordId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    email = excluded.email,
+    name = excluded.name,
+    phoneNumber = excluded.phoneNumber,
+    customerCode = excluded.customerCode,
+    status = excluded.status,
+    verificationCode = excluded.verificationCode,
+    verificationCodeExpiry = excluded.verificationCodeExpiry,
+    emailVerified = excluded.emailVerified,
+    phoneVerfied = excluded.phoneVerfied,
+    reference = excluded.reference,
+    createdAt = excluded.createdAt,
+    outletId = excluded.outletId,
+    otherEmails = excluded.otherEmails,
+    otherNames = excluded.otherNames,
+    otherPhoneNumbers = excluded.otherPhoneNumbers,
+    customerType = excluded.customerType,
+    pricingTier = excluded.pricingTier,
+    paymentTermId = excluded.paymentTermId,
+    organizationName = excluded.organizationName,
+    addedBy = excluded.addedBy,
+    updatedBy = excluded.updatedBy,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt,
+    reason = excluded.reason,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= customers.version
+     OR excluded.updatedAt >= customers.updatedAt
+     OR customers.updatedAt IS NULL
 `;
 const buildCustomerUpsertParams = (c) => ({
   id: c.id,
@@ -2105,7 +2265,7 @@ const recipeVariantsSchema = {
   ]
 };
 const systemDefaultUpsertSql = `
-  INSERT OR REPLACE INTO system_default (
+  INSERT INTO system_default (
     id,
     key,
     data,
@@ -2120,6 +2280,13 @@ const systemDefaultUpsertSql = `
     @recordId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    key = excluded.key,
+    data = excluded.data,
+    outletId = excluded.outletId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= system_default.version
 `;
 const buildSystemDefaultUpsertParams = (s) => ({
   id: s.id,
@@ -3376,7 +3543,7 @@ const componentLotLogSchema = {
   ]
 };
 const modifierUpsertSql = `
-  INSERT OR REPLACE INTO modifier (
+  INSERT INTO modifier (
     id,
     modifierType,
     modifierMode,
@@ -3409,6 +3576,24 @@ const modifierUpsertSql = `
     @updatedAt,
     @deletedAt
   )
+  ON CONFLICT(id) DO UPDATE SET
+    modifierType = excluded.modifierType,
+    modifierMode = excluded.modifierMode,
+    showInPos = excluded.showInPos,
+    name = excluded.name,
+    limitTotalSelection = excluded.limitTotalSelection,
+    maximumQuantity = excluded.maximumQuantity,
+    productId = excluded.productId,
+    outletId = excluded.outletId,
+    reference = excluded.reference,
+    recordId = excluded.recordId,
+    version = excluded.version,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt
+  WHERE excluded.version >= modifier.version
+     OR excluded.updatedAt >= modifier.updatedAt
+     OR modifier.updatedAt IS NULL
 `;
 const buildModifierUpsertParams = (m) => ({
   id: String(m.id || ""),
@@ -3455,7 +3640,7 @@ const modifierSchema = {
   ]
 };
 const modifierOptionUpsertSql = `
-  INSERT OR REPLACE INTO modifier_option (
+  INSERT INTO modifier_option (
     id,
     name,
     amount,
@@ -3482,6 +3667,21 @@ const modifierOptionUpsertSql = `
     @updatedAt,
     @deletedAt
   )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    amount = excluded.amount,
+    maximumQuantity = excluded.maximumQuantity,
+    limitQuantity = excluded.limitQuantity,
+    modifierId = excluded.modifierId,
+    reference = excluded.reference,
+    recordId = excluded.recordId,
+    version = excluded.version,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt
+  WHERE excluded.version >= modifier_option.version
+     OR excluded.updatedAt >= modifier_option.updatedAt
+     OR modifier_option.updatedAt IS NULL
 `;
 const buildModifierOptionUpsertParams = (mo) => ({
   id: String(mo.id || ""),
@@ -5203,12 +5403,6 @@ class DatabaseService {
         const stmt = this.prepare(componentLotLogUpsertSql);
         for (const cll of data.componentLotLogs) {
           stmt.run(this.sanitize(buildComponentLotLogUpsertParams(cll)));
-        }
-      }
-      if (Array.isArray(data.systemDefaults) && data.systemDefaults.length > 0) {
-        const stmt = this.prepare(systemDefaultUpsertSql);
-        for (const sd of data.systemDefaults) {
-          stmt.run(this.sanitize(buildSystemDefaultUpsertParams(sd)));
         }
       }
       if (Array.isArray(data.paymentTerms) && data.paymentTerms.length > 0) {
@@ -23293,6 +23487,11 @@ class SyncService {
       }
       const url = new URL(PULL_ENDPOINT);
       url.searchParams.set("userId", String(userId));
+      const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
+      console.log(`[SyncService] lastSyncTimestamp: ${lastSyncTimestamp}`);
+      if (lastSyncTimestamp) {
+        url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
+      }
       console.log(`[SyncService] Fetching from: ${url.toString()}`);
       const response = await net.fetch(url.toString(), {
         method: "GET",

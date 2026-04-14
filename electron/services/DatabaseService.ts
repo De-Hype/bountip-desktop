@@ -1668,16 +1668,6 @@ export class DatabaseService {
         }
       }
 
-      if (
-        Array.isArray(data.systemDefaults) &&
-        data.systemDefaults.length > 0
-      ) {
-        const stmt = this.prepare(systemDefaultUpsertSql);
-        for (const sd of data.systemDefaults) {
-          stmt.run(this.sanitize(buildSystemDefaultUpsertParams(sd)));
-        }
-      }
-
       if (Array.isArray(data.paymentTerms) && data.paymentTerms.length > 0) {
         const stmt = this.prepare(`
           INSERT INTO payment_terms (

@@ -16,7 +16,7 @@ export type ModifierOptionUpsertParams = {
 };
 
 export const modifierOptionUpsertSql = `
-  INSERT OR REPLACE INTO modifier_option (
+  INSERT INTO modifier_option (
     id,
     name,
     amount,
@@ -43,6 +43,21 @@ export const modifierOptionUpsertSql = `
     @updatedAt,
     @deletedAt
   )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    amount = excluded.amount,
+    maximumQuantity = excluded.maximumQuantity,
+    limitQuantity = excluded.limitQuantity,
+    modifierId = excluded.modifierId,
+    reference = excluded.reference,
+    recordId = excluded.recordId,
+    version = excluded.version,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt
+  WHERE excluded.version >= modifier_option.version
+     OR excluded.updatedAt >= modifier_option.updatedAt
+     OR modifier_option.updatedAt IS NULL
 `;
 
 export const buildModifierOptionUpsertParams = (

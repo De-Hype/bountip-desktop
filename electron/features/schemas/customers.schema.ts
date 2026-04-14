@@ -31,7 +31,7 @@ export type CustomerUpsertParams = {
 };
 
 export const customerUpsertSql = `
-  INSERT OR REPLACE INTO customers (
+  INSERT INTO customers (
     id,
     email,
     name,
@@ -88,6 +88,36 @@ export const customerUpsertSql = `
     @recordId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    email = excluded.email,
+    name = excluded.name,
+    phoneNumber = excluded.phoneNumber,
+    customerCode = excluded.customerCode,
+    status = excluded.status,
+    verificationCode = excluded.verificationCode,
+    verificationCodeExpiry = excluded.verificationCodeExpiry,
+    emailVerified = excluded.emailVerified,
+    phoneVerfied = excluded.phoneVerfied,
+    reference = excluded.reference,
+    createdAt = excluded.createdAt,
+    outletId = excluded.outletId,
+    otherEmails = excluded.otherEmails,
+    otherNames = excluded.otherNames,
+    otherPhoneNumbers = excluded.otherPhoneNumbers,
+    customerType = excluded.customerType,
+    pricingTier = excluded.pricingTier,
+    paymentTermId = excluded.paymentTermId,
+    organizationName = excluded.organizationName,
+    addedBy = excluded.addedBy,
+    updatedBy = excluded.updatedBy,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt,
+    reason = excluded.reason,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= customers.version
+     OR excluded.updatedAt >= customers.updatedAt
+     OR customers.updatedAt IS NULL
 `;
 
 export const buildCustomerUpsertParams = (c: any): CustomerUpsertParams => ({

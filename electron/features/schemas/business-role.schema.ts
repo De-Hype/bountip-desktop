@@ -11,7 +11,7 @@ export type BusinessRoleUpsertParams = {
 };
 
 export const businessRoleUpsertSql = `
-  INSERT OR REPLACE INTO business_role (
+  INSERT INTO business_role (
     id,
     name,
     permissions,
@@ -28,6 +28,16 @@ export const businessRoleUpsertSql = `
     @businessId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    permissions = excluded.permissions,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    businessId = excluded.businessId,
+    version = excluded.version
+  WHERE excluded.version >= business_role.version
+     OR excluded.updatedAt >= business_role.updatedAt
+     OR business_role.updatedAt IS NULL
 `;
 
 export const buildBusinessRoleUpsertParams = (

@@ -463,7 +463,7 @@ const AddSupplierModal: React.FC<AddSupplierModalProps> = ({
                     <div className="flex items-center gap-1.5 text-[#15BA5C]">
                       <Info className="size-3.5" />
                       <span>
-                        If there are more than 1, click 'Enter' after each
+                        If there are more than 1, click 'Add Another' after each
                       </span>
                     </div>
                     <button
