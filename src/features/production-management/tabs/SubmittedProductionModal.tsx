@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { Pagination } from "@/shared/Pagination/pagination";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import NotFound from "@/features/inventory/NotFound";
-import { OrderStatus } from "../../../../electron/types/order.types";
+import { ProductionV2Status } from "../../../../electron/types/productionV2.types";
 
 type SubmittedScheduleRow = {
   id: string;
@@ -21,23 +21,23 @@ const statusPill = (status: string | null | undefined) => {
   const s = String(status || "")
     .trim()
     .toLowerCase();
-  if (s.includes("approved")) {
+  if (s.includes("inventory_approved")) {
     return { label: "Approved", cls: "bg-[#DCFCE7] text-[#16A34A]" };
   }
-  if (s.includes("reject")) {
-    return { label: "Rejected", cls: "bg-[#FEE2E2] text-[#EF4444]" };
-  }
-  if (s.includes("pending") || s.includes("submitted") || !s) {
+  if (s.includes("inventory_pending")) {
     return { label: "Pending", cls: "bg-gray-100 text-gray-500" };
+  }
+  if (s.includes("in_preparation")) {
+    return { label: "In preparation", cls: "bg-[#FEF3C7] text-[#B45309]" };
+  }
+  if (s.includes("quality_control")) {
+    return { label: "Quality Control", cls: "bg-[#F3E8FF] text-[#A855F7]" };
+  }
+  if (s.includes("ready")) {
+    return { label: "Ready", cls: "bg-[#DCFCE7] text-[#16A34A]" };
   }
   if (s.includes("cancel")) {
     return { label: "Cancelled", cls: "bg-[#FEE2E2] text-[#EF4444]" };
-  }
-  if (s.includes("scheduled")) {
-    return {
-      label: "Scheduled",
-      cls: "bg-[#FEF3C7] text-[#B45309]",
-    };
   }
   return { label: status || "-", cls: "bg-gray-100 text-gray-500" };
 };
@@ -83,13 +83,22 @@ const SubmittedProductionModal = () => {
       const where: string[] = ["p.outletId = ?"];
       const params: any[] = [selectedOutlet.id];
 
-      where.push(
-        "LOWER(COALESCE(p.status, '')) IN ('submitted','approved','rejected','pending')",
+      where.push("LOWER(COALESCE(p.status, '')) IN (LOWER(?), LOWER(?))");
+      params.push(
+        ProductionV2Status.INVENTORY_PENDING,
+        ProductionV2Status.INVENTORY_APPROVED,
       );
 
       if (statusFilter !== "All") {
-        where.push("LOWER(COALESCE(p.status, '')) = ?");
-        params.push(statusFilter.toLowerCase());
+        if (statusFilter === "Approved") {
+          where.push("LOWER(COALESCE(p.status, '')) = LOWER(?)");
+          params.push(ProductionV2Status.INVENTORY_APPROVED);
+        } else if (statusFilter === "Pending") {
+          where.push("LOWER(COALESCE(p.status, '')) = LOWER(?)");
+          params.push(ProductionV2Status.INVENTORY_PENDING);
+        } else {
+          where.push("1 = 0");
+        }
       }
 
       const q = searchTerm.trim();
@@ -104,7 +113,7 @@ const SubmittedProductionModal = () => {
       const countRows = await api.dbQuery(
         `
           SELECT COUNT(*) as count
-          FROM productions p
+          FROM productions_v2 p
           ${whereClause}
         `,
         params,
@@ -130,10 +139,10 @@ const SubmittedProductionModal = () => {
             p.productionTime as productionTime,
             (
               SELECT COUNT(*)
-              FROM production_items pi
+              FROM production_v2_items pi
               WHERE pi.productionId = p.id
             ) as ordersCount
-          FROM productions p
+          FROM productions_v2 p
           ${whereClause}
           ORDER BY COALESCE(p.updatedAt, p.createdAt) DESC
           LIMIT ? OFFSET ?
@@ -193,12 +202,12 @@ const SubmittedProductionModal = () => {
 
         if (api.queueAdd) {
           const rec = await api.dbQuery(
-            "SELECT * FROM productions WHERE id = ?",
+            "SELECT * FROM productions_v2 WHERE id = ?",
             [row.id],
           );
           if (rec?.[0]) {
             await api.queueAdd({
-              table: "productions",
+              table: "productions_v2",
               action: "UPDATE",
               data: rec[0],
               id: row.id,
@@ -311,11 +320,16 @@ const SubmittedProductionModal = () => {
               : rows.map((r) => {
                   const pill = statusPill(r.status);
                   const raw = String(r.status || "").toLowerCase();
-                  const canStart = pill.label === "Approved";
-                  const startDisabled =
-                    !canStart ||
-                    raw.includes("scheduled") ||
-                    raw.includes("cancel");
+                  const isPending = raw.includes("inventory_pending");
+                  const isApproved = raw.includes("inventory_approved");
+                  const primaryLabel = isPending
+                    ? "Approve Inventory"
+                    : "Start Production";
+                  const primaryNextStatus = isPending
+                    ? ProductionV2Status.INVENTORY_APPROVED
+                    : ProductionV2Status.IN_PREPARATION;
+                  const primaryDisabled =
+                    raw.includes("cancel") || (!isPending && !isApproved);
 
                   return (
                     <tr key={r.id} className="hover:bg-gray-50">
@@ -353,24 +367,24 @@ const SubmittedProductionModal = () => {
                           <button
                             type="button"
                             onClick={() =>
-                              updateScheduleStatus(
-                                r,
-                                OrderStatus.SCHEDULED_FOR_PRODUCTION,
-                              )
+                              updateScheduleStatus(r, primaryNextStatus)
                             }
-                            disabled={startDisabled}
+                            disabled={primaryDisabled}
                             className={`h-10 px-4 rounded-[10px] text-[13px] font-medium transition-colors cursor-pointer ${
-                              startDisabled
+                              primaryDisabled
                                 ? "bg-gray-200 text-white cursor-not-allowed"
                                 : "bg-[#15BA5C] text-white hover:bg-[#119E4D]"
                             }`}
                           >
-                            Start Production
+                            {primaryLabel}
                           </button>
                           <button
                             type="button"
                             onClick={() =>
-                              updateScheduleStatus(r, OrderStatus.CANCELLED)
+                              updateScheduleStatus(
+                                r,
+                                ProductionV2Status.CANCELLED,
+                              )
                             }
                             disabled={raw.includes("cancel")}
                             className={`h-10 px-4 rounded-[10px] text-[13px] font-medium transition-colors cursor-pointer ${

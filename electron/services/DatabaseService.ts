@@ -147,6 +147,14 @@ import {
   productionV2TraceUpsertSql,
   buildProductionV2TraceUpsertParams,
 } from "../features/schemas/production_v2_trace.schema";
+import {
+  productionV2ApprovalLogUpsertSql,
+  buildProductionV2ApprovalLogUpsertParams,
+} from "../features/schemas/production_v2_approval_log.schema";
+import {
+  productionV2ApprovalLogItemUpsertSql,
+  buildProductionV2ApprovalLogItemUpsertParams,
+} from "../features/schemas/production_v2_approval_log_item.schema";
 import { v4 as uuidv4 } from "uuid";
 import { LocalUserProfile } from "../types/user.types";
 import { SYNC_ACTIONS } from "../types/action.types";
@@ -1603,6 +1611,28 @@ export class DatabaseService {
         const stmt = this.prepare(productionV2TraceUpsertSql);
         for (const pt of data.productionV2Traces) {
           stmt.run(this.sanitize(buildProductionV2TraceUpsertParams(pt)));
+        }
+      }
+
+      if (
+        Array.isArray(data.productionV2ApprovalLogs) &&
+        data.productionV2ApprovalLogs.length > 0
+      ) {
+        const stmt = this.prepare(productionV2ApprovalLogUpsertSql);
+        for (const al of data.productionV2ApprovalLogs) {
+          stmt.run(this.sanitize(buildProductionV2ApprovalLogUpsertParams(al)));
+        }
+      }
+
+      if (
+        Array.isArray(data.productionV2ApprovalLogItems) &&
+        data.productionV2ApprovalLogItems.length > 0
+      ) {
+        const stmt = this.prepare(productionV2ApprovalLogItemUpsertSql);
+        for (const ali of data.productionV2ApprovalLogItems) {
+          stmt.run(
+            this.sanitize(buildProductionV2ApprovalLogItemUpsertParams(ali)),
+          );
         }
       }
 

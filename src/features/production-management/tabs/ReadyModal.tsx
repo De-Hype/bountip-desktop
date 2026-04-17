@@ -5,7 +5,7 @@ import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
 import { Pagination } from "@/shared/Pagination/pagination";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import NotFound from "@/features/inventory/NotFound";
-import { OrderStatus } from "../../../../electron/types/order.types";
+import { ProductionV2Status } from "../../../../electron/types/productionV2.types";
 import ViewDeliveryNote from "@/features/production-management/orders/ViewDeliveryNote";
 
 type ScheduledRow = {
@@ -45,8 +45,8 @@ const ReadyModal = () => {
       const where: string[] = ["p.outletId = ?"];
       const params: any[] = [selectedOutlet.id];
 
-      where.push("p.status = ?");
-      params.push(OrderStatus.READY);
+      where.push("LOWER(COALESCE(p.status, '')) = LOWER(?)");
+      params.push(ProductionV2Status.READY);
 
       const q = searchTerm.trim();
       if (q) {
@@ -60,7 +60,7 @@ const ReadyModal = () => {
       const countRows = await api.dbQuery(
         `
           SELECT COUNT(*) as count
-          FROM productions p
+          FROM productions_v2 p
           ${whereClause}
         `,
         params,
@@ -86,10 +86,10 @@ const ReadyModal = () => {
             p.updatedAt as updatedAt,
             (
               SELECT COUNT(*)
-              FROM production_items pi
+              FROM production_v2_items pi
               WHERE pi.productionId = p.id
             ) as ordersCount
-          FROM productions p
+          FROM productions_v2 p
           ${whereClause}
           ORDER BY COALESCE(p.updatedAt, p.createdAt) DESC
           LIMIT ? OFFSET ?

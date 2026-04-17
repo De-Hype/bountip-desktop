@@ -4032,6 +4032,167 @@ const productionV2TraceSchema = {
     "CREATE INDEX IF NOT EXISTS idx_production_v2_traces_productionId ON production_v2_traces(productionId)"
   ]
 };
+const productionV2ApprovalLogUpsertSql = `
+  INSERT INTO production_v2_approval_logs (
+    id,
+    status,
+    approvedBy,
+    rejectedBy,
+    approvedAt,
+    rejectedAt,
+    notes,
+    createdAt,
+    updatedAt,
+    productionId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @status,
+    @approvedBy,
+    @rejectedBy,
+    @approvedAt,
+    @rejectedAt,
+    @notes,
+    @createdAt,
+    @updatedAt,
+    @productionId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    status = excluded.status,
+    approvedBy = excluded.approvedBy,
+    rejectedBy = excluded.rejectedBy,
+    approvedAt = excluded.approvedAt,
+    rejectedAt = excluded.rejectedAt,
+    notes = excluded.notes,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    productionId = excluded.productionId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= production_v2_approval_logs.version
+     OR excluded.updatedAt >= production_v2_approval_logs.updatedAt
+     OR production_v2_approval_logs.updatedAt IS NULL
+`;
+const buildProductionV2ApprovalLogUpsertParams = (log2) => ({
+  id: log2.id,
+  status: log2.status,
+  approvedBy: log2.approvedBy,
+  rejectedBy: log2.rejectedBy,
+  approvedAt: log2.approvedAt,
+  rejectedAt: log2.rejectedAt,
+  notes: log2.notes,
+  createdAt: log2.createdAt,
+  updatedAt: log2.updatedAt,
+  productionId: log2.productionId,
+  recordId: log2.recordId,
+  version: Number(log2.version || 0)
+});
+const productionV2ApprovalLogSchema = {
+  name: "production_v2_approval_logs",
+  create: `
+    CREATE TABLE IF NOT EXISTS production_v2_approval_logs (
+      id TEXT PRIMARY KEY,
+      status TEXT,
+      approvedBy TEXT,
+      rejectedBy TEXT,
+      approvedAt TEXT,
+      rejectedAt TEXT,
+      notes TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      productionId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_approval_logs_productionId ON production_v2_approval_logs(productionId)",
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_approval_logs_status ON production_v2_approval_logs(status)"
+  ]
+};
+const productionV2ApprovalLogItemUpsertSql = `
+  INSERT INTO production_v2_approval_log_items (
+    id,
+    requiredQuantity,
+    availableQuantity,
+    isSufficient,
+    createdAt,
+    approvalLogId,
+    inventoryItemId,
+    ingredientType,
+    itemName,
+    componentId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @requiredQuantity,
+    @availableQuantity,
+    @isSufficient,
+    @createdAt,
+    @approvalLogId,
+    @inventoryItemId,
+    @ingredientType,
+    @itemName,
+    @componentId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    requiredQuantity = excluded.requiredQuantity,
+    availableQuantity = excluded.availableQuantity,
+    isSufficient = excluded.isSufficient,
+    createdAt = excluded.createdAt,
+    approvalLogId = excluded.approvalLogId,
+    inventoryItemId = excluded.inventoryItemId,
+    ingredientType = excluded.ingredientType,
+    itemName = excluded.itemName,
+    componentId = excluded.componentId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= production_v2_approval_log_items.version
+     OR production_v2_approval_log_items.version IS NULL
+`;
+const buildProductionV2ApprovalLogItemUpsertParams = (it) => ({
+  id: it.id,
+  requiredQuantity: it.requiredQuantity,
+  availableQuantity: it.availableQuantity,
+  isSufficient: it.isSufficient ? 1 : 0,
+  createdAt: it.createdAt,
+  approvalLogId: it.approvalLogId,
+  inventoryItemId: it.inventoryItemId,
+  ingredientType: it.ingredientType,
+  itemName: it.itemName,
+  componentId: it.componentId,
+  recordId: it.recordId,
+  version: Number(it.version || 0)
+});
+const productionV2ApprovalLogItemSchema = {
+  name: "production_v2_approval_log_items",
+  create: `
+    CREATE TABLE IF NOT EXISTS production_v2_approval_log_items (
+      id TEXT PRIMARY KEY,
+      requiredQuantity TEXT,
+      availableQuantity TEXT,
+      isSufficient INTEGER,
+      createdAt TEXT,
+      approvalLogId TEXT,
+      inventoryItemId TEXT,
+      ingredientType TEXT,
+      itemName TEXT,
+      componentId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_approval_log_items_approvalLogId ON production_v2_approval_log_items(approvalLogId)",
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_approval_log_items_inventoryItemId ON production_v2_approval_log_items(inventoryItemId)"
+  ]
+};
 const schemas = [
   userSchema,
   usersSchema,
@@ -4073,7 +4234,9 @@ const schemas = [
   modifierOptionSchema,
   productionV2Schema,
   productionV2ItemSchema,
-  productionV2TraceSchema
+  productionV2TraceSchema,
+  productionV2ApprovalLogSchema,
+  productionV2ApprovalLogItemSchema
 ];
 var rng;
 var hasRequiredRng;
@@ -5355,6 +5518,20 @@ class DatabaseService {
         const stmt = this.prepare(productionV2TraceUpsertSql);
         for (const pt of data.productionV2Traces) {
           stmt.run(this.sanitize(buildProductionV2TraceUpsertParams(pt)));
+        }
+      }
+      if (Array.isArray(data.productionV2ApprovalLogs) && data.productionV2ApprovalLogs.length > 0) {
+        const stmt = this.prepare(productionV2ApprovalLogUpsertSql);
+        for (const al of data.productionV2ApprovalLogs) {
+          stmt.run(this.sanitize(buildProductionV2ApprovalLogUpsertParams(al)));
+        }
+      }
+      if (Array.isArray(data.productionV2ApprovalLogItems) && data.productionV2ApprovalLogItems.length > 0) {
+        const stmt = this.prepare(productionV2ApprovalLogItemUpsertSql);
+        for (const ali of data.productionV2ApprovalLogItems) {
+          stmt.run(
+            this.sanitize(buildProductionV2ApprovalLogItemUpsertParams(ali))
+          );
         }
       }
       if (Array.isArray(data.invoices) && data.invoices.length > 0) {

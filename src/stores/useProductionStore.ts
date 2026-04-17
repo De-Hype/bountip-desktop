@@ -3,22 +3,31 @@ import { create } from "zustand";
 export interface Production {
   id: string;
   status: string;
-  previousStatus: string;
-  productionDate: string;
-  additionalInformation: string;
-  productionTime: string;
-  initiator: string;
-  cancelReason: string;
-  batchId: string;
-  scheduleId: string;
-  createdAt: string;
-  updatedAt: string;
-  metadata: string;
-  outletId: string;
-  recordId: string;
-  version: number;
-  productionDueDate: string;
-  productionManager: string;
+  previousStatus?: string | null;
+  workflowPath?: string | null;
+  recipeValidationStatus?: string | null;
+  recipeValidationStrategy?: string | null;
+  initiator?: string | null;
+  inventoryCheckedBy?: string | null;
+  inventoryApprovedBy?: string | null;
+  productionStartedBy?: string | null;
+  qcApprovedBy?: string | null;
+  inventoryCheckedAt?: string | null;
+  inventoryApprovedAt?: string | null;
+  preparationStartedAt?: string | null;
+  qcStartedAt?: string | null;
+  readyAt?: string | null;
+  cancelReason?: string | null;
+  metadata?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  outletId?: string | null;
+  batchId?: string | null;
+  productionDate?: string | null;
+  productionTime?: string | null;
+  productionDueDate?: string | null;
+  recordId?: string | null;
+  version?: number;
 }
 
 export interface ProductionItem {
@@ -52,11 +61,12 @@ const useProductionStore = create<ProductionState>((set) => ({
         throw new Error("Electron API not available");
       }
 
-      let sql = "SELECT * FROM productions ORDER BY createdAt DESC";
+      let sql = "SELECT * FROM productions_v2 ORDER BY createdAt DESC";
       let params: any[] = [];
 
       if (outletId) {
-        sql = "SELECT * FROM productions WHERE outletId = ? ORDER BY createdAt DESC";
+        sql =
+          "SELECT * FROM productions_v2 WHERE outletId = ? ORDER BY createdAt DESC";
         params = [outletId];
       }
 

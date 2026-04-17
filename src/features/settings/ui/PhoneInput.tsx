@@ -11,6 +11,7 @@ interface PhoneInputProps {
   onCountryChange?: (country: PhoneCountry) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export const PhoneInput = ({
@@ -20,6 +21,7 @@ export const PhoneInput = ({
   onCountryChange,
   placeholder = "Enter phone number",
   className = "",
+  disabled = false,
 }: PhoneInputProps) => {
   const phoneCountries = useMemo(() => getPhoneCountries(), []);
   const [isOpen, setIsOpen] = useState(false);
@@ -52,8 +54,14 @@ export const PhoneInput = ({
       <div className="relative">
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center h-full px-3 py-3 bg-white border border-gray-200 border-r-0 rounded-l-xl hover:bg-gray-50 transition-colors focus:outline-none"
+          onClick={() => {
+            if (disabled) return;
+            setIsOpen(!isOpen);
+          }}
+          disabled={disabled}
+          className={`flex items-center h-full px-3 py-3 bg-white border border-gray-200 border-r-0 rounded-l-xl transition-colors focus:outline-none ${
+            disabled ? "opacity-60 cursor-not-allowed" : "hover:bg-gray-50"
+          }`}
         >
           {selectedCountry && (
             <>
@@ -72,7 +80,7 @@ export const PhoneInput = ({
           <ChevronDown className="h-4 w-4 text-gray-400" />
         </button>
 
-        {isOpen && (
+        {isOpen && !disabled && (
           <div className="absolute z-50 left-0 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-2 border-b border-gray-100">
               <input
@@ -129,7 +137,12 @@ export const PhoneInput = ({
           }
         }}
         placeholder={placeholder}
-        className="flex-1 px-4 py-3 border border-gray-200 rounded-r-xl outline-none focus:ring-1 focus:ring-[#15BA5C] focus:border-transparent transition-all text-sm"
+        disabled={disabled}
+        className={`flex-1 px-4 py-3 border border-gray-200 rounded-r-xl outline-none transition-all text-sm ${
+          disabled
+            ? "opacity-60 cursor-not-allowed"
+            : "focus:ring-1 focus:ring-[#15BA5C] focus:border-transparent"
+        }`}
       />
     </div>
   );

@@ -1,8 +1,9 @@
 import ProductionManagementAssets from "@/assets/images/products-management";
-import React, { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import useProductionStore from "@/stores/useProductionStore";
 import useOrderStore from "@/stores/useOrderStore";
 import { useBusinessStore } from "@/stores/useBusinessStore";
+import { ProductionV2Status } from "../../../../electron/types/productionV2.types";
 
 const ProductionStats = () => {
   const { productions, fetchProductions } = useProductionStore();
@@ -16,10 +17,22 @@ const ProductionStats = () => {
 
   const stats = useMemo(() => {
     return {
-      newOrders: orders.filter((o) => o.status === "Pending" || o.status === "To be produced").length,
-      scheduledProductions: productions.filter((p) => p.status === "Scheduled for Production").length,
-      readyOrders: productions.filter((p) => p.status === "Ready").length,
-      cancelledOrders: productions.filter((p) => p.status === "Cancelled").length,
+      newOrders: orders.filter(
+        (o) => o.status === "Pending" || o.status === "To be produced",
+      ).length,
+      scheduledProductions: productions.filter(
+        (p) =>
+          String(p.status || "").toLowerCase() ===
+          ProductionV2Status.IN_PREPARATION,
+      ).length,
+      readyOrders: productions.filter(
+        (p) =>
+          String(p.status || "").toLowerCase() === ProductionV2Status.READY,
+      ).length,
+      cancelledOrders: productions.filter(
+        (p) =>
+          String(p.status || "").toLowerCase() === ProductionV2Status.CANCELLED,
+      ).length,
     };
   }, [orders, productions]);
 

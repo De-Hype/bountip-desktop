@@ -7,11 +7,10 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-import { formatDistanceToNowStrict } from "date-fns";
 import { Pagination } from "@/shared/Pagination/pagination";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import NotFound from "@/features/inventory/NotFound";
-import { OrderStatus } from "../../../../electron/types/order.types";
+import { ProductionV2Status } from "../../../../electron/types/productionV2.types";
 
 type ScheduledRow = {
   id: string;
@@ -22,12 +21,25 @@ type ScheduledRow = {
   ordersCount: number;
 };
 
-const timeSpentLabel = (createdAt: string | null, updatedAt: string | null) => {
-  const raw = updatedAt || createdAt;
-  if (!raw) return "-";
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return "-";
-  return formatDistanceToNowStrict(d, { unit: "minute" });
+const getTimeSpent = (createdAt: string | null) => {
+  if (!createdAt) return "-";
+
+  const start = new Date(createdAt);
+  if (Number.isNaN(start.getTime())) return "-";
+
+  const now = new Date();
+  const diffMs = now.getTime() - start.getTime();
+
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  if (diffMins < 60) return `${diffMins}m`;
+
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffHours < 24) {
+    return `${diffHours}h ${diffMins % 60}m`;
+  }
+
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return `${diffDays}d ${diffHours % 24}h`;
 };
 
 const ScheduledProductionModal = () => {
@@ -54,8 +66,8 @@ const ScheduledProductionModal = () => {
       const where: string[] = ["p.outletId = ?"];
       const params: any[] = [selectedOutlet.id];
 
-      where.push("p.status = ?");
-      params.push(OrderStatus.SCHEDULED_FOR_PRODUCTION);
+      where.push("LOWER(COALESCE(p.status, '')) = LOWER(?)");
+      params.push(ProductionV2Status.IN_PREPARATION);
 
       const q = searchTerm.trim();
       if (q) {
@@ -69,7 +81,7 @@ const ScheduledProductionModal = () => {
       const countRows = await api.dbQuery(
         `
           SELECT COUNT(*) as count
-          FROM productions p
+          FROM productions_v2 p
           ${whereClause}
         `,
         params,
@@ -93,12 +105,15 @@ const ScheduledProductionModal = () => {
             p.status as status,
             p.createdAt as createdAt,
             p.updatedAt as updatedAt,
+            p.productionDate as productionDate,
+            p.productionTime as productionTime,
+            p.productionDueDate as productionDueDate,
             (
               SELECT COUNT(*)
-              FROM production_items pi
+              FROM production_v2_items pi
               WHERE pi.productionId = p.id
             ) as ordersCount
-          FROM productions p
+          FROM productions_v2 p
           ${whereClause}
           ORDER BY COALESCE(p.updatedAt, p.createdAt) DESC
           LIMIT ? OFFSET ?
@@ -113,6 +128,12 @@ const ScheduledProductionModal = () => {
           status: r.status != null ? String(r.status) : null,
           createdAt: r.createdAt != null ? String(r.createdAt) : null,
           updatedAt: r.updatedAt != null ? String(r.updatedAt) : null,
+          productionDate:
+            r.productionDate != null ? String(r.productionDate) : null,
+          productionTime:
+            r.productionTime != null ? String(r.productionTime) : null,
+          productionDueDate:
+            r.productionDueDate != null ? String(r.productionDueDate) : null,
           ordersCount: Number(r.ordersCount || 0),
         })),
       );
@@ -142,7 +163,7 @@ const ScheduledProductionModal = () => {
         const now = new Date().toISOString();
         await api.dbQuery(
           `
-            UPDATE productions
+            UPDATE productions_v2
             SET
               status = ?,
               previousStatus = ?,
@@ -151,7 +172,7 @@ const ScheduledProductionModal = () => {
             WHERE id = ? AND outletId = ?
           `,
           [
-            "Quality Control",
+            ProductionV2Status.QUALITY_CONTROL,
             row.status || null,
             now,
             row.id,
@@ -160,12 +181,12 @@ const ScheduledProductionModal = () => {
         );
         if (api.queueAdd) {
           const rec = await api.dbQuery(
-            "SELECT * FROM productions WHERE id = ?",
+            "SELECT * FROM productions_v2 WHERE id = ?",
             [row.id],
           );
           if (rec?.[0]) {
             await api.queueAdd({
-              table: "productions",
+              table: "productions_v2",
               action: "UPDATE",
               data: rec[0],
               id: row.id,
@@ -191,7 +212,7 @@ const ScheduledProductionModal = () => {
             <div className="flex items-center">
               <div className="relative">
                 <select
-                  value={"All"}
+                  defaultValue="All"
                   className="h-11 w-[140px] pl-4 pr-10 bg-white border border-gray-200 rounded-l-[10px] text-[14px] text-[#111827] outline-none appearance-none"
                 >
                   <option value="All">All</option>
@@ -288,7 +309,7 @@ const ScheduledProductionModal = () => {
                     <td className="px-4 py-6">
                       <span className="inline-flex items-center gap-2 text-[14px] text-[#111827]">
                         <CircleAlert className="size-4 text-[#EF4444]" />
-                        {timeSpentLabel(r.createdAt, r.updatedAt)}
+                        {getTimeSpent(r.createdAt)}
                       </span>
                     </td>
                     <td className="px-4 py-6">

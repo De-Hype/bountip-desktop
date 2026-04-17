@@ -1,15 +1,20 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Dropdown, type DropdownOption } from "@/features/settings/ui/Dropdown";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimeDropdownSplit } from "@/features/settings/ui/TimeDropdownSplit";
+import { PhoneInput } from "@/features/settings/ui/PhoneInput";
 import PreOrderAssests from "@/assets/images/pos/pre-order";
 import useToastStore from "@/stores/toastStore";
 import ProcessPaymentModal from "./ProcessPaymentModal";
+import {
+  getPhoneCountries,
+  type PhoneCountry,
+} from "@/utils/getPhoneCountries";
 
 type CreatePreOrderProps = {
   isOpen: boolean;
@@ -93,6 +98,20 @@ const CreatePreOrder = ({
     useState<DeliveryMethod>("pickup");
   const [useSameCustomerDetails, setUseSameCustomerDetails] = useState(true);
   const [recipientName, setRecipientName] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryPhoneNumber, setDeliveryPhoneNumber] = useState("");
+  const [deliveryFee, setDeliveryFee] = useState("0");
+  const phoneCountries = useMemo(() => getPhoneCountries(), []);
+  const defaultDeliveryPhoneCountry = useMemo(() => {
+    if (phoneCountries.length === 0) return null;
+    return (
+      phoneCountries.find((country) => country.isoCode === "NG") ||
+      phoneCountries[0] ||
+      null
+    );
+  }, [phoneCountries]);
+  const [deliveryPhoneCountry, setDeliveryPhoneCountry] =
+    useState<PhoneCountry | null>(null);
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(
     undefined,
   );
@@ -122,10 +141,21 @@ const CreatePreOrder = ({
     setDeliveryMethod("pickup");
     setUseSameCustomerDetails(true);
     setRecipientName("");
+    setDeliveryAddress("");
+    setDeliveryPhoneNumber("");
+    setDeliveryFee("0");
+    setDeliveryPhoneCountry(null);
     setScheduledDate(undefined);
     setScheduledTime("09:00");
     setSpecialInstructions("");
   }, [defaultOrderType, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (deliveryPhoneCountry) return;
+    if (!defaultDeliveryPhoneCountry) return;
+    setDeliveryPhoneCountry(defaultDeliveryPhoneCountry);
+  }, [defaultDeliveryPhoneCountry, deliveryPhoneCountry, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -175,7 +205,7 @@ const CreatePreOrder = ({
       try {
         const rows = await api.dbQuery(
           `
-            SELECT id, name, pricingTier
+            SELECT id, name, pricingTier, phoneNumber
             FROM customers
             WHERE outletId = ?
               AND status = 'active'
@@ -228,6 +258,47 @@ const CreatePreOrder = ({
       (customers || []).find((c: any) => String(c.id) === customerId) || null
     );
   }, [customerId, customers]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!useSameCustomerDetails) return;
+    if (!selectedCustomer) return;
+    const name = String(selectedCustomer?.name || "").trim();
+    if (name) setRecipientName(name);
+    const phone = String(selectedCustomer?.phoneNumber || "").trim();
+    if (!phone) return;
+
+    const normalizedPhone = phone.replace(/\s+/g, "");
+    if (normalizedPhone.startsWith("+") && phoneCountries.length > 0) {
+      const sortedCountries = [...phoneCountries].sort(
+        (a, b) => b.dialCode.length - a.dialCode.length,
+      );
+      const matched = sortedCountries.find((c) =>
+        normalizedPhone.startsWith(c.dialCode),
+      );
+      if (matched) {
+        setDeliveryPhoneCountry(matched);
+        setDeliveryPhoneNumber(
+          normalizedPhone.slice(matched.dialCode.length).trim(),
+        );
+        return;
+      }
+    }
+
+    if (!deliveryPhoneCountry && defaultDeliveryPhoneCountry) {
+      setDeliveryPhoneCountry(defaultDeliveryPhoneCountry);
+    }
+    setDeliveryPhoneNumber(
+      normalizedPhone.startsWith("+") ? normalizedPhone : phone,
+    );
+  }, [
+    defaultDeliveryPhoneCountry,
+    deliveryPhoneCountry,
+    isOpen,
+    phoneCountries,
+    selectedCustomer,
+    useSameCustomerDetails,
+  ]);
 
   const selectedPriceTier = useMemo(() => {
     const key = selectedCustomer?.pricingTier;
@@ -356,6 +427,15 @@ const CreatePreOrder = ({
     const dd = String(scheduledDate.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}T${scheduledTime}`;
   }, [scheduledDate, scheduledTime]);
+
+  const deliveryRecipientPhone = useMemo(() => {
+    if (deliveryMethod !== "delivery") return "";
+    const raw = deliveryPhoneNumber.trim();
+    if (!raw) return "";
+    if (raw.startsWith("+")) return raw;
+    const dial = deliveryPhoneCountry?.dialCode || "";
+    return `${dial}${raw}`;
+  }, [deliveryMethod, deliveryPhoneCountry, deliveryPhoneNumber]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -687,6 +767,20 @@ const CreatePreOrder = ({
       showToast("error", "Missing date/time", "Select scheduled date and time");
       return;
     }
+    if (deliveryMethod === "delivery") {
+      if (!deliveryAddress.trim()) {
+        showToast("error", "Missing address", "Enter delivery address");
+        return;
+      }
+      if (!deliveryRecipientPhone.trim()) {
+        showToast(
+          "error",
+          "Missing phone number",
+          "Enter delivery phone number",
+        );
+        return;
+      }
+    }
     if (cleanedItems.length === 0) {
       showToast("error", "No products", "Add at least one product");
       return;
@@ -785,11 +879,11 @@ const CreatePreOrder = ({
         `
           INSERT INTO orders (
             id, status, deliveryMethod, amount, tax, serviceCharge, total,
-            specialInstructions, recipientName, occasion, scheduledAt,
+            deliveryFee, specialInstructions, recipientName, occasion, recipientPhone, scheduledAt, address,
             reference, orderMode, orderChannel, orderType,
             createdAt, updatedAt, customerId, outletId, cartId,
             paymentStatus, discount, markup, deletedAt, version, timeline
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           orderId,
@@ -799,10 +893,13 @@ const CreatePreOrder = ({
           taxAmount,
           serviceChargeAmount,
           totalAmount,
+          Number(sanitizeNumber(deliveryFee || "0") || 0) || 0,
           specialInstructions || null,
           recipientName || null,
           occasion || null,
+          deliveryRecipientPhone || null,
           scheduledAt || null,
+          deliveryAddress || null,
           orderReference,
           "Preorder",
           "Preorder",
@@ -875,6 +972,220 @@ const CreatePreOrder = ({
     } catch (e) {
       console.error("Failed to create order:", e);
       showToast("error", "Create failed", "Failed to save order");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!selectedOutletId) {
+      showToast("error", "No outlet selected", "Select an outlet first");
+      return;
+    }
+    const api: any = (window as any).electronAPI;
+    if (!api?.dbQuery) {
+      showToast("error", "Offline DB not available", "dbQuery not found");
+      return;
+    }
+
+    const cleanedItems = items
+      .map((it) => ({
+        ...it,
+        quantity: sanitizeNumber(it.quantity),
+      }))
+      .filter((it) => it.productId && Number(it.quantity || 0) > 0);
+
+    if (cleanedItems.length === 0) {
+      showToast("error", "No products", "Add at least one product");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const now = new Date().toISOString();
+      const orderId = crypto.randomUUID();
+      const cartId = crypto.randomUUID();
+      const orderReference = generateReference();
+      const cartReference = `CRT-${Date.now()}`;
+      const timeline = JSON.stringify([
+        {
+          action: "draft_saved",
+          timestamp: now,
+          description: "Order saved as draft",
+        },
+      ]);
+
+      const subtotalAmount = cleanedItems.reduce((acc, it) => {
+        const qty = Math.floor(Number(it.quantity || 0) || 0);
+        return acc + (Number(it.unitPrice || 0) || 0) * qty;
+      }, 0);
+      const discountAmount = cleanedItems.reduce((acc, it) => {
+        const qty = Math.floor(Number(it.quantity || 0) || 0);
+        return acc + (Number(it.priceTierDiscount || 0) || 0) * qty;
+      }, 0);
+      const markupAmount = cleanedItems.reduce((acc, it) => {
+        const qty = Math.floor(Number(it.quantity || 0) || 0);
+        return acc + (Number(it.priceTierMarkup || 0) || 0) * qty;
+      }, 0);
+
+      const taxRateTotal = checkoutTaxes.reduce(
+        (acc: number, t: { name: string; rate: number }) => acc + t.rate,
+        0,
+      );
+      const taxAmount = (subtotalAmount * taxRateTotal) / 100;
+      const serviceChargeAmount = checkoutServiceCharge
+        ? (subtotalAmount * checkoutServiceCharge.rate) / 100
+        : 0;
+      const totalAmount = subtotalAmount + taxAmount + serviceChargeAmount;
+
+      await api.dbQuery(
+        `
+          INSERT INTO cart (
+            id, reference, status, createdAt, updatedAt, outletId,
+            itemCount, totalQuantity, totalAmount, customerId, recordId, version
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          cartId,
+          cartReference,
+          "open",
+          now,
+          now,
+          selectedOutletId,
+          cleanedItems.length,
+          cleanedItems.reduce(
+            (acc, it) => acc + Math.floor(Number(it.quantity || 0) || 0),
+            0,
+          ),
+          subtotalAmount,
+          customerId || null,
+          null,
+          0,
+        ],
+      );
+
+      const cartItemIds: string[] = [];
+      for (const it of cleanedItems) {
+        const qty = Math.floor(Number(it.quantity || 0) || 0);
+        const cartItemId = crypto.randomUUID();
+        cartItemIds.push(cartItemId);
+        await api.dbQuery(
+          `
+            INSERT INTO cart_item (
+              id, productId, quantity, unitPrice, cartId, priceTierDiscount, priceTierMarkup, recordId, version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            cartItemId,
+            it.productId,
+            qty,
+            Number(it.unitPrice || 0) || 0,
+            cartId,
+            Number(it.priceTierDiscount || 0) || 0,
+            Number(it.priceTierMarkup || 0) || 0,
+            null,
+            0,
+          ],
+        );
+      }
+
+      await api.dbQuery(
+        `
+          INSERT INTO orders (
+            id, status, deliveryMethod, amount, tax, serviceCharge, total,
+            deliveryFee, specialInstructions, recipientName, occasion, recipientPhone, scheduledAt, address,
+            reference, orderMode, orderChannel, orderType,
+            createdAt, updatedAt, customerId, outletId, cartId,
+            paymentStatus, discount, markup, deletedAt, version, timeline
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          orderId,
+          "Draft",
+          deliveryMethod === "pickup" ? "Pickup" : "Delivery",
+          subtotalAmount,
+          taxAmount,
+          serviceChargeAmount,
+          totalAmount,
+          Number(sanitizeNumber(deliveryFee || "0") || 0) || 0,
+          specialInstructions || null,
+          recipientName || null,
+          occasion || null,
+          deliveryRecipientPhone || null,
+          scheduledAt || null,
+          deliveryAddress || null,
+          orderReference,
+          "Preorder",
+          "Preorder",
+          "Order",
+          now,
+          now,
+          customerId || null,
+          selectedOutletId,
+          cartId,
+          null,
+          discountAmount,
+          markupAmount,
+          null,
+          0,
+          timeline,
+        ],
+      );
+
+      if (api?.queueAdd) {
+        const cartRows = await api.dbQuery(
+          "SELECT * FROM cart WHERE id = ? LIMIT 1",
+          [cartId],
+        );
+        const cartRow = cartRows?.[0] ?? null;
+        if (cartRow) {
+          await api.queueAdd({
+            table: "cart",
+            action: "CREATE",
+            data: cartRow,
+            id: cartId,
+          });
+        }
+
+        if (cartItemIds.length > 0) {
+          const placeholders = cartItemIds.map(() => "?").join(", ");
+          const itemRows = await api.dbQuery(
+            `SELECT * FROM cart_item WHERE id IN (${placeholders})`,
+            cartItemIds,
+          );
+          for (const row of itemRows || []) {
+            const id = String(row?.id || "");
+            if (!id) continue;
+            await api.queueAdd({
+              table: "cart_item",
+              action: "CREATE",
+              data: row,
+              id,
+            });
+          }
+        }
+
+        const orderRows = await api.dbQuery(
+          "SELECT * FROM orders WHERE id = ? LIMIT 1",
+          [orderId],
+        );
+        const orderRow = orderRows?.[0] ?? null;
+        if (orderRow) {
+          await api.queueAdd({
+            table: "orders",
+            action: "CREATE",
+            data: orderRow,
+            id: orderId,
+          });
+        }
+      }
+
+      showToast("success", "Draft saved", "Order saved as draft");
+      onCreated?.();
+      onClose();
+    } catch (e) {
+      console.error("Failed to save draft:", e);
+      showToast("error", "Save failed", "Failed to save draft");
     } finally {
       setIsSaving(false);
     }
@@ -1287,6 +1598,52 @@ const CreatePreOrder = ({
                   </div>
 
                   <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {deliveryMethod === "delivery" && (
+                      <div>
+                        <div className="text-[14px] font-semibold text-[#111827]">
+                          Delivery Address
+                          <span className="text-[#EF4444]">*</span>
+                        </div>
+                        <input
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
+                          disabled={useSameCustomerDetails}
+                          placeholder="Enter delivery address"
+                          className={`mt-3 h-14 w-full rounded-[10px] border border-[#E5E7EB] bg-white px-5 text-[15px] outline-none ${
+                            useSameCustomerDetails
+                              ? "opacity-60 cursor-not-allowed"
+                              : ""
+                          }`}
+                        />
+                        <div className="mt-3 flex items-center gap-2 text-[13px] text-[#6B7280]">
+                          <span className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-[#15BA5C] text-[#15BA5C] text-[12px] font-bold">
+                            i
+                          </span>
+                          Please include city/state/country for API
+                        </div>
+                      </div>
+                    )}
+
+                    {deliveryMethod === "delivery" && (
+                      <div>
+                        <div className="text-[14px] font-semibold text-[#111827]">
+                          Delivery Phone Number
+                          <span className="text-[#EF4444]">*</span>
+                        </div>
+                        <PhoneInput
+                          value={deliveryPhoneNumber}
+                          onChange={(value) => setDeliveryPhoneNumber(value)}
+                          selectedCountry={deliveryPhoneCountry || undefined}
+                          onCountryChange={(country) =>
+                            setDeliveryPhoneCountry(country)
+                          }
+                          disabled={useSameCustomerDetails}
+                          placeholder="Enter delivery phone number"
+                          className="mt-3 h-14 w-full"
+                        />
+                      </div>
+                    )}
+
                     <div>
                       <div className="text-[14px] font-semibold text-[#111827]">
                         Recipient Name<span className="text-[#EF4444]">*</span>
@@ -1294,19 +1651,63 @@ const CreatePreOrder = ({
                       <input
                         value={recipientName}
                         onChange={(e) => setRecipientName(e.target.value)}
+                        disabled={useSameCustomerDetails}
                         placeholder="Enter recipient name"
-                        className="mt-3 h-14 w-full rounded-[10px] border border-[#E5E7EB] bg-white px-5 text-[15px] outline-none"
+                        className={`mt-3 h-14 w-full rounded-[10px] border border-[#E5E7EB] bg-white px-5 text-[15px] outline-none ${
+                          useSameCustomerDetails
+                            ? "opacity-60 cursor-not-allowed"
+                            : ""
+                        }`}
                       />
                     </div>
-                    <div>
+
+                    {deliveryMethod === "delivery" && (
+                      <div>
+                        <div className="text-[14px] font-semibold text-[#111827]">
+                          Delivery Fee
+                        </div>
+                        <input
+                          value={deliveryFee}
+                          onChange={(e) =>
+                            setDeliveryFee(sanitizeNumber(e.target.value))
+                          }
+                          disabled={useSameCustomerDetails}
+                          placeholder="0"
+                          className={`mt-3 h-14 w-full rounded-[10px] border border-[#E5E7EB] bg-white px-5 text-[15px] outline-none ${
+                            useSameCustomerDetails
+                              ? "opacity-60 cursor-not-allowed"
+                              : ""
+                          }`}
+                        />
+                      </div>
+                    )}
+
+                    <div
+                      className={
+                        deliveryMethod === "delivery" ? "md:col-span-2" : ""
+                      }
+                    >
                       <div className="text-[14px] font-semibold text-[#111827]">
-                        Date and Time<span className="text-[#EF4444]">*</span>
+                        {deliveryMethod === "delivery"
+                          ? "Delivery Date and Time"
+                          : "Date and Time"}
+                        <span className="text-[#EF4444]">*</span>
                       </div>
                       <div className="mt-3">
                         <DatePicker
+                          disabledDates={(date) => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            return date < today;
+                          }}
+                          disabled={useSameCustomerDetails}
                           date={scheduledDate}
                           onDateChange={(d) => setScheduledDate(d)}
-                          placeholder="Select Date"
+                          placeholder={
+                            deliveryMethod === "delivery"
+                              ? "Select delivery date"
+                              : "Select Date"
+                          }
                           className="h-14 rounded-[10px] border border-[#E5E7EB] hover:border-[#E5E7EB]"
                           popoverClassName="z-[220]"
                         />
@@ -1319,6 +1720,7 @@ const CreatePreOrder = ({
                               value={scheduledTime}
                               onChange={(v) => setScheduledTime(v)}
                               minuteStep={1}
+                              disabled={useSameCustomerDetails}
                             />
                           </div>
                         )}
@@ -1400,7 +1802,9 @@ const CreatePreOrder = ({
               <div className="flex gap-6">
                 <button
                   type="button"
-                  className="h-14 flex-1 cursor-pointer rounded-[12px] bg-[#E5E7EB] text-[#9CA3AF] font-bold text-[18px]"
+                  disabled={isSaving}
+                  onClick={handleSaveDraft}
+                  className="h-14 flex-1 cursor-pointer rounded-[12px] bg-[#E5E7EB] text-[#111827] font-bold text-[18px] hover:bg-[#D1D5DB] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Save as Draft
                 </button>

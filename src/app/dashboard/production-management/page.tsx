@@ -4,6 +4,7 @@ import useProductionStore from "@/stores/useProductionStore";
 import useOrderStore from "@/stores/useOrderStore";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { OrderStatus } from "../../../../electron/types/order.types";
+import { ProductionV2Status } from "../../../../electron/types/productionV2.types";
 import ToBeProducedList from "@/features/production-management/tabs/ToBeProducedList";
 import ProductionStats from "@/features/production-management/stats/ProductionStats";
 import SubmittedProductionModal from "@/features/production-management/tabs/SubmittedProductionModal";
@@ -45,24 +46,27 @@ const ProductionManagementPage = () => {
       orders.filter((o) => (o.status || "").toLowerCase() === "draft").length ||
       0;
     const submitted =
-      productions.filter((p) => (p.status || "").toLowerCase() === "submitted")
-        .length || 0;
+      productions.filter((p) => {
+        const s = String(p.status || "").toLowerCase();
+        return (
+          s === ProductionV2Status.INVENTORY_PENDING ||
+          s === ProductionV2Status.INVENTORY_APPROVED
+        );
+      }).length || 0;
     const scheduled =
       productions.filter((p) => {
         const s = (p.status || "").toLowerCase();
-        return (
-          s === "scheduled for production" ||
-          s === OrderStatus.SCHEDULED_FOR_PRODUCTION.toLowerCase()
-        );
+        return s === ProductionV2Status.IN_PREPARATION;
       }).length || 0;
     const qualityControl =
-      productions.filter(
-        (p) => (p.status || "").toLowerCase() === "quality control",
-      ).length || 0;
+      productions.filter((p) => {
+        const s = String(p.status || "").toLowerCase();
+        return s === ProductionV2Status.QUALITY_CONTROL;
+      }).length || 0;
     const ready =
       productions.filter((p) => {
-        const s = (p.status || "").toLowerCase();
-        return s === "ready" || s === OrderStatus.READY.toLowerCase();
+        const s = String(p.status || "").toLowerCase();
+        return s === ProductionV2Status.READY;
       }).length || 0;
 
     return [
