@@ -1,12 +1,6 @@
 "use client";
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   MoreVertical,
   Search,
@@ -19,6 +13,7 @@ import { Pagination } from "@/shared/Pagination/pagination";
 import { format } from "date-fns";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import NotFound from "@/features/inventory/NotFound";
+import { OrderStatus } from "../../../../electron/types/order.types";
 
 const DraftModal: React.FC = () => {
   const { selectedOutlet } = useBusinessStore();
@@ -49,10 +44,10 @@ const DraftModal: React.FC = () => {
             FROM orders
             WHERE outletId = ?
               AND (deletedAt IS NULL OR deletedAt = '')
-              AND LOWER(status) = 'draft'
+              AND LOWER(COALESCE(status, '')) = LOWER(?)
             ORDER BY initiator ASC
           `,
-          [selectedOutlet.id],
+          [selectedOutlet.id, OrderStatus.DRAFT],
         );
         setInitiators(
           (list || [])
@@ -79,9 +74,9 @@ const DraftModal: React.FC = () => {
       const where: string[] = [
         "outletId = ?",
         "(deletedAt IS NULL OR deletedAt = '')",
-        "LOWER(COALESCE(status, '')) = 'draft'",
+        "LOWER(COALESCE(status, '')) = LOWER(?)",
       ];
-      const params: any[] = [selectedOutlet.id];
+      const params: any[] = [selectedOutlet.id, OrderStatus.DRAFT];
 
       if (searchTerm.trim()) {
         const pattern = `%${searchTerm.trim()}%`;

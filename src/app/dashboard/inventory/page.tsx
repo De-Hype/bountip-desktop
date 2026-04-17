@@ -59,6 +59,7 @@ const InventoryPage = () => {
               lot_min.minExpiry AS minExpiry
             FROM inventory_item ii
             JOIN inventory i ON ii.inventoryId = i.id
+            JOIN item_master im ON ii.itemMasterId = im.id
             LEFT JOIN lot_min ON lot_min.itemId = ii.id
             WHERE i.outletId = ? AND ii.isDeleted = 0
           )

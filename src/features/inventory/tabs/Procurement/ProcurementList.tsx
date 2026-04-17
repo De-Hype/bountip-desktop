@@ -192,7 +192,7 @@ const ProcurementList = () => {
               .filter((email: string) => String(email).trim() !== ""),
           ),
           supplierData.address,
-          null,
+          id,
           supplierData.notes,
           supplierData.taxNumber,
           now,

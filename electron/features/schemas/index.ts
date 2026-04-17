@@ -40,6 +40,8 @@ import { modifierOptionSchema } from "./modifier_option.schema";
 import { productionV2Schema } from "./production_v2.schema";
 import { productionV2ItemSchema } from "./production_v2_item.schema";
 import { productionV2TraceSchema } from "./production_v2_trace.schema";
+import { productionV2ApprovalLogSchema } from "./production_v2_approval_log.schema";
+import { productionV2ApprovalLogItemSchema } from "./production_v2_approval_log_item.schema";
 
 export const schemas: TableSchema[] = [
   userSchema,
@@ -83,4 +85,6 @@ export const schemas: TableSchema[] = [
   productionV2Schema,
   productionV2ItemSchema,
   productionV2TraceSchema,
+  productionV2ApprovalLogSchema,
+  productionV2ApprovalLogItemSchema,
 ];

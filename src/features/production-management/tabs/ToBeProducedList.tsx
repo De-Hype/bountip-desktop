@@ -42,7 +42,7 @@ const ToBeProducedList: React.FC = () => {
             FROM orders
             WHERE outletId = ?
               AND (deletedAt IS NULL OR deletedAt = '')
-              AND LOWER(status) = LOWER(?)
+              AND LOWER(COALESCE(status, '')) = LOWER(?)
             ORDER BY initiator ASC
           `,
           [selectedOutlet.id, OrderStatus.TO_BE_PRODUCED],
@@ -73,7 +73,7 @@ const ToBeProducedList: React.FC = () => {
         const where: string[] = [
           "outletId = ?",
           "(deletedAt IS NULL OR deletedAt = '')",
-          "LOWER(status) = LOWER(?)",
+          "LOWER(COALESCE(status, '')) = LOWER(?)",
         ];
         const params: any[] = [selectedOutlet.id, OrderStatus.TO_BE_PRODUCED];
 

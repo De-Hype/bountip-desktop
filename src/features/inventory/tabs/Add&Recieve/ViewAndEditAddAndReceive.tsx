@@ -404,7 +404,10 @@ const ViewAndEditAddAndReceive = ({
           supplierCode, notes, taxNumber, createdAt, updatedAt, deletedAt, outletId, recordId, version
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      const id = crypto.randomUUID();
+      const id =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : String(Date.now());
       const now = new Date().toISOString();
 
       await api.dbQuery(sql, [
@@ -412,18 +415,22 @@ const ViewAndEditAddAndReceive = ({
         1,
         supplierData.supplierName,
         JSON.stringify(
-          supplierData.representatives.filter((r: string) => r.trim() !== ""),
+          (supplierData.representatives || [])
+            .map((r: any) => r?.name)
+            .filter((name: string) => String(name || "").trim() !== ""),
         ),
         JSON.stringify(
-          supplierData.phoneNumbers
-            .filter((p: any) => p.number.trim() !== "")
+          (supplierData.phoneNumbers || [])
+            .filter((p: any) => String(p?.number || "").trim() !== "")
             .map((p: any) => `${p.country.dialCode}${p.number}`),
         ),
         JSON.stringify(
-          supplierData.emails.filter((e: string) => e.trim() !== ""),
+          (supplierData.emails || [])
+            .map((e: any) => e?.email)
+            .filter((email: string) => String(email || "").trim() !== ""),
         ),
         supplierData.address,
-        null,
+        id,
         supplierData.notes,
         supplierData.taxNumber,
         now,
@@ -433,6 +440,67 @@ const ViewAndEditAddAndReceive = ({
         null,
         1,
       ]);
+
+      if (api.queueAdd) {
+        const supplierRow = await api.dbQuery(
+          "SELECT * FROM suppliers WHERE id = ?",
+          [id],
+        );
+        if (supplierRow?.[0]) {
+          await api.queueAdd({
+            table: "suppliers",
+            action: "CREATE",
+            data: supplierRow[0],
+            id,
+          });
+        }
+      }
+
+      if (
+        supplierData.itemsToSupply &&
+        Array.isArray(supplierData.itemsToSupply)
+      ) {
+        for (const item of supplierData.itemsToSupply) {
+          const supplierItemId =
+            typeof crypto !== "undefined" &&
+            typeof crypto.randomUUID === "function"
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          await api.dbQuery(
+            `
+              INSERT INTO supplier_items (
+                id, totalSupplied, createdAt, updatedAt, deletedAt, supplierId, itemId, recordId, version
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            [
+              supplierItemId,
+              0,
+              now,
+              now,
+              null,
+              id,
+              item.inventoryItemId,
+              null,
+              1,
+            ],
+          );
+
+          if (api.queueAdd) {
+            const siRow = await api.dbQuery(
+              "SELECT * FROM supplier_items WHERE id = ?",
+              [supplierItemId],
+            );
+            if (siRow?.[0]) {
+              await api.queueAdd({
+                table: "supplier_items",
+                action: "CREATE",
+                data: siRow[0],
+                id: supplierItemId,
+              });
+            }
+          }
+        }
+      }
 
       const supplierRows = await api.dbQuery(
         "SELECT id, name FROM suppliers WHERE outletId = ? AND deletedAt IS NULL ORDER BY name ASC",

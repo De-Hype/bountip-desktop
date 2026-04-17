@@ -40,7 +40,7 @@ export const businessCreateSql = `
 `;
 
 export const businessUpsertSql = `
-  INSERT OR REPLACE INTO business (
+  INSERT INTO business (
     id,
     name,
     slug,
@@ -73,6 +73,24 @@ export const businessUpsertSql = `
     @ownerId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    slug = excluded.slug,
+    status = excluded.status,
+    logoUrl = excluded.logoUrl,
+    country = excluded.country,
+    businessType = excluded.businessType,
+    address = excluded.address,
+    currency = excluded.currency,
+    revenueRange = excluded.revenueRange,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    ownerId = excluded.ownerId,
+    version = excluded.version
+  WHERE excluded.version >= business.version
+     OR excluded.updatedAt >= business.updatedAt
+     OR business.updatedAt IS NULL
 `;
 
 export const buildBusinessUpsertParams = (b: any): BusinessUpsertParams => ({

@@ -7,7 +7,7 @@ export type BusinessUserRolesBusinessRoleUpsertParams = {
 };
 
 export const businessUserRolesBusinessRoleUpsertSql = `
-  INSERT OR REPLACE INTO business_user_roles_business_role (
+  INSERT INTO business_user_roles_business_role (
     businessUserId,
     businessRoleId,
     version
@@ -16,6 +16,9 @@ export const businessUserRolesBusinessRoleUpsertSql = `
     @businessRoleId,
     @version
   )
+  ON CONFLICT(businessUserId, businessRoleId) DO UPDATE SET
+    version = excluded.version
+  WHERE excluded.version >= business_user_roles_business_role.version
 `;
 
 export const buildBusinessUserRolesBusinessRoleUpsertParams = (

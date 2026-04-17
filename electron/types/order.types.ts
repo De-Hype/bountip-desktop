@@ -1,11 +1,12 @@
 export enum OrderStatus {
   PENDING = "Pending",
   INTENT = "Intent",
-  TO_BE_PRODUCED = "To be produced",
+  TO_BE_PRODUCED = "To Be Produced",
   SCHEDULED_FOR_PRODUCTION = "Scheduled for Production",
   READY = "Ready",
   COMPLETED = "Completed",
   CANCELLED = "Cancelled",
+  DRAFT = "Draft",
 }
 
 export enum OnlineOrderStatus {

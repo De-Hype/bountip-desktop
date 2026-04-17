@@ -180,11 +180,11 @@ export class SyncService {
 
       url.searchParams.set("userId", String(userId));
 
-      // const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
-      // console.log(`[SyncService] lastSyncTimestamp: ${lastSyncTimestamp}`);
-      // if (lastSyncTimestamp) {
-      //   url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
-      // }
+      const lastSyncTimestamp = this.db.getCache("last_sync_timestamp");
+      console.log(`[SyncService] lastSyncTimestamp: ${lastSyncTimestamp}`);
+      if (lastSyncTimestamp) {
+        url.searchParams.set("lastSyncTimestamp", lastSyncTimestamp);
+      }
 
       console.log(`[SyncService] Fetching from: ${url.toString()}`);
 

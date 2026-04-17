@@ -19,7 +19,7 @@ export type ModifierUpsertParams = {
 };
 
 export const modifierUpsertSql = `
-  INSERT OR REPLACE INTO modifier (
+  INSERT INTO modifier (
     id,
     modifierType,
     modifierMode,
@@ -52,6 +52,24 @@ export const modifierUpsertSql = `
     @updatedAt,
     @deletedAt
   )
+  ON CONFLICT(id) DO UPDATE SET
+    modifierType = excluded.modifierType,
+    modifierMode = excluded.modifierMode,
+    showInPos = excluded.showInPos,
+    name = excluded.name,
+    limitTotalSelection = excluded.limitTotalSelection,
+    maximumQuantity = excluded.maximumQuantity,
+    productId = excluded.productId,
+    outletId = excluded.outletId,
+    reference = excluded.reference,
+    recordId = excluded.recordId,
+    version = excluded.version,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt
+  WHERE excluded.version >= modifier.version
+     OR excluded.updatedAt >= modifier.updatedAt
+     OR modifier.updatedAt IS NULL
 `;
 
 export const buildModifierUpsertParams = (m: any): ModifierUpsertParams => ({
@@ -103,4 +121,3 @@ export const modifierSchema: TableSchema = {
     `CREATE INDEX IF NOT EXISTS idx_modifier_type ON modifier(modifierType);`,
   ],
 };
-

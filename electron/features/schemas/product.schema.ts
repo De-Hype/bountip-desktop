@@ -60,7 +60,7 @@ export const productCreateSql = `
 `;
 
 export const productUpsertSql = `
-  INSERT OR REPLACE INTO product (
+  INSERT INTO product (
     id,
     name,
     isActive,
@@ -113,6 +113,34 @@ export const productUpsertSql = `
     @outletId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    isActive = excluded.isActive,
+    description = excluded.description,
+    category = excluded.category,
+    price = excluded.price,
+    preparationArea = excluded.preparationArea,
+    weight = excluded.weight,
+    productCode = excluded.productCode,
+    weightScale = excluded.weightScale,
+    productAvailableStock = excluded.productAvailableStock,
+    packagingMethod = excluded.packagingMethod,
+    priceTierId = excluded.priceTierId,
+    allergenList = excluded.allergenList,
+    logoUrl = excluded.logoUrl,
+    logoHash = excluded.logoHash,
+    leadTime = excluded.leadTime,
+    availableAtStorefront = excluded.availableAtStorefront,
+    createdAtStorefront = excluded.createdAtStorefront,
+    isDeleted = excluded.isDeleted,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    outletId = excluded.outletId,
+    version = excluded.version
+  WHERE excluded.version >= product.version
+     OR excluded.updatedAt >= product.updatedAt
+     OR product.updatedAt IS NULL
 `;
 
 export const buildProductUpsertParams = (p: any): ProductUpsertParams => ({

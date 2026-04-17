@@ -140,8 +140,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db:getSystemDefaults", key, outletId),
   addSystemDefault: async (key: string, data: any, outletId: string) =>
     ipcRenderer.invoke("db:addSystemDefault", key, data, outletId),
-  deleteSystemDefault: async (id: string) =>
-    ipcRenderer.invoke("db:deleteSystemDefault", id),
+  deleteSystemDefault: async (id: string, itemValue?: string) =>
+    ipcRenderer.invoke("db:deleteSystemDefault", id, itemValue),
   queueAdd: async (op: any) => ipcRenderer.invoke("queue:add", op),
   triggerSync: async (forceFullPull?: boolean) =>
     ipcRenderer.invoke("sync:trigger", forceFullPull),

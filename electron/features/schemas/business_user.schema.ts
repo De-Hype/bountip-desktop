@@ -20,7 +20,7 @@ export type BusinessUserUpsertParams = {
 };
 
 export const businessUserUpsertSql = `
-  INSERT OR REPLACE INTO business_user (
+  INSERT INTO business_user (
     id,
     accessType,
     permissions,
@@ -55,6 +55,25 @@ export const businessUserUpsertSql = `
     @createdBy,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    accessType = excluded.accessType,
+    permissions = excluded.permissions,
+    status = excluded.status,
+    invitedBy = excluded.invitedBy,
+    invitationToken = excluded.invitationToken,
+    invitationExpiry = excluded.invitationExpiry,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    userId = excluded.userId,
+    outletId = excluded.outletId,
+    businessId = excluded.businessId,
+    roleId = excluded.roleId,
+    createdBy = excluded.createdBy,
+    version = excluded.version
+  WHERE excluded.version >= business_user.version
+     OR excluded.updatedAt >= business_user.updatedAt
+     OR business_user.updatedAt IS NULL
 `;
 
 export const buildBusinessUserUpsertParams = (

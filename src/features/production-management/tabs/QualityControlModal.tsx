@@ -5,7 +5,7 @@ import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
 import { Pagination } from "@/shared/Pagination/pagination";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import NotFound from "@/features/inventory/NotFound";
-import { OrderStatus } from "../../../../electron/types/order.types";
+import { ProductionV2Status } from "../../../../electron/types/productionV2.types";
 
 type ScheduledRow = {
   id: string;
@@ -40,8 +40,8 @@ const QualityControlModal = () => {
       const where: string[] = ["p.outletId = ?"];
       const params: any[] = [selectedOutlet.id];
 
-      where.push("p.status = ?");
-      params.push("Quality Control");
+      where.push("LOWER(COALESCE(p.status, '')) = LOWER(?)");
+      params.push(ProductionV2Status.QUALITY_CONTROL);
 
       const q = searchTerm.trim();
       if (q) {
@@ -55,7 +55,7 @@ const QualityControlModal = () => {
       const countRows = await api.dbQuery(
         `
           SELECT COUNT(*) as count
-          FROM productions p
+          FROM productions_v2 p
           ${whereClause}
         `,
         params,
@@ -81,10 +81,10 @@ const QualityControlModal = () => {
             p.updatedAt as updatedAt,
             (
               SELECT COUNT(*)
-              FROM production_items pi
+              FROM production_v2_items pi
               WHERE pi.productionId = p.id
             ) as ordersCount
-          FROM productions p
+          FROM productions_v2 p
           ${whereClause}
           ORDER BY COALESCE(p.updatedAt, p.createdAt) DESC
           LIMIT ? OFFSET ?
@@ -128,7 +128,7 @@ const QualityControlModal = () => {
         const now = new Date().toISOString();
         await api.dbQuery(
           `
-            UPDATE productions
+            UPDATE productions_v2
             SET
               status = ?,
               previousStatus = ?,
@@ -137,21 +137,23 @@ const QualityControlModal = () => {
             WHERE id = ? AND outletId = ?
           `,
           [
-            OrderStatus.READY,
+            ProductionV2Status.READY,
             row.status || null,
             now,
             row.id,
             selectedOutlet.id,
           ],
         );
+        setRows((prev) => prev.filter((r) => r.id !== row.id));
+        setTotalCount((prev) => Math.max(0, prev - 1));
         if (api.queueAdd) {
           const rec = await api.dbQuery(
-            "SELECT * FROM productions WHERE id = ?",
+            "SELECT * FROM productions_v2 WHERE id = ?",
             [row.id],
           );
           if (rec?.[0]) {
             await api.queueAdd({
-              table: "productions",
+              table: "productions_v2",
               action: "UPDATE",
               data: rec[0],
               id: row.id,
@@ -177,7 +179,7 @@ const QualityControlModal = () => {
             <div className="flex items-center">
               <div className="relative">
                 <select
-                  value={"All"}
+                  defaultValue="All"
                   className="h-11 w-[140px] pl-4 pr-10 bg-white border border-gray-200 rounded-l-[10px] text-[14px] text-[#111827] outline-none appearance-none"
                 >
                   <option value="All">All</option>

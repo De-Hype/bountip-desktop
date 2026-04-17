@@ -35,7 +35,7 @@ type ElectronAPI = {
   createProduct: (payload: ProductCreatePayload) => Promise<{ id: string }>;
   getSystemDefaults: (key: string, outletId?: string) => Promise<any[]>;
   addSystemDefault: (key: string, data: any, outletId: string) => Promise<any>;
-  deleteSystemDefault: (id: string) => Promise<void>;
+  deleteSystemDefault: (id: string, itemValue?: string) => Promise<void>;
   queueAdd: (op: any) => Promise<void>;
 };
 

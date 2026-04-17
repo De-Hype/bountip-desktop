@@ -18,6 +18,7 @@ import ComponentListFilter, {
   ComponentFilterState,
 } from "./ComponentListFilter";
 import ViewAndEditComponent from "./ViewAndEditComponent";
+import ActivityLogMainTab from "./tabs/ApprovalLogs";
 
 const ComponentList = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -29,6 +30,7 @@ const ComponentList = () => {
   const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
   const [isCreateDropdownOpen, setIsCreateDropdownOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isApprovalLogsOpen, setIsApprovalLogsOpen] = useState(false);
   const [isPrepareModalOpen, setIsPrepareModalOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isViewEditOpen, setIsViewEditOpen] = useState(false);
@@ -361,6 +363,7 @@ const ComponentList = () => {
                   Activity Log
                 </button>
                 <button
+                  onClick={() => setIsApprovalLogsOpen(true)}
                   type="button"
                   className="w-full px-4 py-2.5 text-left text-[14px] text-white hover:bg-white/10 transition-colors cursor-pointer"
                 >
@@ -371,7 +374,6 @@ const ComponentList = () => {
                   className="w-full px-4 py-2.5 text-left text-[14px] text-white hover:bg-white/10 transition-colors flex items-center justify-between cursor-pointer"
                 >
                   Export
-                  <Send className="size-4 text-white -rotate-45" />
                 </button>
               </div>
             )}
@@ -582,6 +584,14 @@ const ComponentList = () => {
           setRefreshNonce((n) => n + 1);
         }}
       />
+
+      {isApprovalLogsOpen && (
+        <div className="fixed inset-0 z-150 bg-black/40 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-[840px] h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+            <ActivityLogMainTab onClose={() => setIsApprovalLogsOpen(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

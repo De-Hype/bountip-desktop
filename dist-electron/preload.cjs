@@ -88,7 +88,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   cacheDelete: async (key) => electron.ipcRenderer.invoke("cache:delete", key),
   getSystemDefaults: async (key, outletId) => electron.ipcRenderer.invoke("db:getSystemDefaults", key, outletId),
   addSystemDefault: async (key, data, outletId) => electron.ipcRenderer.invoke("db:addSystemDefault", key, data, outletId),
-  deleteSystemDefault: async (id) => electron.ipcRenderer.invoke("db:deleteSystemDefault", id),
+  deleteSystemDefault: async (id, itemValue) => electron.ipcRenderer.invoke("db:deleteSystemDefault", id, itemValue),
   queueAdd: async (op) => electron.ipcRenderer.invoke("queue:add", op),
   triggerSync: async (forceFullPull) => electron.ipcRenderer.invoke("sync:trigger", forceFullPull),
   flushSync: async () => electron.ipcRenderer.invoke("sync:flush"),

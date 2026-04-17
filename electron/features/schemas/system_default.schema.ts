@@ -10,7 +10,7 @@ export type SystemDefaultUpsertParams = {
 };
 
 export const systemDefaultUpsertSql = `
-  INSERT OR REPLACE INTO system_default (
+  INSERT INTO system_default (
     id,
     key,
     data,
@@ -25,6 +25,13 @@ export const systemDefaultUpsertSql = `
     @recordId,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    key = excluded.key,
+    data = excluded.data,
+    outletId = excluded.outletId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= system_default.version
 `;
 
 export const buildSystemDefaultUpsertParams = (

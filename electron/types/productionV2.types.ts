@@ -12,3 +12,14 @@ export enum ProductionV2WorkflowPath {
   SKIP_INVENTORY = "skip_inventory",
   INVENTORY_FLOW = "inventory_flow",
 }
+
+export enum RecipeValidationStatus {
+  OK = "ok",
+  PARTIAL = "partial",
+  FAILED = "failed",
+}
+
+export enum RecipeValidationStrategy {
+  BLOCK = "block",
+  REMOVE_MISSING = "remove_missing",
+}

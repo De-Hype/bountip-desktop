@@ -55,7 +55,7 @@ export const usersCreateSql = `
 `;
 
 export const usersUpsertSql = `
-  INSERT OR REPLACE INTO users (
+  INSERT INTO users (
     id,
     email,
     fullName,
@@ -104,6 +104,32 @@ export const usersUpsertSql = `
     @lastSyncedAt,
     @version
   )
+  ON CONFLICT(id) DO UPDATE SET
+    email = excluded.email,
+    fullName = excluded.fullName,
+    password = excluded.password,
+    pin = excluded.pin,
+    otpCodeHash = excluded.otpCodeHash,
+    otpCodeExpiry = excluded.otpCodeExpiry,
+    failedLoginCount = excluded.failedLoginCount,
+    failedLoginRetryTime = excluded.failedLoginRetryTime,
+    lastFailedLogin = excluded.lastFailedLogin,
+    isEmailVerified = excluded.isEmailVerified,
+    isPin = excluded.isPin,
+    isDeleted = excluded.isDeleted,
+    lastLoginAt = excluded.lastLoginAt,
+    status = excluded.status,
+    authProvider = excluded.authProvider,
+    providerId = excluded.providerId,
+    publicId = excluded.publicId,
+    providerData = excluded.providerData,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    lastSyncedAt = excluded.lastSyncedAt,
+    version = excluded.version
+  WHERE excluded.version >= users.version
+     OR excluded.updatedAt >= users.updatedAt
+     OR users.updatedAt IS NULL
 `;
 
 export const buildUsersUpsertParams = (u: any): UsersUpsertParams => ({
