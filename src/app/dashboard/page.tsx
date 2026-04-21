@@ -226,8 +226,8 @@ const Dashboard = () => {
         icon: AssetsFiles.analytics,
         title: "Report & Analysis",
         path: "/dashboard/report-analysis",
-        available: false,
-        badge: "Coming Soon",
+        available: true,
+       // badge: "Coming Soon",
         permissionKey: "reportAnalytics",
       },
       {

@@ -17,7 +17,7 @@ const routeTitles: Record<string, string> = {
   "/dashboard/production-management": "Production",
   "/dashboard/customer-management": "Customer Management",
   "/dashboard/orders": "Order Management",
-  "/dashboard/report-analysis": "Reports & Analysis",
+  "/dashboard/report-analysis": "Insight Hub",
   "/dashboard/roles-permissions": "Roles & Permissions",
   "/dashboard/settings": "Settings",
   "/dashboard/settings/customization": "General Settings",
@@ -28,7 +28,7 @@ const routeDescriptions: Record<string, string> = {
   "/dashboard/settings/customization":
     "Manage your business and personal preferences here",
   "/dashboard/report-analysis":
-    "Analyze sales, performance, and key metrics for your business.",
+    "Explore real-time insights into your business performance with the Insight Hub.",
   "/dashboard/roles-permissions":
     "Manage access level control between your staff",
 };

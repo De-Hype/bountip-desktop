@@ -3,7 +3,6 @@ import { ChevronDown } from "lucide-react";
 import { getPhoneCountries, PhoneCountry } from "@/utils/getPhoneCountries";
 import { CachedImg } from "@/shared/CachedImg";
 
-
 interface PhoneInputProps {
   value: string;
   onChange: (value: string) => void;
@@ -36,7 +35,7 @@ export const PhoneInput = ({
       (c) =>
         c.name.toLowerCase().includes(lowerSearch) ||
         c.dialCode.includes(lowerSearch) ||
-        c.isoCode.toLowerCase().includes(lowerSearch)
+        c.isoCode.toLowerCase().includes(lowerSearch),
     );
   }, [phoneCountries, searchTerm]);
 

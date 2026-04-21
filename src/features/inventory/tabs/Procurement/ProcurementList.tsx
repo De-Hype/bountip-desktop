@@ -216,17 +216,7 @@ const ProcurementList = () => {
                   id, totalSupplied, createdAt, updatedAt, deletedAt, supplierId, itemId, recordId, version
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
               `,
-              [
-                siId,
-                0,
-                now,
-                now,
-                null,
-                id,
-                item.inventoryItemId,
-                null,
-                1,
-              ],
+              [siId, 0, now, now, null, id, item.inventoryItemId, null, 1],
             );
 
             if (api.queueAdd) {
