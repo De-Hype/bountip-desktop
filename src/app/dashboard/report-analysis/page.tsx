@@ -15,6 +15,7 @@ import { formatPrice } from "@/utils/formatPrice";
 import ReportsStatsCards from "@/features/report-analysis/ReportsStatsCards";
 import SalesPerformance from "@/features/report-analysis/sales";
 import * as XLSX from "xlsx";
+import ReportTraceability from "@/features/report-analysis/traceability";
 
 type AnyRow = Record<string, any>;
 
@@ -488,7 +489,9 @@ const ReportAnalysisPage = () => {
           </button>
         </div>
 
-        <ReportsStatsCards reportsStats={reportsStats} />
+        {reportType === "all_sales" && (
+          <ReportsStatsCards reportsStats={reportsStats} />
+        )}
       </section>
       <section className="">
         {reportType === "all_sales" ? (
@@ -497,7 +500,10 @@ const ReportAnalysisPage = () => {
             dateRange={dateRange}
           />
         ) : (
-          <></>
+          <ReportTraceability
+            outletId={location !== "all" ? location : undefined}
+            dateRange={dateRange}
+          />
         )}
       </section>
 

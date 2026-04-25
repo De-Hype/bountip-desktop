@@ -155,6 +155,18 @@ import {
   productionV2ApprovalLogItemUpsertSql,
   buildProductionV2ApprovalLogItemUpsertParams,
 } from "../features/schemas/production_v2_approval_log_item.schema";
+import {
+  productionV2LotUpsertSql,
+  buildProductionV2LotUpsertParams,
+} from "../features/schemas/production_v2_lot.schema";
+import {
+  productionV2LotItemUpsertSql,
+  buildProductionV2LotItemUpsertParams,
+} from "../features/schemas/production_v2_lot_item.schema";
+import {
+  productionV2DeliveryUpsertSql,
+  buildProductionV2DeliveryUpsertParams,
+} from "../features/schemas/production_v2_delivery.schema";
 import { v4 as uuidv4 } from "uuid";
 import { LocalUserProfile } from "../types/user.types";
 import { SYNC_ACTIONS } from "../types/action.types";
@@ -1340,6 +1352,15 @@ export class DatabaseService {
       resetTableIfFullAndProvided("productionV2Items", "production_v2_items");
       resetTableIfFullAndProvided("productionV2Traces", "production_v2_traces");
       resetTableIfFullAndProvided("productionsV2", "productions_v2");
+      resetTableIfFullAndProvided("productionV2Lots", "production_v2_lots");
+      resetTableIfFullAndProvided(
+        "productionV2LotItems",
+        "production_v2_lot_items",
+      );
+      resetTableIfFullAndProvided(
+        "productionV2Deliveries",
+        "production_v2_deliveries",
+      );
 
       resetTableIfFullAndProvided("supplierItems", "supplier_items");
       resetTableIfFullAndProvided("suppliers", "suppliers");
@@ -1581,6 +1602,40 @@ export class DatabaseService {
         const stmt = this.prepare(productionV2UpsertSql);
         for (const p of data.productionsV2) {
           stmt.run(this.sanitize(buildProductionV2UpsertParams(p)));
+        }
+      }
+
+      if (
+        Array.isArray(data.productionV2Lots) &&
+        data.productionV2Lots.length
+      ) {
+        const stmt = this.prepare(productionV2LotUpsertSql);
+        for (const lot of data.productionV2Lots) {
+          stmt.run(this.sanitize(buildProductionV2LotUpsertParams(lot)));
+        }
+      }
+
+      if (
+        Array.isArray(data.productionV2LotItems) &&
+        data.productionV2LotItems.length
+      ) {
+        const stmt = this.prepare(productionV2LotItemUpsertSql);
+        for (const lotItem of data.productionV2LotItems) {
+          stmt.run(
+            this.sanitize(buildProductionV2LotItemUpsertParams(lotItem)),
+          );
+        }
+      }
+
+      if (
+        Array.isArray(data.productionV2Deliveries) &&
+        data.productionV2Deliveries.length
+      ) {
+        const stmt = this.prepare(productionV2DeliveryUpsertSql);
+        for (const delivery of data.productionV2Deliveries) {
+          stmt.run(
+            this.sanitize(buildProductionV2DeliveryUpsertParams(delivery)),
+          );
         }
       }
 

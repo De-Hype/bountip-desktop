@@ -42,6 +42,9 @@ import { productionV2ItemSchema } from "./production_v2_item.schema";
 import { productionV2TraceSchema } from "./production_v2_trace.schema";
 import { productionV2ApprovalLogSchema } from "./production_v2_approval_log.schema";
 import { productionV2ApprovalLogItemSchema } from "./production_v2_approval_log_item.schema";
+import { productionV2LotSchema } from "./production_v2_lot.schema";
+import { productionV2LotItemSchema } from "./production_v2_lot_item.schema";
+import { productionV2DeliverySchema } from "./production_v2_delivery.schema";
 
 export const schemas: TableSchema[] = [
   userSchema,
@@ -87,4 +90,7 @@ export const schemas: TableSchema[] = [
   productionV2TraceSchema,
   productionV2ApprovalLogSchema,
   productionV2ApprovalLogItemSchema,
+  productionV2LotSchema,
+  productionV2LotItemSchema,
+  productionV2DeliverySchema,
 ];

@@ -43,7 +43,9 @@ const isPaidOrder = (row: AnyRow) => {
   const paymentStatus = normalizeText(
     row.paymentStatus ?? row.payment_status ?? row.payment_state,
   );
-  const status = normalizeText(row.status ?? row.orderStatus ?? row.order_status);
+  const status = normalizeText(
+    row.status ?? row.orderStatus ?? row.order_status,
+  );
   const merged = `${paymentStatus} ${status}`.trim();
 
   if (merged.includes("unpaid")) return false;
@@ -93,7 +95,10 @@ const ServiceChargeCard = ({ orders }: ServiceChargeCardProps) => {
     const paidOrders = orders.filter(isPaidOrder);
     const revenueOrders = paidOrders.length > 0 ? paidOrders : orders;
 
-    const sales = revenueOrders.reduce((sum, row) => sum + getOrderTotal(row), 0);
+    const sales = revenueOrders.reduce(
+      (sum, row) => sum + getOrderTotal(row),
+      0,
+    );
 
     return { serviceCharge, sales };
   }, [orders]);

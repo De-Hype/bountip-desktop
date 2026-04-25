@@ -45,7 +45,9 @@ const isPaidOrder = (row: AnyRow) => {
   const paymentStatus = normalizeText(
     row.paymentStatus ?? row.payment_status ?? row.payment_state,
   );
-  const status = normalizeText(row.status ?? row.orderStatus ?? row.order_status);
+  const status = normalizeText(
+    row.status ?? row.orderStatus ?? row.order_status,
+  );
   const merged = `${paymentStatus} ${status}`.trim();
 
   if (merged.includes("unpaid")) return false;
@@ -194,7 +196,11 @@ const SalesByChannel = ({ orders }: SalesByChannelProps) => {
         }),
       },
     ],
-    [selectedOutlet?.currency, stats.orderCountByChannel, stats.revenueByChannel],
+    [
+      selectedOutlet?.currency,
+      stats.orderCountByChannel,
+      stats.revenueByChannel,
+    ],
   );
   return (
     <section className="bg-[#FFFFFF] p-6 rounded-[14px]">

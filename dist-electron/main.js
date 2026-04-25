@@ -4193,6 +4193,215 @@ const productionV2ApprovalLogItemSchema = {
     "CREATE INDEX IF NOT EXISTS idx_production_v2_approval_log_items_inventoryItemId ON production_v2_approval_log_items(inventoryItemId)"
   ]
 };
+const productionV2LotUpsertSql = `
+  INSERT INTO production_v2_lots (
+    id,
+    lotNumber,
+    expiryDate,
+    notes,
+    createdAt,
+    updatedAt,
+    productionId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @lotNumber,
+    @expiryDate,
+    @notes,
+    @createdAt,
+    @updatedAt,
+    @productionId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    lotNumber = excluded.lotNumber,
+    expiryDate = excluded.expiryDate,
+    notes = excluded.notes,
+    updatedAt = excluded.updatedAt,
+    productionId = excluded.productionId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= production_v2_lots.version OR excluded.updatedAt >= production_v2_lots.updatedAt OR production_v2_lots.updatedAt IS NULL
+`;
+const buildProductionV2LotUpsertParams = (l) => ({
+  id: l.id,
+  lotNumber: l.lotNumber,
+  expiryDate: l.expiryDate,
+  notes: l.notes,
+  createdAt: l.createdAt,
+  updatedAt: l.updatedAt,
+  productionId: l.productionId,
+  recordId: l.recordId,
+  version: Number(l.version || 0)
+});
+const productionV2LotSchema = {
+  name: "production_v2_lots",
+  create: `
+    CREATE TABLE IF NOT EXISTS production_v2_lots (
+      id TEXT PRIMARY KEY,
+      lotNumber TEXT,
+      expiryDate TEXT,
+      notes TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      productionId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_lots_productionId ON production_v2_lots(productionId)"
+  ]
+};
+const productionV2LotItemUpsertSql = `
+  INSERT INTO production_v2_lot_items (
+    id,
+    quantityProduced,
+    quantityDelivered,
+    quantityRemaining,
+    createdAt,
+    updatedAt,
+    lotId,
+    productId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @quantityProduced,
+    @quantityDelivered,
+    @quantityRemaining,
+    @createdAt,
+    @updatedAt,
+    @lotId,
+    @productId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    quantityProduced = excluded.quantityProduced,
+    quantityDelivered = excluded.quantityDelivered,
+    quantityRemaining = excluded.quantityRemaining,
+    updatedAt = excluded.updatedAt,
+    lotId = excluded.lotId,
+    productId = excluded.productId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= production_v2_lot_items.version OR excluded.updatedAt >= production_v2_lot_items.updatedAt OR production_v2_lot_items.updatedAt IS NULL
+`;
+const buildProductionV2LotItemUpsertParams = (li) => ({
+  id: li.id,
+  quantityProduced: Number(li.quantityProduced || 0),
+  quantityDelivered: Number(li.quantityDelivered || 0),
+  quantityRemaining: Number(li.quantityRemaining || 0),
+  createdAt: li.createdAt,
+  updatedAt: li.updatedAt,
+  lotId: li.lotId,
+  productId: li.productId,
+  recordId: li.recordId,
+  version: Number(li.version || 0)
+});
+const productionV2LotItemSchema = {
+  name: "production_v2_lot_items",
+  create: `
+    CREATE TABLE IF NOT EXISTS production_v2_lot_items (
+      id TEXT PRIMARY KEY,
+      quantityProduced REAL,
+      quantityDelivered REAL,
+      quantityRemaining REAL,
+      createdAt TEXT,
+      updatedAt TEXT,
+      lotId TEXT,
+      productId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_lot_items_lotId ON production_v2_lot_items(lotId)",
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_lot_items_productId ON production_v2_lot_items(productId)"
+  ]
+};
+const productionV2DeliveryUpsertSql = `
+  INSERT INTO production_v2_deliveries (
+    id,
+    quantityDelivered,
+    status,
+    deliveredAt,
+    deliveryReference,
+    createdAt,
+    updatedAt,
+    lotId,
+    orderId,
+    productId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @quantityDelivered,
+    @status,
+    @deliveredAt,
+    @deliveryReference,
+    @createdAt,
+    @updatedAt,
+    @lotId,
+    @orderId,
+    @productId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    quantityDelivered = excluded.quantityDelivered,
+    status = excluded.status,
+    deliveredAt = excluded.deliveredAt,
+    deliveryReference = excluded.deliveryReference,
+    updatedAt = excluded.updatedAt,
+    lotId = excluded.lotId,
+    orderId = excluded.orderId,
+    productId = excluded.productId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= production_v2_deliveries.version OR excluded.updatedAt >= production_v2_deliveries.updatedAt OR production_v2_deliveries.updatedAt IS NULL
+`;
+const buildProductionV2DeliveryUpsertParams = (d) => ({
+  id: d.id,
+  quantityDelivered: Number(d.quantityDelivered || 0),
+  status: d.status,
+  deliveredAt: d.deliveredAt,
+  deliveryReference: d.deliveryReference,
+  createdAt: d.createdAt,
+  updatedAt: d.updatedAt,
+  lotId: d.lotId,
+  orderId: d.orderId,
+  productId: d.productId,
+  recordId: d.recordId,
+  version: Number(d.version || 0)
+});
+const productionV2DeliverySchema = {
+  name: "production_v2_deliveries",
+  create: `
+    CREATE TABLE IF NOT EXISTS production_v2_deliveries (
+      id TEXT PRIMARY KEY,
+      quantityDelivered REAL,
+      status TEXT,
+      deliveredAt TEXT,
+      deliveryReference TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      lotId TEXT,
+      orderId TEXT,
+      productId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_deliveries_lotId ON production_v2_deliveries(lotId)",
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_deliveries_orderId ON production_v2_deliveries(orderId)",
+    "CREATE INDEX IF NOT EXISTS idx_production_v2_deliveries_productId ON production_v2_deliveries(productId)"
+  ]
+};
 const schemas = [
   userSchema,
   usersSchema,
@@ -4236,7 +4445,10 @@ const schemas = [
   productionV2ItemSchema,
   productionV2TraceSchema,
   productionV2ApprovalLogSchema,
-  productionV2ApprovalLogItemSchema
+  productionV2ApprovalLogItemSchema,
+  productionV2LotSchema,
+  productionV2LotItemSchema,
+  productionV2DeliverySchema
 ];
 var rng;
 var hasRequiredRng;
@@ -5325,6 +5537,15 @@ class DatabaseService {
       resetTableIfFullAndProvided("productionV2Items", "production_v2_items");
       resetTableIfFullAndProvided("productionV2Traces", "production_v2_traces");
       resetTableIfFullAndProvided("productionsV2", "productions_v2");
+      resetTableIfFullAndProvided("productionV2Lots", "production_v2_lots");
+      resetTableIfFullAndProvided(
+        "productionV2LotItems",
+        "production_v2_lot_items"
+      );
+      resetTableIfFullAndProvided(
+        "productionV2Deliveries",
+        "production_v2_deliveries"
+      );
       resetTableIfFullAndProvided("supplierItems", "supplier_items");
       resetTableIfFullAndProvided("suppliers", "suppliers");
       resetTableIfFullAndProvided("componentItems", "component_items");
@@ -5500,6 +5721,28 @@ class DatabaseService {
         const stmt = this.prepare(productionV2UpsertSql);
         for (const p of data.productionsV2) {
           stmt.run(this.sanitize(buildProductionV2UpsertParams(p)));
+        }
+      }
+      if (Array.isArray(data.productionV2Lots) && data.productionV2Lots.length) {
+        const stmt = this.prepare(productionV2LotUpsertSql);
+        for (const lot of data.productionV2Lots) {
+          stmt.run(this.sanitize(buildProductionV2LotUpsertParams(lot)));
+        }
+      }
+      if (Array.isArray(data.productionV2LotItems) && data.productionV2LotItems.length) {
+        const stmt = this.prepare(productionV2LotItemUpsertSql);
+        for (const lotItem of data.productionV2LotItems) {
+          stmt.run(
+            this.sanitize(buildProductionV2LotItemUpsertParams(lotItem))
+          );
+        }
+      }
+      if (Array.isArray(data.productionV2Deliveries) && data.productionV2Deliveries.length) {
+        const stmt = this.prepare(productionV2DeliveryUpsertSql);
+        for (const delivery of data.productionV2Deliveries) {
+          stmt.run(
+            this.sanitize(buildProductionV2DeliveryUpsertParams(delivery))
+          );
         }
       }
       if (Array.isArray(data.productionItems) && data.productionItems.length > 0) {
