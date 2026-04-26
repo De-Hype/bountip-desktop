@@ -14,6 +14,7 @@ import useBusinessStore from "@/stores/useBusinessStore";
 import InventoryNavigation from "@/features/inventory/InventoryNavigation";
 import CreateInventoryItems from "@/features/inventory/tabs/InventoryList/CreateInventoryItems";
 import BulkUploadInventoryItemsModal from "@/features/inventory/BulkUploadInventoryItemsModal";
+import TotalNumberOfItemsModal from "@/features/inventory/modals/TotalNumberOfItemsModal";
 import useToastStore from "@/stores/toastStore";
 import * as XLSX from "xlsx";
 
@@ -97,7 +98,8 @@ const InventoryPage = () => {
   }, [selectedOutlet?.id, lastUpdated]);
 
   // State for modals/tables visibility
-  const [, setShowTotalNumberOfItemsTable] = useState(false);
+  const [isTotalNumberOfItemsOpen, setIsTotalNumberOfItemsOpen] =
+    useState(false);
   const [, setShowTotalExpiringItemsTable] = useState(false);
   const [, setShowTotalNumberOfExpiredItemsTable] = useState(false);
   const [, setShowTotalLowInStockItemsTable] = useState(false);
@@ -331,7 +333,7 @@ const InventoryPage = () => {
           </div>
           <button
             type="button"
-            onClick={() => setShowTotalNumberOfItemsTable(true)}
+            onClick={() => setIsTotalNumberOfItemsOpen(true)}
             className="cursor-pointer hover:bg-[#15BA5C]/10 absolute flex items-center rounded-full h-[30px] w-[30px] right-4 top-3 justify-center border border-[#15BA5C]"
           >
             <MoveUpRight className="text-[#15BA5C] h-[16px] " />
@@ -443,6 +445,13 @@ const InventoryPage = () => {
         onUploadSuccess={() => {
           refreshInventory();
         }}
+      />
+
+      <TotalNumberOfItemsModal
+        isOpen={isTotalNumberOfItemsOpen}
+        onClose={() => setIsTotalNumberOfItemsOpen(false)}
+        outletId={selectedOutlet?.id}
+        outletName={selectedOutlet?.name}
       />
     </div>
   );

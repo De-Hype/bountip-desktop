@@ -600,14 +600,14 @@ const CreateInventoryItems = ({
                 Item / Supplier Details
               </h3>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid  gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-[#1C1B20]">
                     Item Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="Enter Product Name"
+                    placeholder="Enter Item Name"
                     value={formData.itemName}
                     onChange={(e) =>
                       handleInputChange("itemName", e.target.value)
@@ -615,7 +615,7 @@ const CreateInventoryItems = ({
                     className="w-full h-12 px-4 border border-[#E5E7EB] rounded-xl outline-none focus:border-[#15BA5C] transition-all"
                   />
                 </div>
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <label className="text-sm font-semibold text-[#1C1B20]">
                     Item Code
                   </label>
@@ -633,7 +633,7 @@ const CreateInventoryItems = ({
                       <Copy className="size-4" />
                     </button>
                   </div>
-                </div>
+                </div> */}
               </div>
 
               <div className="grid grid-cols-2 gap-6">
@@ -1033,8 +1033,8 @@ const CreateInventoryItems = ({
                 <h3 className="text-[18px] font-bold text-[#1C1B20]">
                   Lot Numbers
                 </h3>
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
+                <div className="grid  gap-6">
+                  {/* <div className="space-y-2">
                     <label className="text-sm font-semibold text-[#1C1B20]">
                       Lot Number
                     </label>
@@ -1052,7 +1052,7 @@ const CreateInventoryItems = ({
                         <Copy className="size-4" />
                       </button>
                     </div>
-                  </div>
+                  </div> */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-[#1C1B20]">
                       Main Supplier for this Lot{" "}
@@ -1112,11 +1112,11 @@ const CreateInventoryItems = ({
                     Expiry Date <span className="text-red-500">*</span>
                   </label>
                   <DatePicker
-                    disabledDates={(date) => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      return date < today;
-                    }}
+                    // disabledDates={(date) => {
+                    //   const today = new Date();
+                    //   today.setHours(0, 0, 0, 0);
+                    //   return date < today;
+                    // }}
                     date={formData.expiryDate}
                     onDateChange={(date) =>
                       handleInputChange("expiryDate", date)

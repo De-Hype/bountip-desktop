@@ -3,7 +3,6 @@
 import { RefreshCw, Search, ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { DateRange } from "react-day-picker";
-import TraceabilityEmptyState from "./TraceabilityEmptyState";
 import TraceabilityCatalogueProducts from "./TraceabilityCatalogueProducts";
 
 type ReportTraceabilityProps = {
@@ -39,12 +38,19 @@ const ReportTraceability = ({
 
   const runSearch = () => {
     const q = String(searchQuery || "").trim();
+    if (!q) {
+      setLastSearch(null);
+      setIsTypeOpen(false);
+      return;
+    }
+
     setLastSearch({ searchType, searchQuery: q });
     setIsTypeOpen(false);
   };
 
   const reset = () => {
     setSearchQuery("");
+    setSearchType(searchTypeOptions[0].value);
     setLastSearch(null);
     setIsTypeOpen(false);
   };
@@ -125,6 +131,9 @@ const ReportTraceability = ({
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") runSearch();
+                }}
                 placeholder="Enter search query"
                 className="flex-1 outline-none text-[14px] text-[#111827] placeholder:text-[#9CA3AF]"
               />
@@ -150,37 +159,13 @@ const ReportTraceability = ({
         </div>
       )}
 
-      {lastSearch ? (
-        <div className="mt-6 rounded-[14px] border border-[#E5E7EB] p-5">
-          <div className="text-[#111827] text-[14px] font-semibold">
-            Results
-          </div>
-          <div className="text-[#6B7280] text-[13px] mt-1">
-            Search type: {selectedTypeLabel} • Query:{" "}
-            {lastSearch.searchQuery || "-"} • Outlet:{" "}
-            {String(outletId || "All")} • Date range:{" "}
-            {dateRange?.from && dateRange?.to
-              ? `${formatDate(dateRange.from)} - ${formatDate(dateRange.to)}`
-              : "All"}
-          </div>
-          <div className="mt-4 text-[#9CA3AF] text-[13px]">No results yet</div>
-        </div>
-      ) : (
-        // <TraceabilityEmptyState />
-        <TraceabilityCatalogueProducts
-          outletId={outletId}
-          dateRange={dateRange}
-        />
-      )}
+      <TraceabilityCatalogueProducts
+        outletId={outletId}
+        dateRange={dateRange}
+        search={lastSearch}
+      />
     </section>
   );
 };
-
-function formatDate(d: Date) {
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}-${mm}-${yyyy}`;
-}
 
 export default ReportTraceability;

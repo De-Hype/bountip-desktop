@@ -84,9 +84,15 @@ type CustomerSaleRow = {
   orderId: string | null;
 };
 
+type TraceabilitySearch = {
+  searchType: "product_or_batch" | "customer" | "order" | string;
+  searchQuery: string;
+};
+
 type TraceabilityCatalogueProductsProps = {
   outletId?: string;
   dateRange?: DateRange;
+  search?: TraceabilitySearch | null;
 };
 
 const isUuidLike = (value: string | null | undefined) => {
@@ -230,6 +236,7 @@ const mapRowToCard = (row: ProductionCardRow): CatalogueProduct => {
 const TraceabilityCatalogueProducts = ({
   outletId,
   dateRange,
+  search,
 }: TraceabilityCatalogueProductsProps): ReactElement => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -273,13 +280,34 @@ const TraceabilityCatalogueProducts = ({
     return Math.max(1, Math.ceil(totalCount / itemsPerPage));
   }, [itemsPerPage, totalCount]);
 
+  const activeSearch = useMemo(() => {
+    const rawQuery = String(search?.searchQuery || "").trim();
+    if (!rawQuery) return null;
+    const searchType = String(search?.searchType || "product_or_batch");
+    const qLower = rawQuery.toLowerCase();
+    return {
+      searchType,
+      rawQuery,
+      qLower,
+      like: `%${qLower}%`,
+      isUuid: isUuidLike(rawQuery),
+    };
+  }, [search?.searchQuery, search?.searchType]);
+
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [outletId, dateRange?.from, dateRange?.to, selectedProductId]);
+  }, [
+    outletId,
+    dateRange?.from,
+    dateRange?.to,
+    selectedProductId,
+    activeSearch?.searchType,
+    activeSearch?.rawQuery,
+  ]);
 
   const fetchRows = useCallback(async () => {
     const api = getElectronAPI();
@@ -293,11 +321,6 @@ const TraceabilityCatalogueProducts = ({
     try {
       const where: string[] = [];
       const params: any[] = [];
-
-      if (!selectedProductId) {
-        where.push("LOWER(COALESCE(p.status, '')) = LOWER(?)");
-        params.push("ready");
-      }
 
       if (outletId) {
         where.push("p.outletId = ?");
@@ -317,6 +340,98 @@ const TraceabilityCatalogueProducts = ({
           "EXISTS (SELECT 1 FROM production_v2_items pi2 WHERE pi2.productionId = p.id AND pi2.productId = ?)",
         );
         params.push(selectedProductId);
+      }
+
+      if (activeSearch) {
+        const type = activeSearch.searchType;
+
+        if (type === "customer") {
+          where.push(`
+            EXISTS (
+              SELECT 1
+              FROM production_v2_deliveries dS
+              JOIN production_v2_lots lS ON lS.id = dS.lotId
+              JOIN orders oS ON oS.id = dS.orderId
+              LEFT JOIN cart ctS ON ctS.id = oS.cartId
+              LEFT JOIN customers cS ON cS.id = COALESCE(oS.customerId, ctS.customerId)
+              WHERE lS.productionId = p.id
+                AND (
+                  LOWER(COALESCE(cS.name, '')) LIKE ?
+                  OR LOWER(COALESCE(cS.email, '')) LIKE ?
+                  OR LOWER(COALESCE(oS.recipientName, '')) LIKE ?
+                )
+            )
+          `);
+          params.push(activeSearch.like, activeSearch.like, activeSearch.like);
+        } else if (type === "order") {
+          const orderOrParts: string[] = [
+            "LOWER(COALESCE(oS.id, '')) LIKE ?",
+            "LOWER(COALESCE(oS.reference, '')) LIKE ?",
+            "LOWER(COALESCE(oS.externalReference, '')) LIKE ?",
+            "LOWER(COALESCE(oS.paymentReference, '')) LIKE ?",
+            "LOWER(COALESCE(oS.recipientName, '')) LIKE ?",
+          ];
+
+          if (activeSearch.isUuid) {
+            orderOrParts.push("oS.id = ?");
+          }
+
+          where.push(`
+            EXISTS (
+              SELECT 1
+              FROM production_v2_deliveries dS
+              JOIN production_v2_lots lS ON lS.id = dS.lotId
+              JOIN orders oS ON oS.id = dS.orderId
+              WHERE lS.productionId = p.id
+                AND (${orderOrParts.join(" OR ")})
+            )
+          `);
+          params.push(
+            activeSearch.like,
+            activeSearch.like,
+            activeSearch.like,
+            activeSearch.like,
+            activeSearch.like,
+          );
+          if (activeSearch.isUuid) params.push(activeSearch.rawQuery);
+        } else {
+          const productOrParts: string[] = [
+            "LOWER(COALESCE(p.batchId, '')) LIKE ?",
+            `
+              EXISTS (
+                SELECT 1
+                FROM production_v2_items piS
+                LEFT JOIN product prS ON prS.id = piS.productId
+                WHERE piS.productionId = p.id
+                  AND (
+                    LOWER(COALESCE(prS.name, '')) LIKE ?
+                    OR LOWER(COALESCE(prS.productCode, '')) LIKE ?
+                  )
+              )
+            `,
+            `
+              EXISTS (
+                SELECT 1
+                FROM production_v2_lots lS
+                WHERE lS.productionId = p.id
+                  AND LOWER(COALESCE(lS.lotNumber, '')) LIKE ?
+              )
+            `,
+          ];
+
+          if (activeSearch.isUuid) {
+            productOrParts.push("p.id = ?");
+          }
+
+          where.push(`(${productOrParts.join(" OR ")})`);
+          params.push(
+            activeSearch.like,
+            activeSearch.like,
+            activeSearch.like,
+            activeSearch.like,
+          );
+          if (activeSearch.isUuid) params.push(activeSearch.rawQuery);
+        }
       }
 
       const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -386,7 +501,14 @@ const TraceabilityCatalogueProducts = ({
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, dateRange, itemsPerPage, outletId, selectedProductId]);
+  }, [
+    activeSearch,
+    currentPage,
+    dateRange,
+    itemsPerPage,
+    outletId,
+    selectedProductId,
+  ]);
 
   useEffect(() => {
     fetchRows();
@@ -394,6 +516,17 @@ const TraceabilityCatalogueProducts = ({
 
   const showEmptyState = !isLoading && totalCount === 0;
   const showDetail = Boolean(selectedProductionId);
+
+  const searchTitle = useMemo(() => {
+    if (!activeSearch) return "Showing All Products in your catalogue";
+    const label =
+      activeSearch.searchType === "customer"
+        ? "Customer"
+        : activeSearch.searchType === "order"
+          ? "Order"
+          : "Product or Batch";
+    return `Showing results for ${label}: ${activeSearch.rawQuery}`;
+  }, [activeSearch]);
 
   const closeDetail = () => {
     setSelectedProductionId(null);
@@ -1378,8 +1511,8 @@ const TraceabilityCatalogueProducts = ({
             selectedDetail?.productionTime || null,
           )}
           initiatedBy={
-
-            selectedDetail?.initiator || selectedDetail?.productionStartedBy ||
+            selectedDetail?.initiator ||
+            selectedDetail?.productionStartedBy ||
             "-"
           }
           totalUnitsCreated={
@@ -1403,7 +1536,7 @@ const TraceabilityCatalogueProducts = ({
       ) : (
         <>
           <h2 className="my-6 text-[18px] font-semibold text-[#111827] sm:text-[20px]">
-            Showing All Products in your catalogue
+            {searchTitle}
           </h2>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
