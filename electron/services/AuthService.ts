@@ -11,6 +11,7 @@ import {
 
 const SERVICE_NAME = "bountip-desktop";
 const ACCOUNT_NAME = "auth-tokens";
+const TOKENS_CACHE_KEY = "auth:tokens";
 
 export class AuthService {
   private db: DatabaseService;
@@ -21,6 +22,11 @@ export class AuthService {
 
   async storeTokens(payload: any) {
     try {
+      this.db.putCache(TOKENS_CACHE_KEY, payload);
+    } catch (error) {
+      console.error("Failed to store tokens in cache", error);
+    }
+    try {
       const serialized = JSON.stringify(payload);
       await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, serialized);
     } catch (error) {
@@ -30,6 +36,11 @@ export class AuthService {
 
   async clearTokens() {
     try {
+      this.db.deleteCache(TOKENS_CACHE_KEY);
+    } catch (error) {
+      console.error("Failed to clear tokens from cache", error);
+    }
+    try {
       await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
     } catch (error) {
       console.error("Failed to clear tokens in keytar", error);
@@ -38,9 +49,31 @@ export class AuthService {
 
   async getTokens() {
     try {
+      const cached = this.db.getCache(TOKENS_CACHE_KEY);
+      const accessToken =
+        cached?.accessToken != null ? String(cached.accessToken) : "";
+      const refreshToken =
+        cached?.refreshToken != null ? String(cached.refreshToken) : "";
+      if (accessToken && refreshToken) {
+        return { accessToken, refreshToken };
+      }
+    } catch (error) {
+      console.error("Failed to read tokens from cache", error);
+    }
+
+    try {
       const serialized = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
       if (!serialized) return null;
-      return JSON.parse(serialized);
+      const parsed = JSON.parse(serialized);
+      const accessToken =
+        parsed?.accessToken != null ? String(parsed.accessToken) : "";
+      const refreshToken =
+        parsed?.refreshToken != null ? String(parsed.refreshToken) : "";
+      if (!accessToken || !refreshToken) return null;
+      try {
+        this.db.putCache(TOKENS_CACHE_KEY, { accessToken, refreshToken });
+      } catch {}
+      return { accessToken, refreshToken };
     } catch (error) {
       console.error("Failed to read tokens from keytar", error);
       return null;

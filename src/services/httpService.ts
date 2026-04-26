@@ -4,7 +4,12 @@ type ElectronAPI = {
   getNetworkStatus: () => Promise<{ online: boolean }>;
   cacheGet: (key: string) => Promise<any>;
   cachePut: (key: string, value: any) => Promise<void>;
-  queueAdd: (op: { method: string; path: string; data?: any; useAuth?: boolean }) => Promise<void>;
+  queueAdd: (op: {
+    method: string;
+    path: string;
+    data?: any;
+    useAuth?: boolean;
+  }) => Promise<void>;
 };
 
 const getElectronAPI = (): ElectronAPI | null => {
@@ -32,7 +37,8 @@ export class HttpService {
     path: string,
     data?: unknown,
     useAuth = false,
-    fullError = false
+    fullError = false,
+    didRetry = false,
   ): Promise<T> {
     const api = getElectronAPI();
     const key = `GET:${path}`;
@@ -86,11 +92,20 @@ export class HttpService {
     const json = await response.json().catch(() => null);
 
     if (!response.ok) {
+      if (response.status === 401 && useAuth && !didRetry) {
+        const refreshed = await tokenManager
+          .refreshAccessToken()
+          .catch(() => null);
+        if (refreshed?.accessToken) {
+          return this.request<T>(method, path, data, useAuth, fullError, true);
+        }
+      }
+
       if (fullError) {
         // Throw an error with full context
         const error = new Error(
           (json && (json.message || json.error)) ||
-            `Request failed with status ${response.status}`
+            `Request failed with status ${response.status}`,
         );
         (error as any).response = {
           status: response.status,
@@ -125,14 +140,16 @@ export class HttpService {
     const api = getElectronAPI();
     if (api) {
       // request() already guards offline and queues; keep catch for non-offline failures
-      return this.request<T>("POST", path, data, useAuth, fullError).catch(async (err) => {
-        try {
-          const { online } = await api.getNetworkStatus();
-          if (!online) return Promise.reject(err);
-        } catch {}
-        // For other errors, propagate
-        throw err;
-      });
+      return this.request<T>("POST", path, data, useAuth, fullError).catch(
+        async (err) => {
+          try {
+            const { online } = await api.getNetworkStatus();
+            if (!online) return Promise.reject(err);
+          } catch {}
+          // For other errors, propagate
+          throw err;
+        },
+      );
     }
     return this.request<T>("POST", path, data, useAuth, fullError);
   }
@@ -140,13 +157,15 @@ export class HttpService {
   patch<T>(path: string, data?: unknown, useAuth = false, fullError = false) {
     const api = getElectronAPI();
     if (api) {
-      return this.request<T>("PATCH", path, data, useAuth, fullError).catch(async (err) => {
-        try {
-          const { online } = await api.getNetworkStatus();
-          if (!online) return Promise.reject(err);
-        } catch {}
-        throw err;
-      });
+      return this.request<T>("PATCH", path, data, useAuth, fullError).catch(
+        async (err) => {
+          try {
+            const { online } = await api.getNetworkStatus();
+            if (!online) return Promise.reject(err);
+          } catch {}
+          throw err;
+        },
+      );
     }
     return this.request<T>("PATCH", path, data, useAuth, fullError);
   }
@@ -154,13 +173,15 @@ export class HttpService {
   delete<T>(path: string, data?: unknown, useAuth = false, fullError = false) {
     const api = getElectronAPI();
     if (api) {
-      return this.request<T>("DELETE", path, data, useAuth, fullError).catch(async (err) => {
-        try {
-          const { online } = await api.getNetworkStatus();
-          if (!online) return Promise.reject(err);
-        } catch {}
-        throw err;
-      });
+      return this.request<T>("DELETE", path, data, useAuth, fullError).catch(
+        async (err) => {
+          try {
+            const { online } = await api.getNetworkStatus();
+            if (!online) return Promise.reject(err);
+          } catch {}
+          throw err;
+        },
+      );
     }
     return this.request<T>("DELETE", path, data, useAuth, fullError);
   }

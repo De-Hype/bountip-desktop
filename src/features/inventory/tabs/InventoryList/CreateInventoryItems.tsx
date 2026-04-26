@@ -505,8 +505,8 @@ const CreateInventoryItems = ({
 
   const isFormValid =
     isBasicInfoValid &&
-    parseFloat(formData.minimumStockLevel) >= 0 &&
-    parseFloat(formData.reOrderLevel) >= 0 &&
+    (parseFloat(formData.minimumStockLevel) >= 0 || formData.minimumStockLevel !== "") &&
+    (parseFloat(formData.reOrderLevel) >= 0 || formData.reOrderLevel !== "") &&
     formData.supplierBarcode.trim() !== "" &&
     parseFloat(formData.quantityPurchased) > 0 &&
     formData.expiryDate !== undefined &&
