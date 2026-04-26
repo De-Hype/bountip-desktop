@@ -42,10 +42,15 @@ const formatAmount = (amount: number) =>
   }).format(Number.isFinite(amount) ? amount : 0);
 
 const parseScheduledAt = (scheduledAt: string | null | undefined) => {
-  if (!scheduledAt)
-    return { date: undefined as Date | undefined, time: "09:00" };
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  if (!scheduledAt) return { date: startOfToday, time: "09:00" };
   const raw = String(scheduledAt).trim();
-  if (!raw) return { date: undefined as Date | undefined, time: "09:00" };
+  if (!raw) return { date: startOfToday, time: "09:00" };
 
   const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
   if (m) {
@@ -67,7 +72,7 @@ const parseScheduledAt = (scheduledAt: string | null | undefined) => {
     };
   }
 
-  return { date: undefined as Date | undefined, time: "09:00" };
+  return { date: startOfToday, time: "09:00" };
 };
 
 const formatRelativeTime = (value: string | null | undefined) => {

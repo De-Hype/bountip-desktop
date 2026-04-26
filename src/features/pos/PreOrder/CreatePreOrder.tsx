@@ -120,6 +120,12 @@ const CreatePreOrder = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    const now = new Date();
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
     setActiveStep("details");
     setOrderType(defaultOrderType);
     setCustomerId("");
@@ -145,7 +151,7 @@ const CreatePreOrder = ({
     setDeliveryPhoneNumber("");
     setDeliveryFee("0");
     setDeliveryPhoneCountry(null);
-    setScheduledDate(undefined);
+    setScheduledDate(startOfToday);
     setScheduledTime("09:00");
     setSpecialInstructions("");
   }, [defaultOrderType, isOpen]);
@@ -1671,13 +1677,8 @@ const CreatePreOrder = ({
                           onChange={(e) =>
                             setDeliveryFee(sanitizeNumber(e.target.value))
                           }
-                          disabled={useSameCustomerDetails}
                           placeholder="0"
-                          className={`mt-3 h-14 w-full rounded-[10px] border border-[#E5E7EB] bg-white px-5 text-[15px] outline-none ${
-                            useSameCustomerDetails
-                              ? "opacity-60 cursor-not-allowed"
-                              : ""
-                          }`}
+                          className="mt-3 h-14 w-full rounded-[10px] border border-[#E5E7EB] bg-white px-5 text-[15px] outline-none"
                         />
                       </div>
                     )}
@@ -1700,7 +1701,6 @@ const CreatePreOrder = ({
                             today.setHours(0, 0, 0, 0);
                             return date < today;
                           }}
-                          disabled={useSameCustomerDetails}
                           date={scheduledDate}
                           onDateChange={(d) => setScheduledDate(d)}
                           placeholder={
@@ -1720,7 +1720,6 @@ const CreatePreOrder = ({
                               value={scheduledTime}
                               onChange={(v) => setScheduledTime(v)}
                               minuteStep={1}
-                              disabled={useSameCustomerDetails}
                             />
                           </div>
                         )}
