@@ -503,18 +503,25 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
     }
   };
 
-  const handleMergeDuplicates = async () => {
-    if (parsedProducts.filter((p) => p.isDuplicate).length > 0) {
-      // Mark duplicates as handled (they will be uploaded)
-      setDuplicatesHandled(true);
-      console.log("Duplicates will be merged/uploaded");
-    }
-  };
+ const handleMergeDuplicates = async () => {
+   const hasDuplicates = parsedProducts.some((p) => p.isDuplicate);
+   if (!hasDuplicates) return;
 
-  const handleSkipDuplicates = () => {
-    setDuplicatesHandled(true);
-    console.log("Duplicates will be skipped");
-  };
+   setParsedProducts((prev) =>
+     prev.map((product) =>
+       product.isDuplicate ? { ...product, isDuplicate: false } : product,
+     ),
+   );
+   setDuplicatesHandled(true);
+ };
+
+ const handleSkipDuplicates = () => {
+   const hasDuplicates = parsedProducts.some((p) => p.isDuplicate);
+   if (!hasDuplicates) return;
+
+   setParsedProducts((prev) => prev.filter((product) => !product.isDuplicate));
+   setDuplicatesHandled(true);
+ };
 
   const handleReupload = () => {
     setUploadedFile(null);

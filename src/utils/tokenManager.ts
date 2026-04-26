@@ -105,9 +105,9 @@ export const tokenManager = {
 
       const endpoints = [
         "/auth/refresh",
-        "/auth/refresh-token",
-        "/auth/refreshToken",
-        "/auth/token/refresh",
+        // "/auth/refresh-token",
+        // "/auth/refreshToken",
+        // "/auth/token/refresh",
       ];
 
       for (const path of endpoints) {

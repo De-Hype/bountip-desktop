@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import AssetsFiles from "@/assets";
 import SettingsAssets from "@/assets/images/settings";
-import { Star, ChevronLeft, ChevronRight } from "lucide-react";
+import { Star, ChevronLeft, ChevronRight, Copy, X } from "lucide-react";
 import { GoDotFill } from "react-icons/go";
 import { BusinessOutlet, ProductType } from "@/types/storefront";
 import storeFrontService from "@/services/storefrontService";
@@ -51,6 +51,8 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
   if (!storeInfo) {
     return null;
   }
+  const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [categories, setCategories] = useState<string[]>(["All"]);
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [categoryStartIndex, setCategoryStartIndex] = useState(0);
@@ -243,6 +245,48 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
     categoryStartIndex + CATEGORIES_PER_PAGE,
   );
 
+  const rawSubDomain = String(storeInfo.customSubDomain || "").trim();
+  const shareUrl = useMemo(() => {
+    if (rawSubDomain) {
+      return rawSubDomain;
+    }
+    const code = String(storeInfo.storeCode || "").trim();
+    if (code) return `https://bountip.restaurant/${encodeURIComponent(code)}`;
+    return "";
+  }, [rawSubDomain, storeInfo.storeCode]);
+
+  const openExternal = (url: string) => {
+    if (!url) return;
+    const api = (window as any)?.electronAPI;
+    if (api?.openExternal) {
+      api.openExternal(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const el = document.createElement("textarea");
+        el.value = shareUrl;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {}
+  };
+
+  const shareText = `Hey, check out my new Business!%0A${encodeURIComponent(
+    storeInfo.name || "My Store",
+  )}%0A${encodeURIComponent(shareUrl)}`;
+
   return (
     <section className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -257,6 +301,7 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
 
         <button
           type="button"
+          onClick={() => setIsShareDrawerOpen(true)}
           className="inline-flex items-center gap-2 rounded-[9.8px] bg-[#15BA5C] px-5 py-2.5 text-sm font-medium text-white cursor-pointer hover:bg-[#13A652]"
         >
           <svg
@@ -277,6 +322,162 @@ const PreviewStoreFront = ({ storeInfo }: PreviewStoreFrontType) => {
           <span>Share Storefront</span>
         </button>
       </div>
+
+      <AnimatePresence>
+        {isShareDrawerOpen && (
+          <>
+            <motion.button
+              type="button"
+              className="fixed inset-0 z-[59] bg-black/20 cursor-pointer"
+              onClick={() => setIsShareDrawerOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              aria-label="Close share drawer"
+            />
+            <motion.aside
+              className="fixed inset-y-0 right-0 z-[60] w-[520px] max-w-[92vw] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)]"
+              initial={{ x: 520 }}
+              animate={{ x: 0 }}
+              exit={{ x: 520 }}
+              transition={{ type: "tween", ease: "easeInOut", duration: 0.22 }}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="flex h-full flex-col">
+                <div className="flex items-center justify-center px-6 py-5">
+                  <h3 className="text-[20px] font-semibold text-[#111827]">
+                    Share Store Link
+                  </h3>
+                  <button
+                    type="button"
+                    className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#EE2323] text-white cursor-pointer"
+                    onClick={() => setIsShareDrawerOpen(false)}
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className=" px-6 pb-10">
+                  <div className="w-full max-w-[520px]">
+                    <div className="rounded-[18px] bg-[#15BA5C] px-6 py-6 text-white shadow-[0_14px_32px_rgba(0,0,0,0.14)]">
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 overflow-hidden rounded-full bg-white">
+                          <img
+                            src={
+                              storeInfo.logoUrl || SettingsAssets.CustomizeTab
+                            }
+                            alt="Store logo"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <p className="text-[18px] font-semibold">
+                            Hey, check out my new Business!
+                          </p>
+                          <p className="text-sm font-normal opacity-90">
+                            Tap to copy link and share
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="mt-6 flex w-full items-center justify-between gap-4 rounded-[14px] bg-white px-5 py-4 text-left cursor-pointer"
+                        onClick={handleCopyShareUrl}
+                      >
+                        <span className="max-w-[360px] truncate text-sm font-medium text-[#111827]">
+                          {shareUrl || "-"}
+                        </span>
+                        <span className="inline-flex items-center gap-2 text-[#6B7280]">
+                          {copied ? (
+                            <span className="text-sm font-semibold text-[#15BA5C]">
+                              Copied
+                            </span>
+                          ) : (
+                            <Copy className="h-5 w-5" />
+                          )}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="mt-10 flex items-start justify-center gap-10">
+                      {(storeInfo.waChannel ||
+                        Boolean(storeInfo.waPhoneNumber)) && (
+                        <button
+                          type="button"
+                          className="flex flex-col items-center gap-3 cursor-pointer"
+                          onClick={() =>
+                            openExternal(`https://wa.me/?text=${shareText}`)
+                          }
+                          disabled={!shareUrl}
+                        >
+                          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#15BA5C] shadow-[0_10px_18px_rgba(0,0,0,0.12)]">
+                            <img
+                              src={AssetsFiles.whatsappLogo}
+                              alt="WhatsApp"
+                              className="h-8 w-8"
+                            />
+                          </span>
+                          <span className="text-sm font-medium text-[#111827]">
+                            WhatsApp
+                          </span>
+                        </button>
+                      )}
+
+                      {(storeInfo.emailChannel ||
+                        Boolean(storeInfo.emailAlias)) && (
+                        <button
+                          type="button"
+                          className="flex flex-col items-center gap-3 cursor-pointer"
+                          onClick={() =>
+                            openExternal(
+                              `mailto:?subject=${encodeURIComponent(
+                                "Storefront link",
+                              )}&body=${shareText}`,
+                            )
+                          }
+                          disabled={!shareUrl}
+                        >
+                          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#EE2323] shadow-[0_10px_18px_rgba(0,0,0,0.12)]">
+                            <img
+                              src={AssetsFiles.emailLogo}
+                              alt="Email"
+                              className="h-8 w-8"
+                            />
+                          </span>
+                          <span className="text-sm font-medium text-[#111827]">
+                            Email
+                          </span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        className="flex flex-col items-center gap-3 cursor-pointer"
+                        onClick={() => openExternal(shareUrl)}
+                        disabled={!shareUrl}
+                      >
+                        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#15BA5C] shadow-[0_10px_18px_rgba(0,0,0,0.12)]">
+                          <img
+                            src={AssetsFiles.websiteLogo}
+                            alt="Web"
+                            className="h-8 w-8"
+                          />
+                        </span>
+                        <span className="text-sm font-medium text-[#111827]">
+                          Web
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       <div className="rounded-[24px] bg-white shadow-[0_10px_30px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="relative">
