@@ -15,8 +15,12 @@ import InventoryNavigation from "@/features/inventory/InventoryNavigation";
 import CreateInventoryItems from "@/features/inventory/tabs/InventoryList/CreateInventoryItems";
 import BulkUploadInventoryItemsModal from "@/features/inventory/BulkUploadInventoryItemsModal";
 import TotalNumberOfItemsModal from "@/features/inventory/modals/TotalNumberOfItemsModal";
+import TotalItemsExpiringModal from "@/features/inventory/modals/TotalItemsExpiringModal";
+import TotalExpiredItemsModal from "@/features/inventory/modals/TotalExpiredItemsModal";
+import TotalOutOfStockItemsModal from "@/features/inventory/modals/TotalOutOfStockItemsModal";
 import useToastStore from "@/stores/toastStore";
 import * as XLSX from "xlsx";
+import TotalLowStockItemsModal from "@/features/inventory/modals/TotalLowStockItemsModal";
 
 const InventoryPage = () => {
   const { refreshInventory, lastUpdated } = useInventoryStore();
@@ -41,9 +45,14 @@ const InventoryPage = () => {
       setIsSummaryLoading(true);
       try {
         const now = new Date();
-        const nowIso = now.toISOString();
-        const expiringUntil = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-        const expiringUntilIso = expiringUntil.toISOString();
+        const startOfTodayIso = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+        ).toISOString();
+        const expiringUntilIso = new Date(
+          now.getTime() + 7 * 24 * 60 * 60 * 1000,
+        ).toISOString();
 
         const sql = `
           WITH lot_min AS (
@@ -75,8 +84,8 @@ const InventoryPage = () => {
 
         const rows = await api.dbQuery(sql, [
           selectedOutlet.id,
-          nowIso,
-          nowIso,
+          startOfTodayIso,
+          startOfTodayIso,
           expiringUntilIso,
         ]);
         const row = rows?.[0] || {};
@@ -100,10 +109,13 @@ const InventoryPage = () => {
   // State for modals/tables visibility
   const [isTotalNumberOfItemsOpen, setIsTotalNumberOfItemsOpen] =
     useState(false);
-  const [, setShowTotalExpiringItemsTable] = useState(false);
-  const [, setShowTotalNumberOfExpiredItemsTable] = useState(false);
-  const [, setShowTotalLowInStockItemsTable] = useState(false);
-  const [, setShowTotalOutOfStocksTable] = useState(false);
+  const [isTotalItemsExpiringOpen, setIsTotalItemsExpiringOpen] =
+    useState(false);
+  const [isTotalExpiredItemsOpen, setIsTotalExpiredItemsOpen] = useState(false);
+  const [isTotalOutOfStockItemsOpen, setIsTotalOutOfStockItemsOpen] =
+    useState(false);
+  const [isTotalLowStockItemsOpen, setIsTotalLowStockItemsOpen] =
+    useState(false);
   const [isCreateInventoryOpen, setIsCreateInventoryOpen] = useState(false);
   const [isBulkMenuOpen, setIsBulkMenuOpen] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
@@ -353,7 +365,7 @@ const InventoryPage = () => {
           </div>
           <button
             type="button"
-            onClick={() => setShowTotalExpiringItemsTable(true)}
+            onClick={() => setIsTotalItemsExpiringOpen(true)}
             className="cursor-pointer hover:bg-[#F8BD00]/10 absolute flex items-center rounded-full h-[30px] w-[30px] right-4 top-3 justify-center border border-[#F8BD00]"
           >
             <MoveUpRight className="text-[#F8BD00] h-[16px] " />
@@ -376,7 +388,7 @@ const InventoryPage = () => {
           </div>
           <div
             className="absolute cursor-pointer hover:bg-[#E33629]/20 flex items-center rounded-full h-[30px] w-[30px] right-4 top-3 justify-center border border-[#E33629]"
-            onClick={() => setShowTotalNumberOfExpiredItemsTable(true)}
+            onClick={() => setIsTotalExpiredItemsOpen(true)}
           >
             <MoveUpRight className="text-[#E33629] h-[16px] " />
           </div>
@@ -395,7 +407,7 @@ const InventoryPage = () => {
           </div>
           <div
             className="cursor-pointer hover:bg-[#9747FF]/20 absolute flex items-center rounded-full h-[30px] w-[30px] right-4 top-3 justify-center border border-[#9747FF]"
-            onClick={() => setShowTotalLowInStockItemsTable(true)}
+            onClick={() => setIsTotalLowStockItemsOpen(true)}
           >
             <MoveUpRight className="text-[#9747FF] h-[16px] " />
           </div>
@@ -414,7 +426,7 @@ const InventoryPage = () => {
           </div>
           <div
             className="absolute cursor-pointer hover:bg-[#737373]/20 flex items-center rounded-full h-[30px] w-[30px] right-4 top-3 justify-center border border-[#737373]"
-            onClick={() => setShowTotalOutOfStocksTable(true)}
+            onClick={() => setIsTotalOutOfStockItemsOpen(true)}
           >
             <MoveUpRight className="text-[#737373] h-[16px] " />
           </div>
@@ -452,6 +464,38 @@ const InventoryPage = () => {
         onClose={() => setIsTotalNumberOfItemsOpen(false)}
         outletId={selectedOutlet?.id}
         outletName={selectedOutlet?.name}
+      />
+
+      <TotalItemsExpiringModal
+        isOpen={isTotalItemsExpiringOpen}
+        onClose={() => setIsTotalItemsExpiringOpen(false)}
+        outletId={selectedOutlet?.id}
+        outletName={selectedOutlet?.name}
+        currencyCode={selectedOutlet?.currency}
+      />
+
+      <TotalExpiredItemsModal
+        isOpen={isTotalExpiredItemsOpen}
+        onClose={() => setIsTotalExpiredItemsOpen(false)}
+        outletId={selectedOutlet?.id}
+        outletName={selectedOutlet?.name}
+        currencyCode={selectedOutlet?.currency}
+      />
+
+      <TotalLowStockItemsModal
+        isOpen={isTotalLowStockItemsOpen}
+        onClose={() => setIsTotalLowStockItemsOpen(false)}
+        outletId={selectedOutlet?.id}
+        outletName={selectedOutlet?.name}
+        currencyCode={selectedOutlet?.currency}
+      />
+
+      <TotalOutOfStockItemsModal
+        isOpen={isTotalOutOfStockItemsOpen}
+        onClose={() => setIsTotalOutOfStockItemsOpen(false)}
+        outletId={selectedOutlet?.id}
+        outletName={selectedOutlet?.name}
+        currencyCode={selectedOutlet?.currency}
       />
     </div>
   );
