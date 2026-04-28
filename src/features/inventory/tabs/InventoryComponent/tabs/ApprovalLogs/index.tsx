@@ -44,6 +44,16 @@ const ActivityLogMainTab = ({ onClose }: ActivityLogMainTabProps) => {
   const [productionRows, setProductionRows] = useState<ApprovalRow[]>([]);
   const [hasTriedProductionSync, setHasTriedProductionSync] =
     useState<boolean>(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => setRefreshKey((k) => k + 1);
+    window.addEventListener("production-approval-updated", handler as any);
+    return () => {
+      window.removeEventListener("production-approval-updated", handler as any);
+    };
+  }, []);
 
   const inventoryRows: ApprovalRow[] = [
     {
@@ -237,12 +247,59 @@ const ActivityLogMainTab = ({ onClose }: ActivityLogMainTabProps) => {
       }
 
       let rows: any[] = [];
+      let approvalStatusExpr = "'Pending'";
       try {
+        let approvalLogColumns: string[] = [];
+        try {
+          const info = await api.dbQuery(
+            "PRAGMA table_info('production_v2_approval_logs')",
+          );
+          approvalLogColumns = (info || [])
+            .map((c: any) => String(c?.name || "").trim())
+            .filter(Boolean);
+        } catch {
+          approvalLogColumns = [];
+        }
+
+        const approvalLogHasStatus = approvalLogColumns.includes("status");
+        const approvalLogHasApprovedAt =
+          approvalLogColumns.includes("approvedAt");
+        const approvalLogHasRejectedAt =
+          approvalLogColumns.includes("rejectedAt");
+        const approvalLogHasApprovedBy =
+          approvalLogColumns.includes("approvedBy");
+        const approvalLogHasRejectedBy =
+          approvalLogColumns.includes("rejectedBy");
+
+        const rejectedChecks: string[] = [];
+        if (approvalLogHasRejectedAt) {
+          rejectedChecks.push("COALESCE(pal.rejectedAt, '') <> ''");
+        }
+        if (approvalLogHasRejectedBy) {
+          rejectedChecks.push("COALESCE(pal.rejectedBy, '') <> ''");
+        }
+
+        const approvedChecks: string[] = [];
+        if (approvalLogHasApprovedAt) {
+          approvedChecks.push("COALESCE(pal.approvedAt, '') <> ''");
+        }
+        if (approvalLogHasApprovedBy) {
+          approvedChecks.push("COALESCE(pal.approvedBy, '') <> ''");
+        }
+
+        approvalStatusExpr = approvalLogHasStatus
+          ? "COALESCE(pal.status, 'Pending')"
+          : `CASE
+              WHEN (${rejectedChecks.length ? rejectedChecks.join(" OR ") : "0"}) THEN 'Rejected'
+              WHEN (${approvedChecks.length ? approvedChecks.join(" OR ") : "0"}) THEN 'Approved'
+              ELSE 'Pending'
+            END`;
+
         rows = await api.dbQuery(
           `
             SELECT
               pal.id as approvalLogId,
-              pal.status as approvalStatus,
+              (${approvalStatusExpr}) as approvalStatus,
               pal.createdAt as approvalCreatedAt,
               p.id as productionId,
               p.batchId as batchId,
@@ -292,7 +349,7 @@ const ActivityLogMainTab = ({ onClose }: ActivityLogMainTabProps) => {
             `
               SELECT
                 pal.id as approvalLogId,
-                pal.status as approvalStatus,
+                (${approvalStatusExpr}) as approvalStatus,
                 pal.createdAt as approvalCreatedAt,
                 p.id as productionId,
                 p.batchId as batchId,
@@ -350,7 +407,7 @@ const ActivityLogMainTab = ({ onClose }: ActivityLogMainTabProps) => {
 
     const timeout = setTimeout(() => setIsTableLoading(false), 700);
     return () => clearTimeout(timeout);
-  }, [activeTab, selectedOutlet?.id]);
+  }, [activeTab, refreshKey, selectedOutlet?.id]);
 
   const filteredRows = useMemo(() => {
     const baseRows =

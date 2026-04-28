@@ -38,7 +38,6 @@ const ProductionManagementPage = () => {
         return (
           s === "to be produced" ||
           s === "to-be-produced" ||
-          s === "confirmed" ||
           s === OrderStatus.TO_BE_PRODUCED.toLowerCase()
         );
       }).length || 0;

@@ -15,6 +15,7 @@ import ProcessPaymentModal from "./ProcessPaymentModal";
 type EditPreOrderProps = {
   isOpen: boolean;
   orderId: string | null;
+  mode?: "edit" | "view";
   onClose: () => void;
   onUpdated?: () => void;
 };
@@ -85,14 +86,22 @@ const formatRelativeTime = (value: string | null | undefined) => {
 const EditPreOrder = ({
   isOpen,
   orderId,
+  mode = "edit",
   onClose,
   onUpdated,
 }: EditPreOrderProps) => {
   const { selectedOutlet, selectedOutletId } = useBusinessStore();
   const { showToast } = useToastStore();
+  const isViewOnly = mode === "view";
   const currencySymbol = selectedOutlet?.currency
     ? getCurrencySymbol(selectedOutlet.currency)
     : "₦";
+
+  const isAllowedInViewMode = (target: EventTarget | null) => {
+    if (!target) return false;
+    const el = target as HTMLElement;
+    return Boolean(el.closest('[data-allow-view-interaction="true"]'));
+  };
 
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState<any>(null);
@@ -770,11 +779,52 @@ const EditPreOrder = ({
   return (
     <>
       <div className="fixed inset-0 z-[180] bg-black/40 backdrop-blur-sm flex justify-end">
-        <div className="relative w-full max-w-[980px] h-full bg-white shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right duration-300">
+        <div
+          className="relative w-full max-w-[980px] h-full bg-white shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right duration-300"
+          onMouseDownCapture={(e) => {
+            if (!isViewOnly || isAllowedInViewMode(e.target)) return;
+            const target = e.target as HTMLElement | null;
+            if (
+              target?.closest("a,button,input,select,textarea,[role='button']")
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+          onClickCapture={(e) => {
+            if (!isViewOnly || isAllowedInViewMode(e.target)) return;
+            const target = e.target as HTMLElement | null;
+            if (
+              target?.closest("a,button,input,select,textarea,[role='button']")
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+          onInputCapture={(e) => {
+            if (!isViewOnly || isAllowedInViewMode(e.target)) return;
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onChangeCapture={(e) => {
+            if (!isViewOnly || isAllowedInViewMode(e.target)) return;
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onKeyDownCapture={(e) => {
+            if (!isViewOnly || isAllowedInViewMode(e.target)) return;
+            const target = e.target as HTMLElement | null;
+            if (!target) return;
+            if (target.closest("input,textarea,select")) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+        >
           <div className="px-8 pt-8 pb-4 flex items-start justify-between">
             <div className="flex flex-col gap-2">
               <div className="text-[23px] font-bold text-[#111827]">
-                Edit Order
+                {isViewOnly ? "View Order" : "Edit Order"}
               </div>
               <div className="flex items-center gap-2">
                 <span
@@ -794,7 +844,8 @@ const EditPreOrder = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+              data-allow-view-interaction="true"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
               aria-label="Close"
               title="Close"
             >
@@ -807,9 +858,10 @@ const EditPreOrder = ({
               <button
                 type="button"
                 onClick={() => setActiveStep("details")}
+                data-allow-view-interaction="true"
                 className={`relative pb-3 text-[16px] font-semibold ${
                   activeStep === "details" ? "text-[#111827]" : "text-[#9CA3AF]"
-                }`}
+                } cursor-pointer`}
               >
                 Customer &amp; Order Details
                 {activeStep === "details" && (
@@ -819,11 +871,12 @@ const EditPreOrder = ({
               <button
                 type="button"
                 onClick={() => setActiveStep("additional")}
+                data-allow-view-interaction="true"
                 className={`relative pb-3 text-[16px] font-semibold ${
                   activeStep === "additional"
                     ? "text-[#111827]"
                     : "text-[#9CA3AF]"
-                }`}
+                } cursor-pointer`}
               >
                 Additional Information
                 {activeStep === "additional" && (
@@ -1242,7 +1295,7 @@ const EditPreOrder = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
                 type="button"
-                disabled={loading}
+                disabled={loading || isViewOnly}
                 onClick={async () => {
                   const ok = await saveEdits({
                     status: "Cancelled",
@@ -1256,13 +1309,13 @@ const EditPreOrder = ({
                   );
                   onClose();
                 }}
-                className="h-14 w-full rounded-[12px] bg-[#EF4444] text-white font-bold text-[16px] hover:bg-[#DC2626] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-14 w-full rounded-[12px] bg-[#EF4444] text-white font-bold text-[16px] hover:bg-[#DC2626] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel Order
               </button>
               <button
                 type="button"
-                disabled={loading}
+                disabled={loading || isViewOnly}
                 onClick={async () => {
                   const ok = await saveEdits({
                     status: "Confirmed",
@@ -1278,7 +1331,7 @@ const EditPreOrder = ({
                   );
                   onClose();
                 }}
-                className="h-14 w-full rounded-[12px] bg-[#F3F4F6] text-[#111827] font-bold text-[16px] hover:bg-[#E5E7EB] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-14 w-full rounded-[12px] bg-[#F3F4F6] text-[#111827] font-bold text-[16px] hover:bg-[#E5E7EB] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Confirm Order without Payment
               </button>

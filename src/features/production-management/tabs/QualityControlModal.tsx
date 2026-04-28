@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, Search, Send, SlidersHorizontal, X } from "lucide-react";
 import { Pagination } from "@/shared/Pagination/pagination";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import NotFound from "@/features/inventory/NotFound";
 import { ProductionV2Status } from "../../../../electron/types/productionV2.types";
+import { useAuthStore } from "@/stores/authStore";
 
 type ScheduledRow = {
   id: string;
@@ -18,6 +19,7 @@ type ScheduledRow = {
 
 const QualityControlModal = () => {
   const selectedOutlet = useBusinessStore((s) => s.selectedOutlet);
+  const authUser = useAuthStore((s) => s.user);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,6 +27,20 @@ const QualityControlModal = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isTransitionModalOpen, setIsTransitionModalOpen] = useState(false);
+  const [transitionRow, setTransitionRow] = useState<ScheduledRow | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const closeTransitionModal = useCallback(() => {
+    setIsTransitionModalOpen(false);
+    setTransitionRow(null);
+    setIsTransitioning(false);
+  }, []);
+
+  const openTransitionModal = useCallback((row: ScheduledRow) => {
+    setTransitionRow(row);
+    setIsTransitionModalOpen(true);
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -125,13 +141,17 @@ const QualityControlModal = () => {
       const api: any = (window as any).electronAPI;
       if (!api?.dbQuery) return;
       try {
+        setIsTransitioning(true);
         const now = new Date().toISOString();
+        const actor = authUser?.name || authUser?.email || "";
         await api.dbQuery(
           `
             UPDATE productions_v2
             SET
               status = ?,
               previousStatus = ?,
+              readyAt = ?,
+              qcApprovedBy = ?,
               updatedAt = ?,
               version = COALESCE(version, 0) + 1
             WHERE id = ? AND outletId = ?
@@ -139,6 +159,8 @@ const QualityControlModal = () => {
           [
             ProductionV2Status.READY,
             row.status || null,
+            now,
+            actor || null,
             now,
             row.id,
             selectedOutlet.id,
@@ -160,13 +182,112 @@ const QualityControlModal = () => {
             });
           }
         }
+
+        let traceColumns: string[] = [];
+        try {
+          const info = await api.dbQuery(
+            "PRAGMA table_info('production_v2_traces')",
+          );
+          traceColumns = (info || [])
+            .map((c: any) => String(c?.name || "").trim())
+            .filter(Boolean);
+        } catch {
+          traceColumns = [];
+        }
+
+        if (traceColumns.length > 0) {
+          const traceId =
+            typeof crypto !== "undefined" &&
+            typeof crypto.randomUUID === "function"
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random()}`;
+
+          const traceRow = {
+            id: traceId,
+            event: "ready",
+            fromStatus: row.status || null,
+            toStatus: ProductionV2Status.READY,
+            actorId: actor || null,
+            metadata: JSON.stringify({ batchId: row.batchId || null }),
+            createdAt: now,
+            productionId: row.id,
+            recordId: null,
+            version: 0,
+          };
+
+          try {
+            await api.dbQuery(
+              `
+                INSERT INTO production_v2_traces (
+                  id,
+                  event,
+                  fromStatus,
+                  toStatus,
+                  actorId,
+                  metadata,
+                  createdAt,
+                  productionId,
+                  recordId,
+                  version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
+              [
+                traceRow.id,
+                traceRow.event,
+                traceRow.fromStatus,
+                traceRow.toStatus,
+                traceRow.actorId,
+                traceRow.metadata,
+                traceRow.createdAt,
+                traceRow.productionId,
+                traceRow.recordId,
+                traceRow.version,
+              ],
+            );
+
+            if (api.queueAdd) {
+              await api.queueAdd({
+                table: "production_v2_traces",
+                action: "INSERT",
+                data: traceRow,
+                id: traceRow.id,
+              });
+            }
+          } catch {}
+        }
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("production-updated", {
+              detail: { productionId: row.id },
+            }),
+          );
+        }
         await fetchRows();
+        closeTransitionModal();
       } catch (e) {
         console.error("Failed to mark as ready:", e);
+      } finally {
+        setIsTransitioning(false);
       }
     },
-    [fetchRows, selectedOutlet?.id],
+    [
+      authUser?.email,
+      authUser?.name,
+      closeTransitionModal,
+      fetchRows,
+      selectedOutlet?.id,
+    ],
   );
+
+  useEffect(() => {
+    if (!isTransitionModalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeTransitionModal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeTransitionModal, isTransitionModalOpen]);
 
   return (
     <div className="px-4 sm:px-6 py-6 bg-white">
@@ -274,7 +395,7 @@ const QualityControlModal = () => {
                       <div className="flex items-center justify-center">
                         <button
                           type="button"
-                          onClick={() => markAsReady(r)}
+                          onClick={() => openTransitionModal(r)}
                           className="h-10 px-4 rounded-[10px] text-[13px] font-medium transition-colors cursor-pointer bg-[#15BA5C] text-white hover:bg-[#119E4D]"
                         >
                           Mark as Ready
@@ -286,6 +407,70 @@ const QualityControlModal = () => {
           </tbody>
         </table>
       </div>
+
+      {isTransitionModalOpen && transitionRow && (
+        <div className="fixed inset-0 z-220 flex items-center justify-center bg-black/40 px-4">
+          <div className="relative w-full max-w-[860px] bg-white rounded-[16px] shadow-2xl overflow-hidden">
+            <button
+              type="button"
+              onClick={closeTransitionModal}
+              className="absolute top-4 right-4 size-10 rounded-full bg-gray-200 flex items-center justify-center cursor-pointer"
+              aria-label="Close"
+              disabled={isTransitioning}
+            >
+              <X className="size-6 text-gray-700" />
+            </button>
+
+            <div className="px-6 sm:px-10 pt-12 pb-10 flex flex-col items-center text-center">
+              <div className="w-full flex items-center justify-center mb-8">
+                <div className="size-16 rounded-full bg-[#E0F2FE] flex items-center justify-center">
+                  <Send className="size-8 text-[#0284C7]" />
+                </div>
+              </div>
+
+              <h3 className="text-[26px] sm:text-[32px] font-bold text-[#111827]">
+                Transition Batch to Ready
+              </h3>
+
+              <p className="mt-4 text-[15px] sm:text-[17px] text-gray-600">
+                Are you sure you want to mark this batch as Ready?
+              </p>
+              <p className="mt-1 text-[15px] sm:text-[17px] text-gray-600">
+                Once moved, no further edits will be allowed
+              </p>
+
+              <div className="mt-10 w-full flex flex-col sm:flex-row items-stretch justify-center gap-4 sm:gap-6">
+                <button
+                  type="button"
+                  onClick={closeTransitionModal}
+                  disabled={isTransitioning}
+                  className={`h-14 sm:h-16 w-full sm:w-[320px] rounded-[12px] text-[18px] font-semibold transition-colors cursor-pointer ${
+                    isTransitioning
+                      ? "bg-gray-200 text-[#111827]/60 cursor-not-allowed"
+                      : "bg-gray-200 text-[#111827] hover:bg-gray-300"
+                  }`}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => markAsReady(transitionRow)}
+                  disabled={isTransitioning}
+                  className={`h-14 sm:h-16 w-full sm:w-[420px] rounded-[12px] text-[18px] font-semibold transition-colors cursor-pointer inline-flex items-center justify-center gap-3 ${
+                    isTransitioning
+                      ? "bg-[#15BA5C]/70 text-white cursor-not-allowed"
+                      : "bg-[#15BA5C] text-white hover:bg-[#119E4D]"
+                  }`}
+                >
+                  <Send className="size-5" />
+                  Confirm & Mark as Ready
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!isLoading && rows.length === 0 && (
         <div className="px-6 py-8">

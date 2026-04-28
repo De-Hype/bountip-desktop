@@ -1149,12 +1149,12 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
                       proceeding with the upload.
                     </p>
                     <div className="flex gap-3">
-                      <button
+                      {/* <button
                         onClick={handleMergeDuplicates}
                         className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 font-medium"
                       >
                         Merge Duplicate Entries
-                      </button>
+                      </button> */}
                       <button
                         onClick={handleSkipDuplicates}
                         className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 font-medium"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MoreVertical, Search, SlidersHorizontal } from "lucide-react";
 import { useBusinessStore } from "@/stores/useBusinessStore";
 import { Pagination } from "@/shared/Pagination/pagination";
@@ -10,8 +10,9 @@ import ViewProductionSchedule from "../orders/ViewProductionSchedule";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import NotFound from "@/features/inventory/NotFound";
 import { OrderStatus } from "../../../../electron/types/order.types";
+import EditPreOrder from "@/features/pos/PreOrder/EditPreOrder";
 
-const ToBeProducedList: React.FC = () => {
+const ToBeProducedList = () => {
   const { selectedOutlet } = useBusinessStore();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -21,6 +22,8 @@ const ToBeProducedList: React.FC = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isCreateScheduleOpen, setIsCreateScheduleOpen] = useState(false);
   const [isViewScheduleOpen, setIsViewScheduleOpen] = useState(false);
+  const [isViewOrderOpen, setIsViewOrderOpen] = useState(false);
+  const [viewOrderId, setViewOrderId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [rows, setRows] = useState<any[]>([]);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -337,10 +340,18 @@ const ToBeProducedList: React.FC = () => {
                       key={
                         order.externalReference || order.reference || order.id
                       }
-                      className="hover:bg-gray-50 transition-colors"
+                      onClick={() => {
+                        setViewOrderId(String(order.id));
+                        setIsViewOrderOpen(true);
+                      }}
+                      className="hover:bg-gray-50 transition-colors cursor-pointer"
                     >
                       <td className="px-4 py-5">
-                        <input type="checkbox" className="rounded" />
+                        <input
+                          type="checkbox"
+                          className="rounded cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       </td>
                       <td className="px-4 py-5 text-sm font-medium text-[#15BA5C]">
                         {order.externalReference || order.reference || order.id}
@@ -366,7 +377,8 @@ const ToBeProducedList: React.FC = () => {
                       <td className="px-4 py-5">
                         <button
                           type="button"
-                          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
                         >
                           <MoreVertical className="size-4 text-gray-400" />
                         </button>
@@ -404,12 +416,23 @@ const ToBeProducedList: React.FC = () => {
         orders={rows}
         onCreated={() => {
           setIsCreateScheduleOpen(false);
+          fetchPage();
         }}
       />
 
       <ViewProductionSchedule
         isOpen={isViewScheduleOpen}
         onClose={() => setIsViewScheduleOpen(false)}
+      />
+
+      <EditPreOrder
+        isOpen={isViewOrderOpen}
+        orderId={viewOrderId}
+        mode="view"
+        onClose={() => {
+          setIsViewOrderOpen(false);
+          setViewOrderId(null);
+        }}
       />
     </div>
   );

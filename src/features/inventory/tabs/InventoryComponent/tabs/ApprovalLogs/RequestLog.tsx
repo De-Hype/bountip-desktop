@@ -1,16 +1,26 @@
 import { X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ApprovalLogStatusBadge from "./getStatusBadge";
+import { useAuthStore } from "@/stores/authStore";
+import { ProductionV2Status } from "../../../../../../../electron/types/productionV2.types";
 
- const formatDate = (raw: string | null | undefined) => {
-   if (!raw) return "-";
-   const d = new Date(raw);
-   if (Number.isNaN(d.getTime())) return String(raw);
-   const dd = String(d.getDate()).padStart(2, "0");
-   const mm = String(d.getMonth() + 1).padStart(2, "0");
-   const yyyy = d.getFullYear();
-   return `${dd}-${mm}-${yyyy}`;
- };
+const formatDate = (raw: string | null | undefined) => {
+  if (!raw) return "-";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return String(raw);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
+const parseQuantity = (raw: unknown) => {
+  if (raw == null) return null;
+  const normalized = String(raw).replaceAll(",", "").trim();
+  if (!normalized) return null;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+};
 
 type RequestLogProps = {
   isOpen: boolean;
@@ -48,6 +58,7 @@ type ApprovalLogItemRow = {
 };
 
 const RequestLog = ({ isOpen, onClose, request }: RequestLogProps) => {
+  const authUser = useAuthStore((s) => s.user);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [commentsByRowId, setCommentsByRowId] = useState<
     Record<string, string>
@@ -131,8 +142,7 @@ const RequestLog = ({ isOpen, onClose, request }: RequestLogProps) => {
   const isProductionApprovalLog =
     request?.meta?.type === "production" && !!request?.meta?.approvalLogId;
 
-  useEffect(() => {
-    if (!isOpen) return;
+  const fetchApprovalLogDetails = useCallback(async () => {
     if (!isProductionApprovalLog) {
       setApprovalLogItems([]);
       setApprovalLogMeta(null);
@@ -149,12 +159,58 @@ const RequestLog = ({ isOpen, onClose, request }: RequestLogProps) => {
     }
 
     setIsDetailsLoading(true);
-    (async () => {
+    try {
       const approvalLogId = request?.meta?.approvalLogId || "";
+      let approvalLogColumns: string[] = [];
+      try {
+        const info = await api.dbQuery(
+          "PRAGMA table_info('production_v2_approval_logs')",
+        );
+        approvalLogColumns = (info || [])
+          .map((c: any) => String(c?.name || "").trim())
+          .filter(Boolean);
+      } catch {
+        approvalLogColumns = [];
+      }
+
+      const approvalLogHasStatus = approvalLogColumns.includes("status");
+      const approvalLogHasApprovedAt =
+        approvalLogColumns.includes("approvedAt");
+      const approvalLogHasRejectedAt =
+        approvalLogColumns.includes("rejectedAt");
+      const approvalLogHasApprovedBy =
+        approvalLogColumns.includes("approvedBy");
+      const approvalLogHasRejectedBy =
+        approvalLogColumns.includes("rejectedBy");
+
+      const rejectedChecks: string[] = [];
+      if (approvalLogHasRejectedAt) {
+        rejectedChecks.push("COALESCE(pal.rejectedAt, '') <> ''");
+      }
+      if (approvalLogHasRejectedBy) {
+        rejectedChecks.push("COALESCE(pal.rejectedBy, '') <> ''");
+      }
+
+      const approvedChecks: string[] = [];
+      if (approvalLogHasApprovedAt) {
+        approvedChecks.push("COALESCE(pal.approvedAt, '') <> ''");
+      }
+      if (approvalLogHasApprovedBy) {
+        approvedChecks.push("COALESCE(pal.approvedBy, '') <> ''");
+      }
+
+      const statusExpr = approvalLogHasStatus
+        ? "pal.status"
+        : `CASE
+            WHEN (${rejectedChecks.length ? rejectedChecks.join(" OR ") : "0"}) THEN 'Rejected'
+            WHEN (${approvedChecks.length ? approvedChecks.join(" OR ") : "0"}) THEN 'Approved'
+            ELSE 'Pending'
+          END`;
+
       const metaRows = await api.dbQuery(
         `
           SELECT
-            pal.status as status,
+            (${statusExpr}) as status,
             pal.createdAt as createdAt,
             pal.approvedBy as approvedBy,
             pal.rejectedBy as rejectedBy,
@@ -200,23 +256,257 @@ const RequestLog = ({ isOpen, onClose, request }: RequestLogProps) => {
       );
 
       setApprovalLogItems(
-        (items || []).map((it: any) => ({
-          id: String(it.id || ""),
-          itemName: String(it.itemName || ""),
-          requiredQuantity: String(it.requiredQuantity || ""),
-          availableQuantity: String(it.availableQuantity || ""),
-          isSufficient: Number(it.isSufficient || 0) === 1,
-          ingredientType: String(it.ingredientType || ""),
-        })),
+        (items || []).map((it: any) => {
+          const required = parseQuantity(it.requiredQuantity);
+          const available = parseQuantity(it.availableQuantity);
+          const computedSufficient =
+            required != null && available != null
+              ? available >= required
+              : null;
+          return {
+            id: String(it.id || ""),
+            itemName: String(it.itemName || ""),
+            requiredQuantity: String(it.requiredQuantity || ""),
+            availableQuantity: String(it.availableQuantity || ""),
+            isSufficient:
+              computedSufficient != null
+                ? computedSufficient
+                : Number(it.isSufficient || 0) === 1,
+            ingredientType: String(it.ingredientType || ""),
+          };
+        }),
       );
-    })()
-      .catch((e: any) => {
-        console.error("Failed to fetch approval log details:", e);
-        setApprovalLogItems([]);
-        setApprovalLogMeta(null);
-      })
-      .finally(() => setIsDetailsLoading(false));
-  }, [isOpen, isProductionApprovalLog, request?.meta?.approvalLogId]);
+    } catch (e: any) {
+      console.error("Failed to fetch approval log details:", e);
+      setApprovalLogItems([]);
+      setApprovalLogMeta(null);
+    } finally {
+      setIsDetailsLoading(false);
+    }
+  }, [isProductionApprovalLog, request?.meta?.approvalLogId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetchApprovalLogDetails();
+  }, [fetchApprovalLogDetails, isOpen]);
+
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const setProductionApprovalStatus = useCallback(
+    async (action: "approve_selected" | "reject_selected" | "approve_all") => {
+      if (!isProductionApprovalLog) return;
+      const approvalLogId = request?.meta?.approvalLogId || "";
+      if (!approvalLogId) return;
+
+      const api: any = (window as any).electronAPI;
+      if (!api?.dbQuery) return;
+
+      const allItemIds = approvalLogItems.map((x) => x.id).filter(Boolean);
+      const targetItemIds =
+        action === "approve_all" ? allItemIds : selectedRowIds;
+      if (targetItemIds.length === 0) return;
+
+      const decisionSufficient = action === "reject_selected" ? 0 : 1;
+
+      setIsUpdating(true);
+      try {
+        const placeholders = targetItemIds.map(() => "?").join(", ");
+        await api.dbQuery(
+          `
+            UPDATE production_v2_approval_log_items
+            SET isSufficient = ?
+            WHERE approvalLogId = ? AND id IN (${placeholders})
+          `,
+          [decisionSufficient, approvalLogId, ...targetItemIds],
+        );
+
+        const agg = await api.dbQuery(
+          `
+            SELECT
+              COUNT(*) as totalCount,
+              SUM(CASE WHEN COALESCE(isSufficient, 0) = 1 THEN 1 ELSE 0 END) as sufficientCount
+            FROM production_v2_approval_log_items
+            WHERE approvalLogId = ?
+          `,
+          [approvalLogId],
+        );
+        const totalCount = Number(agg?.[0]?.totalCount || 0);
+        const sufficientCount = Number(agg?.[0]?.sufficientCount || 0);
+
+        let nextStatus = "Pending";
+        if (action === "reject_selected") {
+          nextStatus = "Rejected";
+        } else if (totalCount > 0 && sufficientCount === totalCount) {
+          nextStatus = "Approved";
+        }
+
+        const now = new Date().toISOString();
+        const actor = authUser?.name || authUser?.email || "";
+
+        let approvalLogColumns: string[] = [];
+        try {
+          const info = await api.dbQuery(
+            "PRAGMA table_info('production_v2_approval_logs')",
+          );
+          approvalLogColumns = (info || [])
+            .map((c: any) => String(c?.name || "").trim())
+            .filter(Boolean);
+        } catch {
+          approvalLogColumns = [];
+        }
+
+        const setParts: string[] = [];
+        const updateParams: any[] = [];
+
+        if (approvalLogColumns.includes("status")) {
+          setParts.push("status = ?");
+          updateParams.push(nextStatus);
+        }
+
+        if (approvalLogColumns.includes("approvedBy")) {
+          setParts.push("approvedBy = ?");
+          updateParams.push(nextStatus === "Approved" ? actor : null);
+        }
+        if (approvalLogColumns.includes("approvedAt")) {
+          setParts.push("approvedAt = ?");
+          updateParams.push(nextStatus === "Approved" ? now : null);
+        }
+        if (approvalLogColumns.includes("rejectedBy")) {
+          setParts.push("rejectedBy = ?");
+          updateParams.push(nextStatus === "Rejected" ? actor : null);
+        }
+        if (approvalLogColumns.includes("rejectedAt")) {
+          setParts.push("rejectedAt = ?");
+          updateParams.push(nextStatus === "Rejected" ? now : null);
+        }
+
+        if (setParts.length > 0) {
+          await api.dbQuery(
+            `
+              UPDATE production_v2_approval_logs
+              SET
+                ${setParts.join(",\n                ")}
+              WHERE id = ?
+            `,
+            [...updateParams, approvalLogId],
+          );
+        }
+
+        const prodIdFromMeta = request?.meta?.productionId || "";
+        const prodId =
+          prodIdFromMeta ||
+          String(
+            (
+              await api.dbQuery(
+                "SELECT productionId FROM production_v2_approval_logs WHERE id = ? LIMIT 1",
+                [approvalLogId],
+              )
+            )?.[0]?.productionId || "",
+          );
+        if (prodId) {
+          const nextProductionStatus =
+            nextStatus === "Approved"
+              ? ProductionV2Status.INVENTORY_APPROVED
+              : ProductionV2Status.INVENTORY_PENDING;
+
+          const currentProd = await api.dbQuery(
+            "SELECT status FROM productions_v2 WHERE id = ? LIMIT 1",
+            [prodId],
+          );
+          const currentStatus = currentProd?.[0]?.status ?? null;
+
+          await api.dbQuery(
+            `
+              UPDATE productions_v2
+              SET
+                status = ?,
+                previousStatus = ?,
+                updatedAt = ?,
+                version = COALESCE(version, 0) + 1
+              WHERE id = ?
+            `,
+            [nextProductionStatus, currentStatus, now, prodId],
+          );
+
+          if (api.queueAdd) {
+            const prodRow = await api.dbQuery(
+              "SELECT * FROM productions_v2 WHERE id = ?",
+              [prodId],
+            );
+            if (prodRow?.[0]) {
+              await api.queueAdd({
+                table: "productions_v2",
+                action: "UPDATE",
+                data: prodRow[0],
+                id: prodId,
+              });
+            }
+          }
+        }
+
+        if (api.queueAdd) {
+          const pal = await api.dbQuery(
+            "SELECT * FROM production_v2_approval_logs WHERE id = ?",
+            [approvalLogId],
+          );
+          if (pal?.[0]) {
+            await api.queueAdd({
+              table: "production_v2_approval_logs",
+              action: "UPDATE",
+              data: pal[0],
+              id: approvalLogId,
+            });
+          }
+
+          const updatedItems = await api.dbQuery(
+            `
+              SELECT *
+              FROM production_v2_approval_log_items
+              WHERE approvalLogId = ? AND id IN (${placeholders})
+            `,
+            [approvalLogId, ...targetItemIds],
+          );
+          for (const it of updatedItems || []) {
+            await api.queueAdd({
+              table: "production_v2_approval_log_items",
+              action: "UPDATE",
+              data: it,
+              id: it.id,
+            });
+          }
+        }
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("production-approval-updated", {
+              detail: {
+                approvalLogId,
+                productionId: prodId || null,
+                status: nextStatus,
+              },
+            }),
+          );
+        }
+
+        setSelectedRowIds([]);
+        await fetchApprovalLogDetails();
+      } catch (e: any) {
+        console.error("Failed to update production approval log:", e);
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+    [
+      approvalLogItems,
+      authUser?.email,
+      authUser?.name,
+      fetchApprovalLogDetails,
+      isProductionApprovalLog,
+      request?.meta?.approvalLogId,
+      request?.meta?.productionId,
+      selectedRowIds,
+    ],
+  );
 
   const isAllSelected =
     (isProductionApprovalLog ? approvalLogItems : orderRows).length > 0 &&
@@ -297,7 +587,9 @@ const RequestLog = ({ isOpen, onClose, request }: RequestLogProps) => {
               Amount of Orders
             </div>
             <div className="px-4 py-3 text-[14px] text-[#1C1B20] font-medium text-right">
-              {request?.itemCount ?? orderRows.length}
+              {isProductionApprovalLog
+                ? approvalLogItems.length
+                : (request?.itemCount ?? orderRows.length)}
             </div>
           </div>
           <div className="grid grid-cols-2 border-b border-[#EDEDED]">
@@ -469,20 +761,36 @@ const RequestLog = ({ isOpen, onClose, request }: RequestLogProps) => {
         <div className="flex items-center gap-4 mt-10">
           <button
             type="button"
-            disabled={selectedRowIds.length === 0}
+            onClick={() => setProductionApprovalStatus("reject_selected")}
+            disabled={
+              !isProductionApprovalLog ||
+              isUpdating ||
+              selectedRowIds.length === 0
+            }
             className="bg-[#E33629] flex-1 cursor-pointer text-white px-5 py-3 text-[15px] rounded-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Reject Selected
           </button>
           <button
             type="button"
-            disabled={selectedRowIds.length === 0}
+            onClick={() => setProductionApprovalStatus("approve_selected")}
+            disabled={
+              !isProductionApprovalLog ||
+              isUpdating ||
+              selectedRowIds.length === 0
+            }
             className="bg-[#15BA5C] flex-1 cursor-pointer text-white px-5 py-3 text-[15px] rounded-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Approval Selected
           </button>
           <button
             type="button"
+            onClick={() => setProductionApprovalStatus("approve_all")}
+            disabled={
+              !isProductionApprovalLog ||
+              isUpdating ||
+              approvalLogItems.length === 0
+            }
             className="bg-[#15BA5C] flex-1 cursor-pointer text-white px-5 py-3 text-[15px] rounded-[10px]"
           >
             Approval All

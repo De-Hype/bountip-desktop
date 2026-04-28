@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -16,6 +17,11 @@ import useBusinessStore from "@/stores/useBusinessStore";
 import useToastStore from "@/stores/toastStore";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import type { Order } from "@/stores/useOrderStore";
+import { OrderStatus } from "../../../../electron/types/order.types";
+import {
+  ProductionV2Status,
+  ProductionV2WorkflowPath,
+} from "../../../../electron/types/productionV2.types";
 
 type CreateProductionScheduleProps = {
   isOpen: boolean;
@@ -31,6 +37,7 @@ type RecipeRow = {
 };
 
 type RecipeIngredientRow = {
+  itemId: string | null;
   itemName: string;
   unitOfMeasure: string;
   quantity: number;
@@ -99,6 +106,7 @@ const CreateProductionSchedule = ({
 
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitDecisionOpen, setIsSubmitDecisionOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -210,6 +218,7 @@ const CreateProductionSchedule = ({
             const ingRows = await api.dbQuery(
               `
                 SELECT
+                  itemId,
                   itemName,
                   unitOfMeasure,
                   COALESCE(quantity, 0) as quantity,
@@ -221,6 +230,7 @@ const CreateProductionSchedule = ({
               [recipe.recipeId],
             );
             ingredients = (ingRows || []).map((ir: any) => ({
+              itemId: ir.itemId ? String(ir.itemId) : null,
               itemName: String(ir.itemName || ""),
               unitOfMeasure: String(ir.unitOfMeasure || ""),
               quantity: Number(ir.quantity || 0),
@@ -311,9 +321,15 @@ const CreateProductionSchedule = ({
     setDraftOrderIds((prev) => prev.filter((id) => id !== orderId));
   };
 
-  const persistSchedule = async (
-    status: "Draft" | "Scheduled for Production",
-  ) => {
+  const persistSchedule = async (args: {
+    v1Status: "Draft" | "Submitted" | "Scheduled for Production";
+    v2Status:
+      | ProductionV2Status.ORDER_SELECTED
+      | ProductionV2Status.INVENTORY_PENDING
+      | ProductionV2Status.IN_PREPARATION;
+    workflowPath: ProductionV2WorkflowPath | null;
+    updateOrdersStatus: boolean;
+  }) => {
     const api = (window as any).electronAPI;
     if (!api?.dbQuery || !selectedOutlet?.id) return;
 
@@ -334,6 +350,14 @@ const CreateProductionSchedule = ({
           ),
         ).toISOString()
       : null;
+
+    const safeV2Metadata = JSON.stringify({
+      scheduleId,
+      additionalInformation: additionalInfo.trim() || null,
+      productionManager: productionManager || authUser?.name || "",
+      orderIds: selectedOrderIds,
+      v1Status: args.v1Status,
+    });
 
     await api.dbQuery(
       `
@@ -360,7 +384,7 @@ const CreateProductionSchedule = ({
       `,
       [
         productionId,
-        status,
+        args.v1Status,
         null,
         productionDateIso,
         additionalInfo.trim() || null,
@@ -380,7 +404,82 @@ const CreateProductionSchedule = ({
       ],
     );
 
+    await api.dbQuery(
+      `
+        INSERT INTO productions_v2 (
+          id,
+          status,
+          previousStatus,
+          workflowPath,
+          recipeValidationStatus,
+          recipeValidationStrategy,
+          initiator,
+          inventoryCheckedBy,
+          inventoryApprovedBy,
+          productionStartedBy,
+          qcApprovedBy,
+          inventoryCheckedAt,
+          inventoryApprovedAt,
+          preparationStartedAt,
+          qcStartedAt,
+          readyAt,
+          cancelReason,
+          metadata,
+          createdAt,
+          updatedAt,
+          outletId,
+          batchId,
+          productionDate,
+          productionTime,
+          productionDueDate,
+          recordId,
+          version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        productionId,
+        args.v2Status,
+        null,
+        args.workflowPath,
+        null,
+        null,
+        authUser?.name || "",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        safeV2Metadata,
+        now,
+        now,
+        selectedOutlet.id,
+        batchId,
+        productionDateIso,
+        productionTime.trim() || null,
+        productionDateIso,
+        null,
+        1,
+      ],
+    );
+
+    const productionItemsRecords: any[] = [];
     for (const orderId of selectedOrderIds) {
+      const rec = {
+        id: crypto.randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+        outletId: selectedOutlet.id,
+        productionId,
+        orderId,
+        recordId: null,
+        version: 1,
+      };
+      productionItemsRecords.push(rec);
       await api.dbQuery(
         `
           INSERT INTO production_items (
@@ -395,14 +494,107 @@ const CreateProductionSchedule = ({
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
-          crypto.randomUUID(),
-          now,
+          rec.id,
+          rec.createdAt,
+          rec.updatedAt,
+          rec.outletId,
+          rec.productionId,
+          rec.orderId,
+          rec.recordId,
+          rec.version,
+        ],
+      );
+    }
+
+    const productionV2ItemsRecords: any[] = [];
+    for (const g of productGroups || []) {
+      const requestedQuantity = Number(g.quantityForProduction || 0);
+      const finalQuantity = Number(g.finalQuantity || 0);
+      const recipeId = g.recipe?.recipeId ? String(g.recipe.recipeId) : null;
+      const totalPortions = Number(g.recipe?.totalPortions || 0);
+      const batchSize = totalPortions > 0 ? String(totalPortions) : null;
+      const batchesRequired =
+        totalPortions > 0
+          ? Math.max(
+              1,
+              Math.ceil(Math.max(0, requestedQuantity) / totalPortions),
+            )
+          : 1;
+
+      const rec = {
+        id: crypto.randomUUID(),
+        requestedQuantity: Number.isFinite(requestedQuantity)
+          ? requestedQuantity
+          : 0,
+        removedQuantity: 0,
+        finalQuantity: Number.isFinite(finalQuantity) ? finalQuantity : 0,
+        status: null,
+        notes: null,
+        createdAt: now,
+        updatedAt: now,
+        productionId,
+        productId: String(g.productId),
+        recipeId,
+        batchSize,
+        batchesRequired,
+        recordId: null,
+        version: 1,
+      };
+
+      productionV2ItemsRecords.push(rec);
+      await api.dbQuery(
+        `
+          INSERT INTO production_v2_items (
+            id,
+            requestedQuantity,
+            removedQuantity,
+            finalQuantity,
+            status,
+            notes,
+            createdAt,
+            updatedAt,
+            productionId,
+            productId,
+            recipeId,
+            batchSize,
+            batchesRequired,
+            recordId,
+            version
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          rec.id,
+          rec.requestedQuantity,
+          rec.removedQuantity,
+          rec.finalQuantity,
+          rec.status,
+          rec.notes,
+          rec.createdAt,
+          rec.updatedAt,
+          rec.productionId,
+          rec.productId,
+          rec.recipeId,
+          rec.batchSize,
+          rec.batchesRequired,
+          rec.recordId,
+          rec.version,
+        ],
+      );
+    }
+
+    if (args.updateOrdersStatus && selectedOrderIds.length > 0) {
+      const placeholders = selectedOrderIds.map(() => "?").join(", ");
+      await api.dbQuery(
+        `
+          UPDATE orders
+          SET status = ?, updatedAt = ?
+          WHERE outletId = ? AND id IN (${placeholders})
+        `,
+        [
+          OrderStatus.SCHEDULED_FOR_PRODUCTION,
           now,
           selectedOutlet.id,
-          productionId,
-          orderId,
-          null,
-          1,
+          ...selectedOrderIds,
         ],
       );
     }
@@ -420,18 +612,51 @@ const CreateProductionSchedule = ({
           id: productionId,
         });
       }
-
-      const itemsRows = await api.dbQuery(
-        "SELECT * FROM production_items WHERE productionId = ?",
+      const productionV2Row = await api.dbQuery(
+        "SELECT * FROM productions_v2 WHERE id = ?",
         [productionId],
       );
-      for (const row of itemsRows || []) {
+      if (productionV2Row?.[0]) {
+        await api.queueAdd({
+          table: "productions_v2",
+          action: "CREATE",
+          data: productionV2Row[0],
+          id: productionId,
+        });
+      }
+
+      for (const row of productionItemsRecords) {
         await api.queueAdd({
           table: "production_items",
           action: "CREATE",
           data: row,
           id: row.id,
         });
+      }
+
+      for (const row of productionV2ItemsRecords) {
+        await api.queueAdd({
+          table: "production_v2_items",
+          action: "CREATE",
+          data: row,
+          id: row.id,
+        });
+      }
+
+      if (args.updateOrdersStatus && selectedOrderIds.length > 0) {
+        const placeholders = selectedOrderIds.map(() => "?").join(", ");
+        const updatedOrders = await api.dbQuery(
+          `SELECT * FROM orders WHERE outletId = ? AND id IN (${placeholders})`,
+          [selectedOutlet.id, ...selectedOrderIds],
+        );
+        for (const o of updatedOrders || []) {
+          await api.queueAdd({
+            table: "orders",
+            action: "UPDATE",
+            data: o,
+            id: o.id,
+          });
+        }
       }
     }
   };
@@ -440,7 +665,12 @@ const CreateProductionSchedule = ({
     if (!canSaveDraft) return;
     try {
       setIsSavingDraft(true);
-      await persistSchedule("Draft");
+      await persistSchedule({
+        v1Status: "Draft",
+        v2Status: ProductionV2Status.ORDER_SELECTED,
+        workflowPath: null,
+        updateOrdersStatus: false,
+      });
       showToast("success", "Success", "Production schedule saved as draft");
       onCreated?.();
       onClose();
@@ -454,18 +684,74 @@ const CreateProductionSchedule = ({
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-    try {
-      setIsSubmitting(true);
-      await persistSchedule("Scheduled for Production");
-      showToast("success", "Success", "Production schedule created");
-      onCreated?.();
-      onClose();
-    } catch (err) {
-      console.error("Failed to submit production schedule:", err);
-      showToast("error", "Error", "Failed to submit schedule");
-    } finally {
-      setIsSubmitting(false);
+    if (isLoadingProducts) {
+      showToast("error", "Error", "Please wait for order items to load");
+      return;
     }
+    const invalidQuantityNames = (productGroups || [])
+      .filter((g) => {
+        const requested = Number(g.quantityForProduction || 0);
+        const finalQty = Number(g.finalQuantity || 0);
+        return (
+          !Number.isFinite(requested) ||
+          requested <= 0 ||
+          !Number.isFinite(finalQty) ||
+          finalQty <= 0
+        );
+      })
+      .map((g) => g.productName)
+      .filter(Boolean);
+    if (invalidQuantityNames.length > 0) {
+      const unique = Array.from(new Set(invalidQuantityNames));
+      const preview = unique.slice(0, 3).join(", ");
+      const suffix = unique.length > 3 ? ` (+${unique.length - 3} more)` : "";
+      showToast(
+        "error",
+        "Error",
+        `Invalid production quantities for some items${preview ? `: ${preview}${suffix}` : ""}`,
+      );
+      return;
+    }
+    const productsMissingRecipe = (productGroups || [])
+      .filter((g) => !g.recipe?.recipeId)
+      .map((g) => g.productName)
+      .filter(Boolean);
+    if (productsMissingRecipe.length > 0) {
+      const uniqueNames = Array.from(new Set(productsMissingRecipe));
+      const preview = uniqueNames.slice(0, 3).join(", ");
+      const suffix =
+        uniqueNames.length > 3 ? ` (+${uniqueNames.length - 3} more)` : "";
+      showToast(
+        "error",
+        "Error",
+        `Recipe is missing for some production items${preview ? `: ${preview}${suffix}` : ""}`,
+      );
+      return;
+    }
+    const hasInventoryItems = (productGroups || []).some(
+      (g) => (g.ingredients || []).length > 0,
+    );
+    if (!hasInventoryItems) {
+      try {
+        setIsSubmitting(true);
+        await persistSchedule({
+          v1Status: "Scheduled for Production",
+          v2Status: ProductionV2Status.IN_PREPARATION,
+          workflowPath: ProductionV2WorkflowPath.SKIP_INVENTORY,
+          updateOrdersStatus: true,
+        });
+        showToast("success", "Success", "Production schedule created");
+        onCreated?.();
+        onClose();
+      } catch (err) {
+        console.error("Failed to submit production schedule:", err);
+        showToast("error", "Error", "Failed to submit schedule");
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+    setIsSubmitDecisionOpen(true);
   };
 
   if (!isOpen) return null;
@@ -638,7 +924,7 @@ const CreateProductionSchedule = ({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-white font-medium">
-                              {o.id}
+                              {o.reference}
                             </span>
                             <span className="text-white/70 text-sm truncate">
                               {o.customerName || ""}
@@ -679,7 +965,11 @@ const CreateProductionSchedule = ({
                   key={id}
                   className="inline-flex items-center gap-3 border border-[#15BA5C] rounded-[10px] px-4 py-2 text-[#15BA5C] bg-white"
                 >
-                  <span className="font-medium">{id}</span>
+                  <span className="font-medium">
+                    {ordersById.get(id)?.externalReference ||
+                      ordersById.get(id)?.reference ||
+                      id}
+                  </span>
                   <button
                     type="button"
                     onClick={() => removeOrder(id)}
@@ -901,6 +1191,313 @@ const CreateProductionSchedule = ({
           </button>
         </div>
       </div>
+
+      {isSubmitDecisionOpen ? (
+        <div className="fixed inset-0 z-[250] bg-black/40 backdrop-blur-sm flex items-center justify-center px-6">
+          <div className="relative w-full max-w-[580px] rounded-[18px] bg-white shadow-2xl px-10 py-12">
+            <button
+              type="button"
+              onClick={() => setIsSubmitDecisionOpen(false)}
+              disabled={isSubmitting}
+              className="absolute top-6 right-6 h-11 w-11 rounded-full bg-white  flex items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Close"
+            >
+              <X className="h-6 w-6 text-[#EF4444]" />
+            </button>
+
+            <div className="flex flex-col items-center">
+              <div className="h-20 w-20 rounded-full bg-red-100 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <AlertTriangle className="h-7 w-7 text-[#EF4444]" />
+                </div>
+              </div>
+
+              <div className="mt-8 text-center">
+                <div className="text-[25px] font-bold text-[#111827]">
+                  Submit to Inventory Manager
+                </div>
+                <div className="mt-3 text-[15px] text-gray-500 max-w-[620px]">
+                  This Order has Inventory Items, would you like to submit to
+                  the inventory manager
+                </div>
+              </div>
+
+              <div className="mt-10 w-full grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={async () => {
+                    try {
+                      setIsSubmitting(true);
+                      await persistSchedule({
+                        v1Status: "Submitted",
+                        v2Status: ProductionV2Status.INVENTORY_PENDING,
+                        workflowPath: ProductionV2WorkflowPath.INVENTORY_FLOW,
+                        updateOrdersStatus: true,
+                      });
+                      showToast(
+                        "success",
+                        "Success",
+                        "Production schedule submitted to inventory manager",
+                      );
+                      setIsSubmitDecisionOpen(false);
+                      onCreated?.();
+                      onClose();
+                    } catch (err) {
+                      console.error(
+                        "Failed to submit production schedule:",
+                        err,
+                      );
+                      showToast("error", "Error", "Failed to submit schedule");
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="h-14 w-full rounded-[12px] bg-[#15BA5C] text-white font-semibold text-[16px] hover:bg-[#119E4D] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Yes, Submit
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={async () => {
+                    const api = (window as any).electronAPI;
+                    if (!api?.dbQuery || !selectedOutlet?.id) return;
+
+                    const requiredByKey = new Map<
+                      string,
+                      {
+                        itemId: string | null;
+                        itemName: string;
+                        unitOfMeasure: string;
+                        requiredQty: number;
+                      }
+                    >();
+
+                    for (const g of productGroups || []) {
+                      const scaled = scaledIngredients(g);
+                      for (const it of scaled) {
+                        const requiredQty = Number(it.quantity || 0);
+                        if (!Number.isFinite(requiredQty) || requiredQty <= 0)
+                          continue;
+                        const itemId = it.itemId ? String(it.itemId) : null;
+                        const itemName = String(it.itemName || "").trim();
+                        const key = itemId
+                          ? `id:${itemId}`
+                          : `name:${itemName}`;
+                        if (!key || key === "name:") continue;
+                        const prev = requiredByKey.get(key);
+                        requiredByKey.set(key, {
+                          itemId,
+                          itemName,
+                          unitOfMeasure: String(it.unitOfMeasure || ""),
+                          requiredQty:
+                            (prev?.requiredQty || 0) + (requiredQty || 0),
+                        });
+                      }
+                    }
+
+                    const requiredList = Array.from(requiredByKey.values());
+                    if (requiredList.length === 0) {
+                      try {
+                        setIsSubmitting(true);
+                        await persistSchedule({
+                          v1Status: "Scheduled for Production",
+                          v2Status: ProductionV2Status.IN_PREPARATION,
+                          workflowPath: ProductionV2WorkflowPath.SKIP_INVENTORY,
+                          updateOrdersStatus: true,
+                        });
+                        showToast(
+                          "success",
+                          "Success",
+                          "Production schedule created",
+                        );
+                        setIsSubmitDecisionOpen(false);
+                        onCreated?.();
+                        onClose();
+                      } catch (err) {
+                        console.error(
+                          "Failed to submit production schedule:",
+                          err,
+                        );
+                        showToast(
+                          "error",
+                          "Error",
+                          "Failed to submit schedule",
+                        );
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                      return;
+                    }
+
+                    const itemIds = requiredList
+                      .map((r) => r.itemId)
+                      .filter(Boolean) as string[];
+                    const itemNames = requiredList
+                      .filter((r) => !r.itemId && r.itemName)
+                      .map((r) => r.itemName);
+
+                    const stockByItemId = new Map<string, number>();
+                    const stockByItemName = new Map<string, number>();
+
+                    try {
+                      if (itemIds.length > 0) {
+                        const placeholders = itemIds.map(() => "?").join(", ");
+                        const rows = await api.dbQuery(
+                          `
+                            SELECT
+                              ii.id as itemId,
+                              COALESCE(ii.currentStockLevel, 0) as currentStockLevel,
+                              COALESCE(im.name, '') as itemName
+                            FROM inventory_item ii
+                            JOIN inventory i ON ii.inventoryId = i.id
+                            JOIN item_master im ON ii.itemMasterId = im.id
+                            WHERE i.outletId = ? AND ii.isDeleted = 0
+                              AND ii.id IN (${placeholders})
+                          `,
+                          [selectedOutlet.id, ...itemIds],
+                        );
+                        (rows || []).forEach((r: any) => {
+                          const id = r?.itemId ? String(r.itemId) : "";
+                          if (id)
+                            stockByItemId.set(
+                              id,
+                              Number(r.currentStockLevel || 0),
+                            );
+                          const name = String(r.itemName || "").trim();
+                          if (name)
+                            stockByItemName.set(
+                              name,
+                              Number(r.currentStockLevel || 0),
+                            );
+                        });
+                      }
+
+                      if (itemNames.length > 0) {
+                        const placeholders = itemNames
+                          .map(() => "?")
+                          .join(", ");
+                        const rows = await api.dbQuery(
+                          `
+                            SELECT
+                              COALESCE(ii.currentStockLevel, 0) as currentStockLevel,
+                              COALESCE(im.name, '') as itemName
+                            FROM inventory_item ii
+                            JOIN inventory i ON ii.inventoryId = i.id
+                            JOIN item_master im ON ii.itemMasterId = im.id
+                            WHERE i.outletId = ? AND ii.isDeleted = 0
+                              AND im.name IN (${placeholders})
+                          `,
+                          [selectedOutlet.id, ...itemNames],
+                        );
+                        (rows || []).forEach((r: any) => {
+                          const name = String(r.itemName || "").trim();
+                          if (name)
+                            stockByItemName.set(
+                              name,
+                              Number(r.currentStockLevel || 0),
+                            );
+                        });
+                      }
+                    } catch (err) {
+                      console.error("Failed to validate inventory:", err);
+                      showToast(
+                        "error",
+                        "Error",
+                        "Failed to validate inventory items",
+                      );
+                      return;
+                    }
+
+                    const insufficient: string[] = [];
+                    const missing: string[] = [];
+
+                    for (const req of requiredList) {
+                      const requiredQty = Number(req.requiredQty || 0);
+                      const availableQty = req.itemId
+                        ? Number(stockByItemId.get(req.itemId) || 0)
+                        : Number(stockByItemName.get(req.itemName) || 0);
+
+                      if (
+                        (req.itemId && !stockByItemId.has(req.itemId)) ||
+                        (!req.itemId && !stockByItemName.has(req.itemName))
+                      ) {
+                        missing.push(req.itemName || "Item");
+                        continue;
+                      }
+
+                      if (availableQty < requiredQty) {
+                        insufficient.push(req.itemName || "Item");
+                      }
+                    }
+
+                    if (missing.length > 0) {
+                      const unique = Array.from(new Set(missing));
+                      const preview = unique.slice(0, 3).join(", ");
+                      const suffix =
+                        unique.length > 3
+                          ? ` (+${unique.length - 3} more)`
+                          : "";
+                      showToast(
+                        "error",
+                        "Error",
+                        `Inventory item not found for some recipe items${preview ? `: ${preview}${suffix}` : ""}`,
+                      );
+                      return;
+                    }
+
+                    if (insufficient.length > 0) {
+                      const unique = Array.from(new Set(insufficient));
+                      const preview = unique.slice(0, 3).join(", ");
+                      const suffix =
+                        unique.length > 3
+                          ? ` (+${unique.length - 3} more)`
+                          : "";
+                      showToast(
+                        "error",
+                        "Error",
+                        `Insufficient inventory for some recipe items${preview ? `: ${preview}${suffix}` : ""}`,
+                      );
+                      return;
+                    }
+
+                    try {
+                      setIsSubmitting(true);
+                      await persistSchedule({
+                        v1Status: "Scheduled for Production",
+                        v2Status: ProductionV2Status.IN_PREPARATION,
+                        workflowPath: ProductionV2WorkflowPath.SKIP_INVENTORY,
+                        updateOrdersStatus: true,
+                      });
+                      showToast(
+                        "success",
+                        "Success",
+                        "Production schedule created",
+                      );
+                      setIsSubmitDecisionOpen(false);
+                      onCreated?.();
+                      onClose();
+                    } catch (err) {
+                      console.error(
+                        "Failed to submit production schedule:",
+                        err,
+                      );
+                      showToast("error", "Error", "Failed to submit schedule");
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="h-14 w-full rounded-[12px] bg-[#E5E7EB] text-[#111827] font-semibold text-[16px] hover:bg-gray-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  No, schedule for production
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
