@@ -30,6 +30,7 @@ import InventoryPage from "./app/dashboard/inventory/page";
 import CustomerManagementPage from "./app/dashboard/customer-management/page";
 import POSPage from "./app/dashboard/pos/page";
 import DatabaseViewerPage from "./app/dashboard/debug/database/page";
+import MainDashboardPage from "./app/dashboard/dashboard/page";
 
 /**
  * Global guard to ensure users are redirected to onboarding
@@ -79,6 +80,7 @@ export default function App() {
 
             <Route path="/dashboard" element={<DashboardLayoutWrapper />}>
               <Route index element={<DashboardPage />} />
+              <Route path="dashboard" element={<MainDashboardPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route
                 path="settings/customization"

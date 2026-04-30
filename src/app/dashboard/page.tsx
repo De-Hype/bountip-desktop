@@ -176,7 +176,7 @@ const Dashboard = () => {
       {
         icon: AssetsFiles.dashboard,
         title: "Dashboard",
-        path: "/dashboard",
+        path: "/dashboard/dashboard",
         available: true,
         permissionKey: "dashboard",
       },
