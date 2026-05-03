@@ -716,7 +716,7 @@ const CreatePreOrder = ({
         const orderRow = orderRows?.[0] ?? null;
         if (orderRow) {
           await api.queueAdd({
-            table: "orders",
+            table: "order",
             action: "CREATE",
             data: orderRow,
             id: orderId,
@@ -964,7 +964,7 @@ const CreatePreOrder = ({
         const orderRow = orderRows?.[0] ?? null;
         if (orderRow) {
           await api.queueAdd({
-            table: "orders",
+            table: "order",
             action: "CREATE",
             data: orderRow,
             id: orderId,
@@ -1178,7 +1178,7 @@ const CreatePreOrder = ({
         const orderRow = orderRows?.[0] ?? null;
         if (orderRow) {
           await api.queueAdd({
-            table: "orders",
+            table: "order",
             action: "CREATE",
             data: orderRow,
             id: orderId,

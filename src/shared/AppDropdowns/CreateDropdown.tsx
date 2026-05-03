@@ -73,7 +73,7 @@ interface MultiSelectWithAddProps extends BaseDropdownProps {
   selectedValues: Record<string, boolean>;
   onMultiChange: (values: Record<string, boolean>, name?: string) => void;
   allowAddNew: true;
-  onAddNew: (newValue: string, name?: string) => void;
+  onAddNew?: (newValue: string, name?: string) => void;
   selectedValue?: never;
   onChange?: never;
 }
@@ -260,13 +260,30 @@ export const Dropdown: React.FC<DropdownProps> = ({
 
   return (
     <>
-      {/* Modal backdrop overlay */}
-      {showAddModal && !onAddNewClick && (
-        <div
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[998]"
-          onClick={() => setShowAddModal(false)}
-        />
-      )}
+      {allowAddNew &&
+        showAddModal &&
+        !onAddNewClick &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[10000]"
+              onClick={() => setShowAddModal(false)}
+            />
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[10001] w-full max-w-md px-6">
+              <AddModal
+                isOpen={showAddModal}
+                onClose={() => setShowAddModal(false)}
+                onAdd={handleAddNewItem}
+                title=""
+                placeholder={defaultModalPlaceholder}
+                buttonText={defaultModalButtonText}
+                inputLabel={defaultModalInputLabel}
+                validation={modalValidation}
+              />
+            </div>
+          </>,
+          document.body,
+        )}
 
       <div className={`relative ${className}`} ref={dropdownRef}>
         {label && (
@@ -328,7 +345,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
                     }
                     setShowAddModal(true);
                   }}
-                  className="p-3.5 bg-[#E6E6E6] hover:bg-gray-300 rounded transition-colors"
+                  className="p-3.5 bg-[#E6E6E6] hover:bg-gray-300 rounded transition-colors cursor-pointer"
                   aria-label={addNewLabel || "Add new option"}
                   title={addNewLabel || "Add new option"}
                 >
@@ -493,22 +510,6 @@ export const Dropdown: React.FC<DropdownProps> = ({
             </div>,
             document.body,
           )}
-
-        {/* Add Modal */}
-        {allowAddNew && showAddModal && !onAddNewClick && (
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-2xl p-6 z-[999] w-full max-w-md">
-            <AddModal
-              isOpen={showAddModal}
-              onClose={() => setShowAddModal(false)}
-              onAdd={handleAddNewItem}
-              title=""
-              placeholder={defaultModalPlaceholder}
-              buttonText={defaultModalButtonText}
-              inputLabel={defaultModalInputLabel}
-              validation={modalValidation}
-            />
-          </div>
-        )}
       </div>
     </>
   );

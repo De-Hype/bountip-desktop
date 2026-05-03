@@ -505,6 +505,7 @@ export class SyncService {
         const jsonFieldsMap: Record<string, string[]> = {
           product: ["packagingMethod", "priceTierId", "allergenList"],
           customers: ["otherEmails", "otherPhoneNumbers", "otherNames"],
+          suppliers: ["representativeName", "phoneNumbers", "emailAddress"],
           business_outlet: [
             "operatingHours",
             "taxSettings",
@@ -577,6 +578,45 @@ export class SyncService {
             );
           }
         }
+
+        if (tableName === "suppliers") {
+          const toStringArray = (val: any) => {
+            if (Array.isArray(val)) {
+              return val.map((v) => String(v || "").trim()).filter(Boolean);
+            }
+            if (typeof val !== "string") return [];
+            const trimmed = val.trim();
+            if (!trimmed) return [];
+            if (trimmed.startsWith("[")) {
+              try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) {
+                  return parsed
+                    .map((v) => String(v || "").trim())
+                    .filter(Boolean);
+                }
+              } catch {}
+            }
+            return [trimmed];
+          };
+
+          (sanitizedPayload as any).representativeName = toStringArray(
+            (sanitizedPayload as any).representativeName,
+          );
+          (sanitizedPayload as any).phoneNumbers = toStringArray(
+            (sanitizedPayload as any).phoneNumbers,
+          );
+          (sanitizedPayload as any).emailAddress = toStringArray(
+            (sanitizedPayload as any).emailAddress,
+          );
+        }
+
+        const basePayloadVersion = Number(
+          (sanitizedPayload as any).version ?? 0,
+        );
+        (sanitizedPayload as any).version = Number.isFinite(basePayloadVersion)
+          ? basePayloadVersion + 1
+          : 1;
 
         // Map local queue format to API expected format
         return {
@@ -683,6 +723,7 @@ export class SyncService {
           const jsonFieldsMap: Record<string, string[]> = {
             product: ["packagingMethod", "priceTierId", "allergenList"],
             customers: ["otherEmails", "otherPhoneNumbers", "otherNames"],
+            suppliers: ["representativeName", "phoneNumbers", "emailAddress"],
             business_outlet: [
               "operatingHours",
               "taxSettings",
@@ -753,6 +794,45 @@ export class SyncService {
             }
           }
 
+          if (record.tableName === "suppliers") {
+            const toStringArray = (val: any) => {
+              if (Array.isArray(val))
+                return val.map((v) => String(v || "").trim()).filter(Boolean);
+              if (typeof val !== "string") return [];
+              const trimmed = val.trim();
+              if (!trimmed) return [];
+              if (trimmed.startsWith("[")) {
+                try {
+                  const parsed = JSON.parse(trimmed);
+                  if (Array.isArray(parsed)) {
+                    return parsed
+                      .map((v) => String(v || "").trim())
+                      .filter(Boolean);
+                  }
+                } catch {}
+              }
+              return [trimmed];
+            };
+
+            (sanitizedPayload as any).representativeName = toStringArray(
+              (sanitizedPayload as any).representativeName,
+            );
+            (sanitizedPayload as any).phoneNumbers = toStringArray(
+              (sanitizedPayload as any).phoneNumbers,
+            );
+            (sanitizedPayload as any).emailAddress = toStringArray(
+              (sanitizedPayload as any).emailAddress,
+            );
+          }
+
+          const finalPayloadVersion = Number((sanitizedPayload as any).version);
+          if (!Number.isFinite(finalPayloadVersion)) {
+            const fallback = Number((record.payload as any)?.version ?? 0);
+            (sanitizedPayload as any).version = Number.isFinite(fallback)
+              ? fallback
+              : 1;
+          }
+
           return {
             ...record,
             payload: sanitizedPayload,
@@ -804,6 +884,102 @@ export class SyncService {
         this.db.markAsSynced(ids);
         console.log(`[SyncService] Successfully synced ${ids.length} items.`);
       } else {
+        const parseStaleTargetVersion = (msg: string) => {
+          const text = String(msg || "");
+          const dbVersionMatch = text.match(/dbVersion\s*=\s*(\d+)/i);
+          if (dbVersionMatch?.[1]) return Number(dbVersionMatch[1]);
+          const currentMatch = text.match(/current version\s+(\d+)/i);
+          if (currentMatch?.[1]) return Number(currentMatch[1]);
+          return null;
+        };
+
+        const dbResults = Array.isArray(responseJson?.data?.dbResults)
+          ? responseJson.data.dbResults
+          : [];
+
+        const staleFixes = dbResults
+          .map((r: any) => {
+            const recordId = r?.recordId != null ? String(r.recordId) : "";
+            const tableName = r?.tableName != null ? String(r.tableName) : "";
+            const errorMsg = r?.error != null ? String(r.error) : "";
+            const currentVersion = parseStaleTargetVersion(errorMsg);
+            const isStale =
+              /stale update rejected/i.test(errorMsg) &&
+              typeof currentVersion === "number" &&
+              Number.isFinite(currentVersion);
+            if (!isStale || !recordId || !tableName) return null;
+            return { recordId, tableName, targetVersion: currentVersion + 1 };
+          })
+          .filter(Boolean) as Array<{
+          recordId: string;
+          tableName: string;
+          targetVersion: number;
+        }>;
+
+        if (staleFixes.length > 0) {
+          for (const fix of staleFixes) {
+            try {
+              const info = getTableInfo(fix.tableName);
+              if (info.hasId && info.hasVersion) {
+                if (info.hasUpdatedAt) {
+                  this.db.run(
+                    `UPDATE ${fix.tableName} SET version = ?, updatedAt = ? WHERE id = ?`,
+                    [fix.targetVersion, new Date().toISOString(), fix.recordId],
+                  );
+                } else {
+                  this.db.run(
+                    `UPDATE ${fix.tableName} SET version = ? WHERE id = ?`,
+                    [fix.targetVersion, fix.recordId],
+                  );
+                }
+              }
+            } catch (e) {
+              console.warn(
+                `[SyncService] Could not apply stale version fix for ${fix.tableName}:${fix.recordId}`,
+                e,
+              );
+            }
+          }
+
+          const retryRecords = finalizedRecords.map((record) => {
+            const match = staleFixes.find(
+              (f) =>
+                f.recordId === record.recordId &&
+                f.tableName === record.tableName,
+            );
+            if (!match) return record;
+            const nextPayload: any = { ...(record.payload || {}) };
+            nextPayload.version = match.targetVersion;
+            return { ...record, payload: nextPayload };
+          });
+
+          const retryPayload = { records: retryRecords };
+          try {
+            const retryResponse = await net.fetch(PUSH_ENDPOINT, {
+              method: "POST",
+              body: JSON.stringify(retryPayload),
+              headers: {
+                "Content-Type": "application/json",
+                "x-app-version": app.getVersion(),
+              },
+            });
+
+            if (retryResponse.ok) {
+              const ids = itemsToSync.map((i: any) => i.id);
+              this.db.markAsSynced(ids);
+              console.log(
+                `[SyncService] Successfully synced ${ids.length} items after stale version fix.`,
+              );
+              return;
+            }
+          } catch (e) {
+            console.error(
+              "[SyncService] Retry after stale version fix failed:",
+              e,
+            );
+          }
+        }
+
         console.error(
           `[SyncService] Sync failed: ${response.status} ${
             responseText || response.statusText

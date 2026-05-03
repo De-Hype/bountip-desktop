@@ -21,8 +21,13 @@ export const createOutlet = async (
   const { businessId, location } = payload;
   const newOutletId = randomUUID();
   const now = new Date().toISOString();
+  const business = db.get(
+    "SELECT currency, country, businessType FROM business WHERE id = ? LIMIT 1",
+    [businessId],
+  ) as any;
 
   const newOutlet = {
+    id: newOutletId,
     businessId,
     name: location.name,
     address: location.address,
@@ -42,14 +47,14 @@ export const createOutlet = async (
     email: null,
     postalCode: null,
     whatsappNumber: null,
-    currency: "CAD",
+    currency: business?.currency ?? null,
     revenueRange: null,
-    country: "Canada",
+    country: business?.country ?? null,
     storeCode: null,
     localInventoryRef: null,
     centralInventoryRef: null,
-    outletRef: "OUT-9DA642BB48E784",
-    businessType: null,
+    outletRef: `OUT-${randomUUID().replaceAll("-", "").slice(0, 15).toUpperCase()}`,
+    businessType: business?.businessType ?? null,
     whatsappChannel: true,
     emailChannel: true,
     operatingHours: null,
@@ -87,7 +92,7 @@ export const createOutlet = async (
   // 2. Queue Sync
   db.addToQueue({
     table: "business_outlet",
-    action: SYNC_ACTIONS.UPDATE, // or UPDATE since we use Upsert logic, but CREATE is semantically correct for sync
+    action: SYNC_ACTIONS.CREATE,
     data: newOutlet,
     id: newOutletId,
   });

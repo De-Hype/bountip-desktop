@@ -22,8 +22,28 @@ export const createInventoryItem = async (
   db: DatabaseService,
   payload: any,
 ) => {
+
   const now = new Date().toISOString();
-  const businessId = db.getIdentity()?.businessId || "";
+  const identity: any = db.getIdentity?.() as any;
+  let businessId = String(
+    identity?.businessId ??
+      identity?.business?.id ??
+      identity?.primaryBusiness?.id ??
+      "",
+  ).trim();
+
+  if (!businessId) {
+    try {
+      const outletId = String(payload?.outletId ?? "").trim();
+      if (outletId) {
+        const row = db.get(
+          "SELECT businessId FROM business_outlet WHERE id = ? LIMIT 1",
+          [outletId],
+        ) as any;
+        businessId = String(row?.businessId ?? "").trim();
+      }
+    } catch {}
+  }
 
   // We wrap in a transaction using the dbService.transaction helper
   // Since db.transaction is a wrapper around better-sqlite3 transaction,

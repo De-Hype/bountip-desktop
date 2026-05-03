@@ -2291,7 +2291,7 @@ const systemDefaultUpsertSql = `
 const buildSystemDefaultUpsertParams = (s) => ({
   id: s.id,
   key: s.key || "category",
-  data: Array.isArray(s.data) ? JSON.stringify(s.data) : s.data || "[]",
+  data: Array.isArray(s.data) ? JSON.stringify(s.data) : typeof s.data === "string" ? s.data : s.data ? JSON.stringify([s.data]) : "[]",
   outletId: s.outletId || null,
   recordId: s.recordId || null,
   version: s.version || 0
@@ -4615,17 +4615,6 @@ var SYNC_ACTIONS = /* @__PURE__ */ ((SYNC_ACTIONS2) => {
   SYNC_ACTIONS2["DELETE"] = "DELETE";
   return SYNC_ACTIONS2;
 })(SYNC_ACTIONS || {});
-var SystemDefaultType = /* @__PURE__ */ ((SystemDefaultType2) => {
-  SystemDefaultType2["CATEGORY"] = "category";
-  SystemDefaultType2["ALLERGENS"] = "allergens";
-  SystemDefaultType2["PREPARATION_AREA"] = "preparation-area";
-  SystemDefaultType2["PACKAGING_METHOD"] = "packaging-method";
-  SystemDefaultType2["WEIGHT_SCALE"] = "weight-scale";
-  SystemDefaultType2["ITEM_CATEGORY"] = "item-category";
-  SystemDefaultType2["INVENTORY_UNIT"] = "inventory-unit";
-  SystemDefaultType2["RECIPE_MIX"] = "recipe-mix";
-  return SystemDefaultType2;
-})(SystemDefaultType || {});
 class DatabaseService {
   constructor() {
     const userDataPath = app.getPath("userData");
@@ -5333,15 +5322,18 @@ class DatabaseService {
     );
   }
   addSystemDefault(key, data, outletId) {
-    const keysRequiringArray = [
-      SystemDefaultType.ITEM_CATEGORY,
-      SystemDefaultType.INVENTORY_UNIT
-    ];
-    const isArrayKey = keysRequiringArray.includes(key);
+    const normalizeItems = (value) => {
+      if (Array.isArray(value)) {
+        return value.flatMap((v) => Array.isArray(v) ? v : [v]).filter(Boolean);
+      }
+      if (value == null) return [];
+      return [value];
+    };
+    const getNameKey = (item) => String(item?.name ?? item ?? "").trim().toLowerCase();
     const existing = this.prepare(
       "SELECT * FROM system_default WHERE key = ? AND outletId = ?"
     ).get(key, outletId);
-    if (existing && isArrayKey) {
+    if (existing) {
       let currentData = [];
       try {
         currentData = JSON.parse(existing.data);
@@ -5349,11 +5341,20 @@ class DatabaseService {
       } catch {
         currentData = [];
       }
-      const exists = currentData.some(
-        (item) => item.name?.toLowerCase() === data.name?.toLowerCase()
+      const incoming = normalizeItems(data);
+      const existingNameKeys = new Set(
+        currentData.map((item) => getNameKey(item)).filter(Boolean)
       );
-      if (exists) return existing;
-      const updatedData = [...currentData, data];
+      const appendItems = [];
+      for (const item of incoming) {
+        const k = getNameKey(item);
+        if (!k) continue;
+        if (existingNameKeys.has(k)) continue;
+        existingNameKeys.add(k);
+        appendItems.push(item);
+      }
+      if (appendItems.length === 0) return existing;
+      const updatedData = [...currentData, ...appendItems];
       const nextVersion = (existing.version || 0) + 1;
       this.prepare(
         "UPDATE system_default SET data = ?, version = ? WHERE id = ?"
@@ -5375,7 +5376,7 @@ class DatabaseService {
       return record2;
     }
     const id = uuidExports.v4();
-    const finalData = isArrayKey ? [data] : data;
+    const finalData = normalizeItems(data);
     const record = {
       id,
       key,
@@ -5404,12 +5405,7 @@ class DatabaseService {
       "SELECT * FROM system_default WHERE id = ?"
     ).get(id);
     if (!record) return;
-    const keysRequiringArray = [
-      SystemDefaultType.ITEM_CATEGORY,
-      SystemDefaultType.INVENTORY_UNIT
-    ];
-    const isArrayKey = keysRequiringArray.includes(record.key);
-    if (isArrayKey && itemValue) {
+    if (itemValue) {
       let currentData = [];
       try {
         currentData = JSON.parse(record.data);
@@ -24204,6 +24200,7 @@ ${signature}\r
         const jsonFieldsMap = {
           product: ["packagingMethod", "priceTierId", "allergenList"],
           customers: ["otherEmails", "otherPhoneNumbers", "otherNames"],
+          suppliers: ["representativeName", "phoneNumbers", "emailAddress"],
           business_outlet: [
             "operatingHours",
             "taxSettings",
@@ -24264,6 +24261,39 @@ ${signature}\r
             );
           }
         }
+        if (tableName === "suppliers") {
+          const toStringArray = (val) => {
+            if (Array.isArray(val)) {
+              return val.map((v) => String(v || "").trim()).filter(Boolean);
+            }
+            if (typeof val !== "string") return [];
+            const trimmed = val.trim();
+            if (!trimmed) return [];
+            if (trimmed.startsWith("[")) {
+              try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) {
+                  return parsed.map((v) => String(v || "").trim()).filter(Boolean);
+                }
+              } catch {
+              }
+            }
+            return [trimmed];
+          };
+          sanitizedPayload.representativeName = toStringArray(
+            sanitizedPayload.representativeName
+          );
+          sanitizedPayload.phoneNumbers = toStringArray(
+            sanitizedPayload.phoneNumbers
+          );
+          sanitizedPayload.emailAddress = toStringArray(
+            sanitizedPayload.emailAddress
+          );
+        }
+        const basePayloadVersion = Number(
+          sanitizedPayload.version ?? 0
+        );
+        sanitizedPayload.version = Number.isFinite(basePayloadVersion) ? basePayloadVersion + 1 : 1;
         return {
           id: item.id,
           tableName,
@@ -24353,6 +24383,7 @@ ${signature}\r
           const jsonFieldsMap = {
             product: ["packagingMethod", "priceTierId", "allergenList"],
             customers: ["otherEmails", "otherPhoneNumbers", "otherNames"],
+            suppliers: ["representativeName", "phoneNumbers", "emailAddress"],
             business_outlet: [
               "operatingHours",
               "taxSettings",
@@ -24411,6 +24442,39 @@ ${signature}\r
               );
             }
           }
+          if (record.tableName === "suppliers") {
+            const toStringArray = (val) => {
+              if (Array.isArray(val))
+                return val.map((v) => String(v || "").trim()).filter(Boolean);
+              if (typeof val !== "string") return [];
+              const trimmed = val.trim();
+              if (!trimmed) return [];
+              if (trimmed.startsWith("[")) {
+                try {
+                  const parsed = JSON.parse(trimmed);
+                  if (Array.isArray(parsed)) {
+                    return parsed.map((v) => String(v || "").trim()).filter(Boolean);
+                  }
+                } catch {
+                }
+              }
+              return [trimmed];
+            };
+            sanitizedPayload.representativeName = toStringArray(
+              sanitizedPayload.representativeName
+            );
+            sanitizedPayload.phoneNumbers = toStringArray(
+              sanitizedPayload.phoneNumbers
+            );
+            sanitizedPayload.emailAddress = toStringArray(
+              sanitizedPayload.emailAddress
+            );
+          }
+          const finalPayloadVersion = Number(sanitizedPayload.version);
+          if (!Number.isFinite(finalPayloadVersion)) {
+            const fallback = Number(record.payload?.version ?? 0);
+            sanitizedPayload.version = Number.isFinite(fallback) ? fallback : 1;
+          }
           return {
             ...record,
             payload: sanitizedPayload
@@ -24459,6 +24523,82 @@ ${signature}\r
         this.db.markAsSynced(ids);
         console.log(`[SyncService] Successfully synced ${ids.length} items.`);
       } else {
+        const parseStaleTargetVersion = (msg) => {
+          const text = String(msg || "");
+          const dbVersionMatch = text.match(/dbVersion\s*=\s*(\d+)/i);
+          if (dbVersionMatch?.[1]) return Number(dbVersionMatch[1]);
+          const currentMatch = text.match(/current version\s+(\d+)/i);
+          if (currentMatch?.[1]) return Number(currentMatch[1]);
+          return null;
+        };
+        const dbResults = Array.isArray(responseJson?.data?.dbResults) ? responseJson.data.dbResults : [];
+        const staleFixes = dbResults.map((r) => {
+          const recordId = r?.recordId != null ? String(r.recordId) : "";
+          const tableName = r?.tableName != null ? String(r.tableName) : "";
+          const errorMsg = r?.error != null ? String(r.error) : "";
+          const currentVersion = parseStaleTargetVersion(errorMsg);
+          const isStale = /stale update rejected/i.test(errorMsg) && typeof currentVersion === "number" && Number.isFinite(currentVersion);
+          if (!isStale || !recordId || !tableName) return null;
+          return { recordId, tableName, targetVersion: currentVersion + 1 };
+        }).filter(Boolean);
+        if (staleFixes.length > 0) {
+          for (const fix of staleFixes) {
+            try {
+              const info = getTableInfo(fix.tableName);
+              if (info.hasId && info.hasVersion) {
+                if (info.hasUpdatedAt) {
+                  this.db.run(
+                    `UPDATE ${fix.tableName} SET version = ?, updatedAt = ? WHERE id = ?`,
+                    [fix.targetVersion, (/* @__PURE__ */ new Date()).toISOString(), fix.recordId]
+                  );
+                } else {
+                  this.db.run(
+                    `UPDATE ${fix.tableName} SET version = ? WHERE id = ?`,
+                    [fix.targetVersion, fix.recordId]
+                  );
+                }
+              }
+            } catch (e) {
+              console.warn(
+                `[SyncService] Could not apply stale version fix for ${fix.tableName}:${fix.recordId}`,
+                e
+              );
+            }
+          }
+          const retryRecords = finalizedRecords.map((record) => {
+            const match = staleFixes.find(
+              (f) => f.recordId === record.recordId && f.tableName === record.tableName
+            );
+            if (!match) return record;
+            const nextPayload = { ...record.payload || {} };
+            nextPayload.version = match.targetVersion;
+            return { ...record, payload: nextPayload };
+          });
+          const retryPayload = { records: retryRecords };
+          try {
+            const retryResponse = await net.fetch(PUSH_ENDPOINT, {
+              method: "POST",
+              body: JSON.stringify(retryPayload),
+              headers: {
+                "Content-Type": "application/json",
+                "x-app-version": app.getVersion()
+              }
+            });
+            if (retryResponse.ok) {
+              const ids = itemsToSync.map((i) => i.id);
+              this.db.markAsSynced(ids);
+              console.log(
+                `[SyncService] Successfully synced ${ids.length} items after stale version fix.`
+              );
+              return;
+            }
+          } catch (e) {
+            console.error(
+              "[SyncService] Retry after stale version fix failed:",
+              e
+            );
+          }
+        }
         console.error(
           `[SyncService] Sync failed: ${response.status} ${responseText || response.statusText}`
         );
@@ -24992,7 +25132,12 @@ const createOutlet = async (db, payload) => {
   const { businessId, location } = payload;
   const newOutletId = randomUUID();
   const now = (/* @__PURE__ */ new Date()).toISOString();
+  const business = db.get(
+    "SELECT currency, country, businessType FROM business WHERE id = ? LIMIT 1",
+    [businessId]
+  );
   const newOutlet = {
+    id: newOutletId,
     businessId,
     name: location.name,
     address: location.address,
@@ -25011,14 +25156,14 @@ const createOutlet = async (db, payload) => {
     email: null,
     postalCode: null,
     whatsappNumber: null,
-    currency: "CAD",
+    currency: business?.currency ?? null,
     revenueRange: null,
-    country: "Canada",
+    country: business?.country ?? null,
     storeCode: null,
     localInventoryRef: null,
     centralInventoryRef: null,
-    outletRef: "OUT-9DA642BB48E784",
-    businessType: null,
+    outletRef: `OUT-${randomUUID().replaceAll("-", "").slice(0, 15).toUpperCase()}`,
+    businessType: business?.businessType ?? null,
     whatsappChannel: true,
     emailChannel: true,
     operatingHours: null,
@@ -25038,8 +25183,7 @@ const createOutlet = async (db, payload) => {
   db.run(businessOutletUpsertSql, params);
   db.addToQueue({
     table: "business_outlet",
-    action: SYNC_ACTIONS.UPDATE,
-    // or UPDATE since we use Upsert logic, but CREATE is semantically correct for sync
+    action: SYNC_ACTIONS.CREATE,
     data: newOutlet,
     id: newOutletId
   });
@@ -25109,7 +25253,23 @@ const deleteOutlet = async (db, payload) => {
 };
 const createInventoryItem = async (db, payload) => {
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const businessId = db.getIdentity()?.businessId || "";
+  const identity = db.getIdentity?.();
+  let businessId = String(
+    identity?.businessId ?? identity?.business?.id ?? identity?.primaryBusiness?.id ?? ""
+  ).trim();
+  if (!businessId) {
+    try {
+      const outletId = String(payload?.outletId ?? "").trim();
+      if (outletId) {
+        const row = db.get(
+          "SELECT businessId FROM business_outlet WHERE id = ? LIMIT 1",
+          [outletId]
+        );
+        businessId = String(row?.businessId ?? "").trim();
+      }
+    } catch {
+    }
+  }
   const tx = db.transaction(() => {
     const itemMasterId = uuidExports.v4();
     const itemMaster = {

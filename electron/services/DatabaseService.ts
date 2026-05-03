@@ -1089,20 +1089,27 @@ export class DatabaseService {
   }
 
   addSystemDefault(key: string, data: any, outletId: string) {
-    const keysRequiringArray: readonly string[] = [
-      SystemDefaultType.ITEM_CATEGORY,
-      SystemDefaultType.INVENTORY_UNIT,
-    ];
+    const normalizeItems = (value: any) => {
+      if (Array.isArray(value)) {
+        return value
+          .flatMap((v) => (Array.isArray(v) ? v : [v]))
+          .filter(Boolean);
+      }
+      if (value == null) return [];
+      return [value];
+    };
 
-    const isArrayKey = keysRequiringArray.includes(key);
+    const getNameKey = (item: any) =>
+      String(item?.name ?? item ?? "")
+        .trim()
+        .toLowerCase();
 
     // 1. Check if a row already exists for this key and outlet
     const existing = this.prepare(
       "SELECT * FROM system_default WHERE key = ? AND outletId = ?",
     ).get(key, outletId) as any;
 
-    if (existing && isArrayKey) {
-      // APPEND LOGIC
+    if (existing) {
       let currentData: any[] = [];
       try {
         currentData = JSON.parse(existing.data);
@@ -1111,13 +1118,23 @@ export class DatabaseService {
         currentData = [];
       }
 
-      // Check for duplicates (by name)
-      const exists = currentData.some(
-        (item) => item.name?.toLowerCase() === data.name?.toLowerCase(),
+      const incoming = normalizeItems(data);
+      const existingNameKeys = new Set(
+        currentData.map((item) => getNameKey(item)).filter(Boolean),
       );
-      if (exists) return existing;
 
-      const updatedData = [...currentData, data];
+      const appendItems: any[] = [];
+      for (const item of incoming) {
+        const k = getNameKey(item);
+        if (!k) continue;
+        if (existingNameKeys.has(k)) continue;
+        existingNameKeys.add(k);
+        appendItems.push(item);
+      }
+
+      if (appendItems.length === 0) return existing;
+
+      const updatedData = [...currentData, ...appendItems];
       const nextVersion = (existing.version || 0) + 1;
 
       this.prepare(
@@ -1146,7 +1163,7 @@ export class DatabaseService {
 
     // CREATE LOGIC (New row)
     const id = uuidv4();
-    const finalData = isArrayKey ? [data] : data;
+    const finalData = normalizeItems(data);
     const record = {
       id,
       key,
@@ -1182,14 +1199,7 @@ export class DatabaseService {
 
     if (!record) return;
 
-    const keysRequiringArray: readonly string[] = [
-      SystemDefaultType.ITEM_CATEGORY,
-      SystemDefaultType.INVENTORY_UNIT,
-    ];
-    const isArrayKey = keysRequiringArray.includes(record.key);
-
-    if (isArrayKey && itemValue) {
-      // SUBTRACT LOGIC (Update existing row by removing one item from array)
+    if (itemValue) {
       let currentData: any[] = [];
       try {
         currentData = JSON.parse(record.data);
@@ -1202,8 +1212,6 @@ export class DatabaseService {
         (item) => (item.name || item).toLowerCase() !== itemValue.toLowerCase(),
       );
 
-      // If array is now empty, we might want to delete the whole row or just keep empty array
-      // Requirements suggest sending back "other data without it", implying row remains.
       const nextVersion = (record.version || 0) + 1;
 
       this.prepare(

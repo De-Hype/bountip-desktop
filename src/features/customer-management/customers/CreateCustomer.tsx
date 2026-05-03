@@ -63,6 +63,18 @@ const CreateCustomer = ({
   const [actualPaymentTerms, setActualPaymentTerms] = useState<any[]>([]);
   const [isPricingTierOpen, setIsPricingTierOpen] = useState(false);
   const [isPaymentTermOpen, setIsPaymentTermOpen] = useState(false);
+  const selectedPaymentTermId = useMemo(() => {
+    const raw = String(paymentTerm || "").trim();
+    if (!raw) return "";
+    const byId = actualPaymentTerms.find((t: any) => String(t?.id) === raw);
+    if (byId?.id != null) return String(byId.id);
+    const lower = raw.toLowerCase();
+    const byName = actualPaymentTerms.find(
+      (t: any) => String(t?.name || "").trim().toLowerCase() === lower,
+    );
+    if (byName?.id != null) return String(byName.id);
+    return raw;
+  }, [actualPaymentTerms, paymentTerm]);
 
   useEffect(() => {
     const fetchPaymentTerms = async () => {
@@ -272,7 +284,7 @@ const CreateCustomer = ({
             : null,
         address: organizationAddresses.join(","),
         pricingTier,
-        paymentTermId: paymentTerm,
+        paymentTermId: selectedPaymentTermId,
         outletId: selectedOutlet?.id,
         status: "active",
         createdAt: new Date().toISOString(),

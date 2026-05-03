@@ -80,6 +80,132 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
   const [duplicatesHandled, setDuplicatesHandled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const parseSystemDefaultNames = (rows: any[]) => {
+    const names: string[] = [];
+    for (const row of rows || []) {
+      try {
+        const parsed = JSON.parse(row?.data ?? "null");
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            const name = String(item?.name ?? item ?? "").trim();
+            if (name) names.push(name);
+          }
+          continue;
+        }
+        const singleName =
+          parsed && typeof parsed === "object"
+            ? String((parsed as any).name ?? "").trim()
+            : String(parsed ?? "").trim();
+        if (singleName) names.push(singleName);
+      } catch {
+        const fallback = String(row?.data ?? "").trim();
+        if (fallback) names.push(fallback);
+      }
+    }
+    return names;
+  };
+
+  const ensureSystemDefaultsForProducts = async (
+    productsToUpload: Array<{
+      category?: string;
+      preparationArea?: string;
+      weightScale?: string;
+      packagingMethod?: string[];
+      allergenList?: string[];
+    }>,
+  ) => {
+    const api = (window as any).electronAPI;
+    const outletId = String(storeCode || outlet?.id || "").trim();
+    if (!outletId) return;
+    if (!api?.getSystemDefaults || !api?.addSystemDefault) return;
+
+    const normalizeKey = (value: any) =>
+      String(value ?? "")
+        .trim()
+        .toLowerCase();
+    const normalizeName = (value: any) => String(value ?? "").trim();
+
+    const required = {
+      category: new Map<string, string>(),
+      "preparation-area": new Map<string, string>(),
+      "weight-scale": new Map<string, string>(),
+      "packaging-method": new Map<string, string>(),
+      allergens: new Map<string, string>(),
+    };
+
+    for (const p of productsToUpload) {
+      const category = normalizeName(p.category);
+      if (category) required.category.set(normalizeKey(category), category);
+
+      const prep = normalizeName(p.preparationArea);
+      if (prep) required["preparation-area"].set(normalizeKey(prep), prep);
+
+      const weightScale = normalizeName(p.weightScale);
+      if (weightScale)
+        required["weight-scale"].set(normalizeKey(weightScale), weightScale);
+
+      for (const method of Array.isArray(p.packagingMethod)
+        ? p.packagingMethod
+        : []) {
+        const m = normalizeName(method);
+        if (m) required["packaging-method"].set(normalizeKey(m), m);
+      }
+
+      for (const allergen of Array.isArray(p.allergenList)
+        ? p.allergenList
+        : []) {
+        const a = normalizeName(allergen);
+        if (a) required.allergens.set(normalizeKey(a), a);
+      }
+    }
+
+    const keys = Object.keys(required) as Array<
+      | "category"
+      | "preparation-area"
+      | "weight-scale"
+      | "packaging-method"
+      | "allergens"
+    >;
+
+    const existingByKey = new Map<string, Set<string>>();
+    const existingRows = await Promise.all(
+      keys.map((key) =>
+        api
+          .getSystemDefaults(key, outletId)
+          .then((rows: any[]) => ({ key, rows }))
+          .catch(() => ({ key, rows: [] })),
+      ),
+    );
+
+    for (const { key, rows } of existingRows) {
+      const set = new Set<string>();
+      for (const n of parseSystemDefaultNames(rows)) {
+        set.add(normalizeKey(n));
+      }
+      existingByKey.set(key, set);
+    }
+
+    const creates: Array<Promise<any>> = [];
+    for (const key of keys) {
+      const existing = existingByKey.get(key) ?? new Set<string>();
+      const requiredNames = required[key];
+      for (const [norm, name] of requiredNames.entries()) {
+        if (existing.has(norm)) continue;
+        if (key === "allergens") {
+          creates.push(
+            api.addSystemDefault(key, { name, selected: false }, outletId),
+          );
+        } else {
+          creates.push(api.addSystemDefault(key, { name }, outletId));
+        }
+      }
+    }
+
+    if (creates.length > 0) {
+      await Promise.allSettled(creates);
+    }
+  };
+
   // Detect duplicates by name (within file and against DB for this outlet)
   const detectDuplicates = async (
     products: ParsedProduct[],
@@ -359,6 +485,39 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
       const finalDuplicateProducts = duplicatesHandled ? [] : duplicateProducts;
 
       if (response && response.status) {
+        try {
+          await ensureSystemDefaultsForProducts(productsToUpload);
+        } catch {}
+        if (typeof window !== "undefined") {
+          const changedAt = Date.now();
+          const detail = {
+            changedAt,
+            reason: "created",
+            outletId: String(storeCode || outlet?.id || ""),
+          };
+
+          try {
+            window.dispatchEvent(new Event("products:changed"));
+          } catch {}
+
+          try {
+            window.dispatchEvent(
+              new CustomEvent("products:changed", { detail }),
+            );
+          } catch {}
+
+          setTimeout(() => {
+            try {
+              window.dispatchEvent(new Event("products:changed"));
+            } catch {}
+
+            try {
+              window.dispatchEvent(
+                new CustomEvent("products:changed", { detail }),
+              );
+            } catch {}
+          }, 0);
+        }
         // If bulk upload succeeded, mark all valid products as successful
         validProducts.forEach((product) => {
           successfulProducts.push({ ...product, status: "success" });
@@ -503,25 +662,25 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
     }
   };
 
- const handleMergeDuplicates = async () => {
-   const hasDuplicates = parsedProducts.some((p) => p.isDuplicate);
-   if (!hasDuplicates) return;
+  const handleMergeDuplicates = async () => {
+    const hasDuplicates = parsedProducts.some((p) => p.isDuplicate);
+    if (!hasDuplicates) return;
 
-   setParsedProducts((prev) =>
-     prev.map((product) =>
-       product.isDuplicate ? { ...product, isDuplicate: false } : product,
-     ),
-   );
-   setDuplicatesHandled(true);
- };
+    setParsedProducts((prev) =>
+      prev.map((product) =>
+        product.isDuplicate ? { ...product, isDuplicate: false } : product,
+      ),
+    );
+    setDuplicatesHandled(true);
+  };
 
- const handleSkipDuplicates = () => {
-   const hasDuplicates = parsedProducts.some((p) => p.isDuplicate);
-   if (!hasDuplicates) return;
+  const handleSkipDuplicates = () => {
+    const hasDuplicates = parsedProducts.some((p) => p.isDuplicate);
+    if (!hasDuplicates) return;
 
-   setParsedProducts((prev) => prev.filter((product) => !product.isDuplicate));
-   setDuplicatesHandled(true);
- };
+    setParsedProducts((prev) => prev.filter((product) => !product.isDuplicate));
+    setDuplicatesHandled(true);
+  };
 
   const handleReupload = () => {
     setUploadedFile(null);
@@ -1149,12 +1308,6 @@ const BulkUploadData: React.FC<BulkUploadDataProps> = ({
                       proceeding with the upload.
                     </p>
                     <div className="flex gap-3">
-                      {/* <button
-                        onClick={handleMergeDuplicates}
-                        className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 font-medium"
-                      >
-                        Merge Duplicate Entries
-                      </button> */}
                       <button
                         onClick={handleSkipDuplicates}
                         className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 font-medium"

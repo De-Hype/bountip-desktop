@@ -101,14 +101,14 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
   const outletIdParam = searchParams.get("outletId") || "";
 
   useEffect(() => {
-    if (outletIdParam && selectedOutletId !== outletIdParam) {
+    if (outletIdParam && String(selectedOutletId) !== String(outletIdParam)) {
       selectOutlet(outletIdParam);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outletIdParam]);
+  }, [outletIdParam, selectedOutletId, selectOutlet]);
 
   const showBackButton = Boolean(outletIdParam);
-  const outlet = outlets.find((o) => o.id === outletIdParam) as unknown as
+  const outlet = outlets.find((o) => String(o.id) === String(outletIdParam)) as unknown as
     | {
         isOnboarded?: boolean;
       }
@@ -337,7 +337,7 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
 
     // Find any other outlet to switch to
     const otherOutlets = outlets.filter(
-      (o) => o.id !== currentId && !o.isDeleted,
+      (o) => String(o.id) !== String(currentId) && !o.isDeleted,
     );
 
     // Prioritize switching to an onboarded outlet, but any other will do

@@ -231,6 +231,8 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
     useState(false);
   const [isAddPreparationAreaModalOpen, setIsAddPreparationAreaModalOpen] =
     useState(false);
+  const [isAddPackagingMethodModalOpen, setIsAddPackagingMethodModalOpen] =
+    useState(false);
 
   const isFormValid = !!(
     productName.trim() &&
@@ -563,9 +565,38 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
         `${productName} has been created successfully.`,
       );
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("products:changed"));
+        const changedAt = Date.now();
+        const detail = {
+          changedAt,
+          reason: "created",
+          outletId: selectedOutletId,
+          productId: response.id,
+        };
+
+        try {
+          window.dispatchEvent(new Event("products:changed"));
+        } catch {}
+
+        try {
+          window.dispatchEvent(new CustomEvent("products:changed", { detail }));
+        } catch {}
+
+        setTimeout(() => {
+          try {
+            window.dispatchEvent(new Event("products:changed"));
+          } catch {}
+
+          try {
+            window.dispatchEvent(
+              new CustomEvent("products:changed", { detail }),
+            );
+          } catch {}
+        }, 0);
       }
-      onSuccess?.();
+
+      try {
+        onSuccess?.();
+      } catch {}
       setTimeout(() => {
         onClose();
       }, 0);
@@ -647,7 +678,7 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
 
   const handleWeightUnitAdded = async (name: string) => {
     const newItem = await handleEntityAdded(
-      "weightUnit",
+      "weight-scale",
       name,
       setWeightUnits,
       setIsAddWeightUnitModalOpen,
@@ -666,7 +697,7 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
 
   const handlePreparationAreaAdded = async (name: string) => {
     const newItem = await handleEntityAdded(
-      "preparationArea",
+      "preparation-area",
       name,
       setPreparationAreas,
       setIsAddPreparationAreaModalOpen,
@@ -693,7 +724,18 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
   };
 
   const handlePackagingMethodAdded = (name: string) => {
-    handleEntityAdded("packagingMethod", name, setPackagingMethods);
+    handleEntityAdded(
+      "packaging-method",
+      name,
+      setPackagingMethods,
+      setIsAddPackagingMethodModalOpen,
+    ).then((newItem) => {
+      if (!newItem?.id) return;
+      setSelectedPackagingMethods((prev) => ({
+        ...prev,
+        [String(newItem.id)]: true,
+      }));
+    });
   };
 
   return (
@@ -1159,7 +1201,7 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
                     className="w-full"
                     allowAddNew
                     addNewLabel="+"
-                    onAddNew={handlePackagingMethodAdded}
+                    onAddNewClick={() => setIsAddPackagingMethodModalOpen(true)}
                     onDeleteOption={handlePackagingMethodDelete}
                     searchPlaceholder="Search Packaging Method"
                   />
@@ -1258,6 +1300,15 @@ const CreateProduct = ({ isOpen, onClose, onSuccess }: CreateProductProps) => {
           fieldPlaceholder="Enter the name of the preparation area"
           submitLabel="Add Area"
           onSubmit={handlePreparationAreaAdded}
+        />
+        <AddEntityModal
+          isOpen={isAddPackagingMethodModalOpen}
+          onClose={() => setIsAddPackagingMethodModalOpen(false)}
+          title="Add Packaging Method"
+          fieldLabel="Packaging Method"
+          fieldPlaceholder="Enter the name of the packaging method"
+          submitLabel="Add Method"
+          onSubmit={handlePackagingMethodAdded}
         />
       </div>
     </div>

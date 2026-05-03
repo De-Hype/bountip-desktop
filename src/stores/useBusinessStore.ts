@@ -67,15 +67,17 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   removeOutletLocal: (id) => {
     const api = getElectronAPI();
     const current = get().outlets;
-    const updatedOutlets = current.filter((o) => o.id !== id);
+    const updatedOutlets = current.filter((o) => String(o.id) !== String(id));
     const selectedOutletId = get().selectedOutletId;
     const selectedOutlet =
-      selectedOutletId === id ? null : get().selectedOutlet;
+      String(selectedOutletId) === String(id) ? null : get().selectedOutlet;
 
     set({
       outlets: updatedOutlets,
-      selectedOutlet: selectedOutletId === id ? null : selectedOutlet,
-      selectedOutletId: selectedOutletId === id ? null : selectedOutletId,
+      selectedOutlet:
+        String(selectedOutletId) === String(id) ? null : selectedOutlet,
+      selectedOutletId:
+        String(selectedOutletId) === String(id) ? null : selectedOutletId,
     });
 
     if (api) {
@@ -131,17 +133,24 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
       const primaryBusiness = (cachedBusiness as Business) ?? null;
       const currentSelectedId = get().selectedOutletId;
 
+      const outletIdEquals = (a: any, b: any) =>
+        String(a ?? "") === String(b ?? "");
+
       const nextSelectedId =
-        (typeof cachedSelectedId === "string" &&
-        outlets.some((o) => o.id === cachedSelectedId)
-          ? cachedSelectedId
+        ((cachedSelectedId != null &&
+        outlets.some((o) => outletIdEquals(o.id, cachedSelectedId))
+          ? String(cachedSelectedId)
           : null) ??
-        (currentSelectedId && outlets.some((o) => o.id === currentSelectedId)
-          ? currentSelectedId
-          : (outlets.find((o) => o.isOnboarded)?.id ?? outlets[0]?.id ?? null));
+          (currentSelectedId &&
+          outlets.some((o) => outletIdEquals(o.id, currentSelectedId))
+            ? String(currentSelectedId)
+            : String(
+                outlets.find((o) => o.isOnboarded)?.id ?? outlets[0]?.id ?? "",
+              ))) ||
+        null;
 
       const nextSelected = nextSelectedId
-        ? (outlets.find((o) => o.id === nextSelectedId) ?? null)
+        ? (outlets.find((o) => outletIdEquals(o.id, nextSelectedId)) ?? null)
         : null;
 
       // 3. Update state with basic business data
@@ -203,15 +212,16 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   },
   selectOutlet: (id: string) => {
     const outlets = get().outlets;
-    const found = outlets.find((o) => o.id === id) ?? null;
+    const found = outlets.find((o) => String(o.id) === String(id)) ?? null;
+    const nextId = found ? String(found.id) : String(id);
 
-    set({ selectedOutletId: id, selectedOutlet: found });
+    set({ selectedOutletId: nextId, selectedOutlet: found });
 
     const api = getElectronAPI();
     if (api) {
       (async () => {
         try {
-          await api.cachePut("business:selectedOutletId", id);
+          await api.cachePut("business:selectedOutletId", nextId);
           if (found) await api.cachePut("business:selectedOutlet", found);
           const [
             allergens,
@@ -220,11 +230,15 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
             category,
             weightScale,
           ] = await Promise.all([
-            api.cacheGet(`defaults:${id}:allergens`).catch(() => null),
-            api.cacheGet(`defaults:${id}:preparation-area`).catch(() => null),
-            api.cacheGet(`defaults:${id}:packaging-method`).catch(() => null),
-            api.cacheGet(`defaults:${id}:category`).catch(() => null),
-            api.cacheGet(`defaults:${id}:weight-scale`).catch(() => null),
+            api.cacheGet(`defaults:${nextId}:allergens`).catch(() => null),
+            api
+              .cacheGet(`defaults:${nextId}:preparation-area`)
+              .catch(() => null),
+            api
+              .cacheGet(`defaults:${nextId}:packaging-method`)
+              .catch(() => null),
+            api.cacheGet(`defaults:${nextId}:category`).catch(() => null),
+            api.cacheGet(`defaults:${nextId}:weight-scale`).catch(() => null),
           ]);
           const toVal = (v: any) => (v && v.data ? v : v);
           set({
@@ -244,12 +258,12 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
     const api = getElectronAPI();
     const current = get().outlets;
     const updatedOutlets = current.map((o) =>
-      o.id === id ? ({ ...o, ...changes } as Outlet) : o,
+      String(o.id) === String(id) ? ({ ...o, ...changes } as Outlet) : o,
     );
     const selectedOutletId = get().selectedOutletId;
     const selectedOutlet =
-      selectedOutletId === id
-        ? (updatedOutlets.find((o) => o.id === id) ?? null)
+      String(selectedOutletId) === String(id)
+        ? (updatedOutlets.find((o) => String(o.id) === String(id)) ?? null)
         : get().selectedOutlet;
 
     set({
@@ -266,7 +280,9 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
           if (selectedOutlet)
             await api.cachePut("business:selectedOutlet", selectedOutlet);
           const ts = Date.now();
-          const outlet = updatedOutlets.find((o) => o.id === id);
+          const outlet = updatedOutlets.find(
+            (o) => String(o.id) === String(id),
+          );
           if (outlet) {
             await api.cachePut(`outlet:${id}`, { data: outlet, ts });
           }

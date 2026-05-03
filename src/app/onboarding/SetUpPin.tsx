@@ -20,10 +20,8 @@ const getElectronAPI = (): ElectronAPI | null => {
 
 const SetUpPin = () => {
   const navigate = useNavigate();
-  const { pin, user } = useAuthStore((state) => ({
-    pin: state.pin,
-    user: state.user,
-  }));
+  const pin = useAuthStore((state) => state.pin);
+  const user = useAuthStore((state) => state.user);
   const [setPin] = useSetPinMutation();
   const { showToast } = useToastStore();
 

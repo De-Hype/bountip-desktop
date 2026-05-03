@@ -305,7 +305,7 @@ const ProcessPaymentModal = ({
     );
     const row = rows?.[0] ?? null;
     if (!row) return;
-    await api.queueAdd({ table: "orders", action: "UPDATE", data: row, id });
+    await api.queueAdd({ table: "order", action: "UPDATE", data: row, id });
   }, []);
 
   const updateTimelineAndSave = useCallback(

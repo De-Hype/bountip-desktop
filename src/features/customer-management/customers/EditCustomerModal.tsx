@@ -74,6 +74,18 @@ const EditCustomerModal = ({
   const [actualPaymentTerms, setActualPaymentTerms] = useState<any[]>([]);
   const [isPricingTierOpen, setIsPricingTierOpen] = useState(false);
   const [isPaymentTermOpen, setIsPaymentTermOpen] = useState(false);
+  const selectedPaymentTermId = useMemo(() => {
+    const raw = String(paymentTerm || "").trim();
+    if (!raw) return "";
+    const byId = actualPaymentTerms.find((t: any) => String(t?.id) === raw);
+    if (byId?.id != null) return String(byId.id);
+    const lower = raw.toLowerCase();
+    const byName = actualPaymentTerms.find(
+      (t: any) => String(t?.name || "").trim().toLowerCase() === lower,
+    );
+    if (byName?.id != null) return String(byName.id);
+    return raw;
+  }, [actualPaymentTerms, paymentTerm]);
   const [isDeactivateConfirmOpen, setIsDeactivateConfirmOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
@@ -295,7 +307,7 @@ const EditCustomerModal = ({
             : null,
         address: organizationAddresses.join(","),
         pricingTier,
-        paymentTermId: paymentTerm,
+        paymentTermId: selectedPaymentTermId,
         outletId: selectedOutlet?.id,
         status: String(customer.status || "active").toLowerCase(),
         updatedAt: new Date().toISOString(),

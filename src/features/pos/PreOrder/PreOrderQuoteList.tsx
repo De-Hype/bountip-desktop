@@ -143,7 +143,7 @@ const PreOrderQuoteList = ({
     const row = rows?.[0] ?? null;
     if (!row) return;
     await api.queueAdd({
-      table: "orders",
+      table: "order",
       action: "UPDATE",
       data: row,
       id: quoteId,

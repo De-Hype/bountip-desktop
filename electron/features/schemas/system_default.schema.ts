@@ -39,7 +39,13 @@ export const buildSystemDefaultUpsertParams = (
 ): SystemDefaultUpsertParams => ({
   id: s.id,
   key: s.key || "category",
-  data: Array.isArray(s.data) ? JSON.stringify(s.data) : s.data || "[]",
+  data: Array.isArray(s.data)
+    ? JSON.stringify(s.data)
+    : typeof s.data === "string"
+      ? s.data
+      : s.data
+        ? JSON.stringify([s.data])
+        : "[]",
   outletId: s.outletId || null,
   recordId: s.recordId || null,
   version: s.version || 0,

@@ -1478,7 +1478,33 @@ const EditProduct = ({
         `${productName} has been updated successfully.`,
       );
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("products:changed"));
+        const changedAt = Date.now();
+        const detail = {
+          changedAt,
+          reason: "updated",
+          outletId: selectedOutletId,
+          productId: product.id,
+        };
+
+        try {
+          window.dispatchEvent(new Event("products:changed"));
+        } catch {}
+
+        try {
+          window.dispatchEvent(new CustomEvent("products:changed", { detail }));
+        } catch {}
+
+        setTimeout(() => {
+          try {
+            window.dispatchEvent(new Event("products:changed"));
+          } catch {}
+
+          try {
+            window.dispatchEvent(
+              new CustomEvent("products:changed", { detail }),
+            );
+          } catch {}
+        }, 0);
       }
       onSuccess?.();
       onClose();
@@ -1558,7 +1584,33 @@ const EditProduct = ({
         `${productName} has been deleted successfully.`,
       );
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("products:changed"));
+        const changedAt = Date.now();
+        const detail = {
+          changedAt,
+          reason: "deleted",
+          outletId: selectedOutletId,
+          productId: product.id,
+        };
+
+        try {
+          window.dispatchEvent(new Event("products:changed"));
+        } catch {}
+
+        try {
+          window.dispatchEvent(new CustomEvent("products:changed", { detail }));
+        } catch {}
+
+        setTimeout(() => {
+          try {
+            window.dispatchEvent(new Event("products:changed"));
+          } catch {}
+
+          try {
+            window.dispatchEvent(
+              new CustomEvent("products:changed", { detail }),
+            );
+          } catch {}
+        }, 0);
       }
       onSuccess?.();
       onClose();

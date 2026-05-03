@@ -535,7 +535,7 @@ const EditPreOrderQuote = ({
       );
       if (orderRow) {
         await api.queueAdd({
-          table: "orders",
+          table: "order",
           action: "UPDATE",
           data: orderRow,
           id: quoteId,

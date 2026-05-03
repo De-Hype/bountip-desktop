@@ -44,6 +44,7 @@ const CatalogueProductList = ({
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const lastSeenProductsChangedAtRef = useRef(0);
 
   const { selectedOutlet } = useBusinessStore();
 
@@ -65,12 +66,124 @@ const CatalogueProductList = ({
   });
 
   useEffect(() => {
-    const handler = () => setRefreshNonce((n) => n + 1);
-    window.addEventListener("products:changed", handler);
-    return () => {
-      window.removeEventListener("products:changed", handler);
+    const refreshFromEvent = (event?: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          changedAt?: number;
+          reason?: string;
+          outletId?: string;
+          productId?: string;
+        }>
+      )?.detail;
+
+      const changedAt =
+        typeof detail?.changedAt === "number" ? detail.changedAt : 0;
+
+      const isSameOutlet =
+        String(detail?.outletId ?? "") === String(selectedOutlet?.id ?? "");
+
+      if (detail?.reason === "created" && isSameOutlet) {
+        setSearchTerm("");
+        setDebouncedSearchTerm("");
+        setIsFilterOpen(false);
+        setFiltersInitialized(false);
+        setActiveFilters({
+          priceRange: [
+            lastBoundsRef.current.minPrice ?? 0,
+            lastBoundsRef.current.maxPrice ?? 1000,
+          ],
+          category: "All Categories",
+          availability: "All",
+        });
+        setCurrentPage(1);
+      }
+
+      if (
+        (detail?.reason === "updated" || detail?.reason === "deleted") &&
+        detail?.productId &&
+        isSameOutlet
+      ) {
+        const api = window.electronAPI;
+        if (api?.dbQuery) {
+          const productId = detail.productId;
+          const reason = detail.reason;
+          (async () => {
+            try {
+              if (reason === "deleted") {
+                setProducts((prev) =>
+                  prev.filter((p) => String(p.id) !== String(productId)),
+                );
+                setRefreshNonce((n) => n + 1);
+                return;
+              }
+
+              const rows = await api.dbQuery(
+                "SELECT * FROM product WHERE id = ? LIMIT 1",
+                [productId],
+              );
+              const row = Array.isArray(rows) ? rows[0] : null;
+
+              if (!row || Number(row.isDeleted || 0) === 1) {
+                setProducts((prev) =>
+                  prev.filter((p) => String(p.id) !== String(productId)),
+                );
+                setRefreshNonce((n) => n + 1);
+                return;
+              }
+
+              let allergenList: string[] = [];
+              try {
+                const parsed = row.allergenList
+                  ? JSON.parse(row.allergenList)
+                  : [];
+                allergenList = Array.isArray(parsed) ? parsed : [];
+              } catch {}
+
+              const nextProduct = { ...row, allergenList };
+              setProducts((prev) => {
+                const idx = prev.findIndex(
+                  (p) => String(p.id) === String(productId),
+                );
+                if (idx === -1) return [...prev, nextProduct];
+                const next = [...prev];
+                next[idx] = { ...(prev[idx] as any), ...nextProduct };
+                return next;
+              });
+              setRefreshNonce((n) => n + 1);
+            } catch {
+              setRefreshNonce((n) => n + 1);
+            }
+          })();
+        }
+      }
+
+      if (changedAt && changedAt > lastSeenProductsChangedAtRef.current) {
+        lastSeenProductsChangedAtRef.current = changedAt;
+        setRefreshNonce((n) => n + 1);
+        return;
+      }
+
+      if (event?.type === "products:changed") {
+        setRefreshNonce((n) => n + 1);
+      }
     };
-  }, []);
+
+    const onProductsChanged = (event: Event) => refreshFromEvent(event);
+    const onFocus = () => setRefreshNonce((n) => n + 1);
+    const onVisibilityChange = () => {
+      if (!document.hidden) setRefreshNonce((n) => n + 1);
+    };
+
+    window.addEventListener("products:changed", onProductsChanged);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("products:changed", onProductsChanged);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [selectedOutlet?.id]);
 
   useEffect(() => {
     if (lastUpdated) {

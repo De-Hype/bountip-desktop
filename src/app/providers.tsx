@@ -7,7 +7,7 @@
 
 import ReactQueryProvider from "@/react-query/providers";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { tokenManager } from "@/utils/tokenManager";
 import { userStorage } from "@/services/userStorage";
@@ -40,16 +40,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
     fetchBusinessData,
     isLoading: businessLoading,
     hasInitialized,
+    selectedOutletId,
     selectedOutlet,
+    outlets,
+    selectOutlet,
   } = useBusinessStore();
   const toast = useToastStore();
 
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isInitialSyncing, setIsInitialSyncing] = useState(false);
+  const [hasCompletedStartupLoad, setHasCompletedStartupLoad] = useState(false);
   const { isOnline, hasCheckedStatus } = useNetworkStore();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSplashIndex, setSyncSplashIndex] = useState(0);
   const [syncSplashProgress, setSyncSplashProgress] = useState(18);
+  const lastAutoOutletSelectIdRef = useRef<string | null>(null);
+  const lastAutoNavigateRef = useRef<string | null>(null);
 
   const SYNC_INTERVAL_MS = Number(
     import.meta.env.VITE_SYNC_INTERVAL_MS || 300000,
@@ -74,10 +80,62 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   const isSplashVisible =
-    isBootstrapping ||
-    isInitialSyncing ||
-    (isAuthenticated && !hasInitialized) ||
-    (isAuthenticated && !selectedOutlet);
+    isBootstrapping || isInitialSyncing || (isAuthenticated && !hasInitialized);
+
+  useEffect(() => {
+    if (isBootstrapping || isInitialSyncing) return;
+    if (!isAuthenticated || !hasInitialized) return;
+    if (!hasCompletedStartupLoad) return;
+
+    const pathname = location.pathname;
+    const onOnboarding = pathname.startsWith("/onboarding");
+
+    if (!outlets || outlets.length === 0) {
+      if (!onOnboarding) {
+        if (lastAutoNavigateRef.current !== "/onboarding") {
+          lastAutoNavigateRef.current = "/onboarding";
+          navigate("/onboarding", { replace: true });
+        }
+      }
+      return;
+    }
+
+    if (selectedOutlet?.id == null) {
+      const outletToSelect =
+        outlets.find((o) => Boolean(o.isOnboarded)) ?? outlets[0] ?? null;
+      if (!outletToSelect?.id) return;
+      const nextId = String(outletToSelect.id);
+      if (String(selectedOutletId) === nextId) return;
+      if (lastAutoOutletSelectIdRef.current === nextId) return;
+      lastAutoOutletSelectIdRef.current = nextId;
+      selectOutlet(nextId);
+      return;
+    }
+
+    if (
+      !onOnboarding &&
+      selectedOutlet &&
+      !Boolean(selectedOutlet.isOnboarded)
+    ) {
+      const nextPath = `/onboarding?outletId=${selectedOutlet.id}`;
+      if (lastAutoNavigateRef.current !== nextPath) {
+        lastAutoNavigateRef.current = nextPath;
+        navigate(nextPath, { replace: true });
+      }
+    }
+  }, [
+    hasInitialized,
+    hasCompletedStartupLoad,
+    isAuthenticated,
+    isBootstrapping,
+    isInitialSyncing,
+    location.pathname,
+    navigate,
+    outlets,
+    selectOutlet,
+    selectedOutletId,
+    selectedOutlet,
+  ]);
 
   useEffect(() => {
     if (!isSplashVisible) return;
@@ -157,49 +215,54 @@ export function Providers({ children }: { children: React.ReactNode }) {
    */
   useEffect(() => {
     if (isAuthenticated) {
+      setHasCompletedStartupLoad(false);
       (async () => {
         const api = (window as any).electronAPI;
         if (!api) return;
 
-        // 0. Ensure user still exists in DB (handle potential data wipe or session loss)
-        const currentUser = await api.getUser();
+        try {
+          // 0. Ensure user still exists in DB (handle potential data wipe or session loss)
+          const currentUser = await api.getUser();
 
-        // Only clear auth if we are NOT in the middle of bootstrapping or initial sync
-        // and the user is truly missing from the database.
-        if (
-          !isBootstrapping &&
-          !isInitialSyncing &&
-          (!currentUser || !currentUser.id)
-        ) {
-          console.warn(
-            "[Providers] Authenticated but no user found in DB. Clearing auth...",
-          );
-          clearAuth();
-          return;
-        }
-
-        // 1. Initial load from local DB
-        await fetchBusinessData();
-
-        // 2. Check if we need a sync pull
-        const { outlets } = useBusinessStore.getState();
-        const hasUnonboarded = outlets.some((o) => !o.isOnboarded);
-
-        // If no outlets found OR some are unonboarded and we are online, perform sync pull
-        if ((outlets.length === 0 || hasUnonboarded) && isOnline) {
-          try {
-            console.log("[Providers] Triggering initial sync pull...");
-            setIsInitialSyncing(true);
-            await api.triggerSync();
-            // 3. Re-fetch after sync to get latest data
-            await fetchBusinessData();
-          } catch (error) {
-            console.error("[Providers] Initial sync failed:", error);
-          } finally {
-            setIsInitialSyncing(false);
+          if (
+            !isBootstrapping &&
+            !isInitialSyncing &&
+            (!currentUser || !currentUser.id)
+          ) {
+            console.warn(
+              "[Providers] Authenticated but no user found in DB. Clearing auth...",
+            );
+            clearAuth();
+            return;
           }
+
+          // 1. Initial load from local DB
+          await fetchBusinessData();
+
+          // 2. Check if we need a sync pull
+          const { outlets } = useBusinessStore.getState();
+          const hasUnonboarded = outlets.some((o) => !o.isOnboarded);
+
+          // If no outlets found OR some are unonboarded and we are online, perform sync pull
+          if ((outlets.length === 0 || hasUnonboarded) && isOnline) {
+            try {
+              console.log("[Providers] Triggering initial sync pull...");
+              setIsInitialSyncing(true);
+              await api.triggerSync();
+              // 3. Re-fetch after sync to get latest data
+              await fetchBusinessData();
+            } catch (error) {
+              console.error("[Providers] Initial sync failed:", error);
+            } finally {
+              setIsInitialSyncing(false);
+            }
+          }
+        } finally {
+          setHasCompletedStartupLoad(true);
         }
       })();
+    } else {
+      setHasCompletedStartupLoad(false);
     }
   }, [isAuthenticated, isOnline]);
 
