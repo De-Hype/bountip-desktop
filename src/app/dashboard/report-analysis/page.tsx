@@ -16,6 +16,7 @@ import ReportsStatsCards from "@/features/report-analysis/ReportsStatsCards";
 import SalesPerformance from "@/features/report-analysis/sales";
 import * as XLSX from "xlsx";
 import ReportTraceability from "@/features/report-analysis/traceability";
+import DebtorsTab from "@/features/report-analysis/debtors";
 
 type AnyRow = Record<string, any>;
 
@@ -103,6 +104,7 @@ const isPaidOrder = (row: AnyRow) => {
   if (merged.includes("cancel")) return false;
   if (merged.includes("refunded")) return false;
 
+  if (merged.includes("verified")) return true;
   if (merged.includes("paid")) return true;
   if (merged.includes("completed")) return true;
   if (merged.includes("success")) return true;
@@ -115,6 +117,26 @@ const isPaidOrder = (row: AnyRow) => {
   return false;
 };
 
+const isUnpaidOrder = (row: AnyRow) => {
+  const paymentStatus = normalizeText(
+    row.paymentStatus ?? row.payment_status ?? row.payment_state,
+  );
+  const status = normalizeText(
+    row.status ?? row.orderStatus ?? row.order_status,
+  );
+  const merged = `${paymentStatus} ${status}`.trim();
+
+  if (merged.includes("draft")) return false;
+  if (merged.includes("cancel")) return false;
+  if (merged.includes("refunded")) return false;
+
+  if (merged.includes("unpaid")) return true;
+  if (merged.includes("not paid")) return true;
+  if (merged.includes("pending")) return true;
+
+  return !isPaidOrder(row);
+};
+
 const ReportAnalysisPage = () => {
   const { outlets, selectedOutlet } = useBusinessStore();
   const { showToast } = useToastStore();
@@ -124,6 +146,8 @@ const ReportAnalysisPage = () => {
       { label: "Sales Performances", value: "all_sales" },
       { label: "Traceability", value: "traceability" },
       { label: "Debtors", value: "debtors" },
+      { label: "Inventory", value: "inventory" },
+      { label: "Production", value: "production" },
     ],
     [],
   );
@@ -212,7 +236,7 @@ const ReportAnalysisPage = () => {
       );
 
       const paidOrders = nonDraft.filter(isPaidOrder);
-      const unpaidOrders = nonDraft.filter((r) => !isPaidOrder(r));
+      const unpaidOrders = nonDraft.filter(isUnpaidOrder);
 
       const paidSales = paidOrders.reduce(
         (sum, row) => sum + getOrderTotal(row),
@@ -500,11 +524,22 @@ const ReportAnalysisPage = () => {
             outletId={location !== "all" ? location : undefined}
             dateRange={dateRange}
           />
-        ) : (
+        ) : reportType === "traceability" ? (
           <ReportTraceability
             outletId={location !== "all" ? location : undefined}
             dateRange={dateRange}
           />
+        ) : reportType === "debtors" ? (
+          <DebtorsTab
+            outletId={location !== "all" ? location : undefined}
+            dateRange={dateRange}
+          />
+        ) : reportType === "inventory" ? (
+          <></>
+        ) : reportType === "production" ? (
+          <></>
+        ) : (
+          <></>
         )}
       </section>
 

@@ -7,10 +7,20 @@ type StatsCardProp = {
 };
 type StatsCardsProps = {
   reportsStats: StatsCardProp[];
+  columns?: 1 | 2 | 3 | 4;
 };
-const ReportsStatsCards = ({ reportsStats }: StatsCardsProps) => {
+const ReportsStatsCards = ({ reportsStats, columns = 4 }: StatsCardsProps) => {
+  const gridColsClass =
+    columns === 1
+      ? "grid-cols-1"
+      : columns === 2
+        ? "grid-cols-2"
+        : columns === 3
+          ? "grid-cols-3"
+          : "grid-cols-4";
+
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className={`grid ${gridColsClass} gap-4`}>
       {reportsStats.map((stats, index) => (
         <div
           key={index}
