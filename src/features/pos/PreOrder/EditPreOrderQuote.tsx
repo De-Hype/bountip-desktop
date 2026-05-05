@@ -40,6 +40,19 @@ const formatAmount = (amount: number) =>
     maximumFractionDigits: 2,
   }).format(Number.isFinite(amount) ? amount : 0);
 
+const normalizeOrderPayload = (row: any) => {
+  const next: any = { ...(row || {}) };
+  if (typeof next.timeline === "string" && next.timeline.trim()) {
+    try {
+      const parsed = JSON.parse(next.timeline);
+      if (parsed && typeof parsed === "object") next.timeline = parsed;
+    } catch {}
+  }
+  if (next.cashCollected == null) next.cashCollected = 0;
+  if (next.changeGiven == null) next.changeGiven = 0;
+  return next;
+};
+
 const parseScheduledAt = (scheduledAt: string | null | undefined) => {
   const now = new Date();
   const startOfToday = new Date(
@@ -535,9 +548,9 @@ const EditPreOrderQuote = ({
       );
       if (orderRow) {
         await api.queueAdd({
-          table: "order",
+          table: "orders",
           action: "UPDATE",
-          data: orderRow,
+          data: normalizeOrderPayload(orderRow),
           id: quoteId,
         });
       }

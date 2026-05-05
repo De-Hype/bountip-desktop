@@ -123,6 +123,7 @@ const ReportAnalysisPage = () => {
     () => [
       { label: "Sales Performances", value: "all_sales" },
       { label: "Traceability", value: "traceability" },
+      { label: "Debtors", value: "debtors" },
     ],
     [],
   );

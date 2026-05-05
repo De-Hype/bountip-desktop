@@ -15,6 +15,7 @@ import {
   getPhoneCountries,
   type PhoneCountry,
 } from "@/utils/getPhoneCountries";
+import { OrderStatus } from "../../../../electron/types/order.types";
 
 type CreatePreOrderProps = {
   isOpen: boolean;
@@ -45,6 +46,19 @@ const formatAmount = (amount: number) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number.isFinite(amount) ? amount : 0);
+
+const normalizeOrderPayload = (row: any) => {
+  const next: any = { ...(row || {}) };
+  if (typeof next.timeline === "string" && next.timeline.trim()) {
+    try {
+      const parsed = JSON.parse(next.timeline);
+      if (parsed && typeof parsed === "object") next.timeline = parsed;
+    } catch {}
+  }
+  if (next.cashCollected == null) next.cashCollected = 0;
+  if (next.changeGiven == null) next.changeGiven = 0;
+  return next;
+};
 
 const CreatePreOrder = ({
   isOpen,
@@ -648,7 +662,7 @@ const CreatePreOrder = ({
         `,
         [
           orderId,
-          "Pending",
+          OrderStatus.PENDING,
           deliveryMethod,
           subtotalAmount,
           taxAmount,
@@ -716,9 +730,9 @@ const CreatePreOrder = ({
         const orderRow = orderRows?.[0] ?? null;
         if (orderRow) {
           await api.queueAdd({
-            table: "order",
+            table: "orders",
             action: "CREATE",
-            data: orderRow,
+            data: normalizeOrderPayload(orderRow),
             id: orderId,
           });
         }
@@ -893,7 +907,7 @@ const CreatePreOrder = ({
         `,
         [
           orderId,
-          "Pending",
+          OrderStatus.PENDING,
           deliveryMethod === "pickup" ? "Pickup" : "Delivery",
           subtotalAmount,
           taxAmount,
@@ -964,9 +978,9 @@ const CreatePreOrder = ({
         const orderRow = orderRows?.[0] ?? null;
         if (orderRow) {
           await api.queueAdd({
-            table: "order",
+            table: "orders",
             action: "CREATE",
-            data: orderRow,
+            data: normalizeOrderPayload(orderRow),
             id: orderId,
           });
         }
@@ -1178,9 +1192,9 @@ const CreatePreOrder = ({
         const orderRow = orderRows?.[0] ?? null;
         if (orderRow) {
           await api.queueAdd({
-            table: "order",
+            table: "orders",
             action: "CREATE",
-            data: orderRow,
+            data: normalizeOrderPayload(orderRow),
             id: orderId,
           });
         }

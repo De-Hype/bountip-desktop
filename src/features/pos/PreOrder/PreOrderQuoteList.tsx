@@ -142,10 +142,22 @@ const PreOrderQuoteList = ({
     );
     const row = rows?.[0] ?? null;
     if (!row) return;
+    let timelineValue: any = row?.timeline;
+    if (typeof timelineValue === "string" && timelineValue.trim()) {
+      try {
+        const parsed = JSON.parse(timelineValue);
+        if (parsed && typeof parsed === "object") timelineValue = parsed;
+      } catch {}
+    }
     await api.queueAdd({
-      table: "order",
+      table: "orders",
       action: "UPDATE",
-      data: row,
+      data: {
+        ...row,
+        timeline: timelineValue,
+        cashCollected: row?.cashCollected ?? 0,
+        changeGiven: row?.changeGiven ?? 0,
+      },
       id: quoteId,
     });
   }, []);

@@ -7,6 +7,7 @@ import { useBusinessStore } from "@/stores/useBusinessStore";
 import { getCurrencySymbol } from "@/utils/getCurrencySymbol";
 import useToastStore from "@/stores/toastStore";
 import SuccessImage from "@/assets/icons/Success.svg";
+import { OrderStatus } from "../../../../electron/types/order.types";
 
 type ProcessPaymentModalProps = {
   isOpen: boolean;
@@ -305,7 +306,19 @@ const ProcessPaymentModal = ({
     );
     const row = rows?.[0] ?? null;
     if (!row) return;
-    await api.queueAdd({ table: "order", action: "UPDATE", data: row, id });
+    const parsedTimeline = parseMaybeJson(row?.timeline);
+    const normalizedRow = {
+      ...row,
+      timeline: parsedTimeline ?? row?.timeline,
+      cashCollected: row?.cashCollected ?? 0,
+      changeGiven: row?.changeGiven ?? 0,
+    };
+    await api.queueAdd({
+      table: "orders",
+      action: "UPDATE",
+      data: normalizedRow,
+      id,
+    });
   }, []);
 
   const updateTimelineAndSave = useCallback(
@@ -389,7 +402,7 @@ const ProcessPaymentModal = ({
     setSaving(true);
     try {
       const ok = await updateTimelineAndSave({
-        status: "Confirmed",
+        status: OrderStatus.TO_BE_PRODUCED,
         paymentStatus: "Pending",
         confirmedAt: new Date().toISOString(),
       });
@@ -413,7 +426,7 @@ const ProcessPaymentModal = ({
       const cashCollected =
         selectedMethod === "Cash" ? numericCashGiven : balanceDue;
       const ok = await updateTimelineAndSave({
-        status: "Confirmed",
+        status: OrderStatus.TO_BE_PRODUCED,
         paymentStatus: "Verified",
         paymentMethod: selectedMethod,
         paymentReference,

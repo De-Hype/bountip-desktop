@@ -24144,7 +24144,7 @@ ${signature}\r
     if (this.isSyncing) return;
     this.isSyncing = true;
     try {
-      const itemsToSync = pending || this.db.getPendingQueueItems();
+      let itemsToSync = pending || this.db.getPendingQueueItems();
       if (itemsToSync.length === 0) {
         this.isSyncing = false;
         return;
@@ -24174,6 +24174,82 @@ ${signature}\r
       );
       const deviceId = this.db.getDeviceId() || "unknown-device";
       console.log("Device ID used for sync:", deviceId);
+      const toLocalTableName = (raw) => {
+        const name = String(raw || "");
+        if (name === "order") return "orders";
+        if (name === "supplier") return "suppliers";
+        return name;
+      };
+      const toRemoteTableName = (local) => {
+        if (local === "orders") return "order";
+        if (local === "suppliers") return "supplier";
+        return local;
+      };
+      const ensureQueueItem = (table, id, action) => {
+        if (!table || !id) return;
+        const alreadyQueued = itemsToSync.some((i) => {
+          try {
+            const op = JSON.parse(i.op);
+            const opTable = toLocalTableName(
+              op.tableName || op.table || op.type
+            );
+            const opId = String(op.recordId || op.id || "");
+            return opTable === table && opId === id;
+          } catch {
+            return false;
+          }
+        });
+        if (alreadyQueued) return;
+        const record = this.db.getRecord(table, id);
+        if (!record) return;
+        this.db.addToQueue({
+          table,
+          action,
+          data: record,
+          id
+        });
+      };
+      for (const item of itemsToSync) {
+        try {
+          const op = JSON.parse(item.op);
+          const tableName = toLocalTableName(
+            op.tableName || op.table || op.type
+          );
+          const rawPayload = op.data || op.payload || {};
+          const recordId = String(op.recordId || op.id || "");
+          if (tableName === "cart") {
+            const customerId = rawPayload?.customerId != null ? String(rawPayload.customerId) : "";
+            if (customerId)
+              ensureQueueItem("customers", customerId, SYNC_ACTIONS.UPDATE);
+          }
+          if (tableName === "cart_item") {
+            const cartId = rawPayload?.cartId != null ? String(rawPayload.cartId) : "";
+            if (cartId) ensureQueueItem("cart", cartId, SYNC_ACTIONS.UPDATE);
+          }
+          if (tableName === "orders") {
+            const customerId = rawPayload?.customerId != null ? String(rawPayload.customerId) : "";
+            const cartId = rawPayload?.cartId != null ? String(rawPayload.cartId) : "";
+            if (customerId)
+              ensureQueueItem("customers", customerId, SYNC_ACTIONS.UPDATE);
+            if (cartId) ensureQueueItem("cart", cartId, SYNC_ACTIONS.UPDATE);
+            if (recordId) {
+              const orderRow = this.db.getRecord("orders", recordId);
+              const orderCartId = orderRow?.cartId != null ? String(orderRow.cartId) : "";
+              const orderCustomerId = orderRow?.customerId != null ? String(orderRow.customerId) : "";
+              if (orderCustomerId)
+                ensureQueueItem(
+                  "customers",
+                  orderCustomerId,
+                  SYNC_ACTIONS.UPDATE
+                );
+              if (orderCartId)
+                ensureQueueItem("cart", orderCartId, SYNC_ACTIONS.UPDATE);
+            }
+          }
+        } catch {
+        }
+      }
+      itemsToSync = this.db.getPendingQueueItems();
       const records = itemsToSync.map((item) => {
         const op = JSON.parse(item.op);
         const rawPayload = op.data || op.payload || {};
@@ -24217,7 +24293,7 @@ ${signature}\r
           payment_terms: ["paymentInInstallment"],
           system_default: ["data"]
         };
-        const tableName = op.tableName || op.table || op.type;
+        const tableName = toLocalTableName(op.tableName || op.table || op.type);
         const fieldsToParse = jsonFieldsMap[tableName] || [];
         for (const field of fieldsToParse) {
           if (typeof sanitizedPayload[field] === "string") {
@@ -24229,6 +24305,13 @@ ${signature}\r
             } catch (e) {
             }
           }
+        }
+        if (tableName === "orders") {
+          if (sanitizedPayload.timeline == null) sanitizedPayload.timeline = [];
+          if (sanitizedPayload.cashCollected == null)
+            sanitizedPayload.cashCollected = 0;
+          if (sanitizedPayload.changeGiven == null)
+            sanitizedPayload.changeGiven = 0;
         }
         if (tableName === "product" && Array.isArray(sanitizedPayload.allergenList)) {
           sanitizedPayload.allergenList = {
@@ -24412,6 +24495,14 @@ ${signature}\r
               }
             }
           }
+          if (record.tableName === "orders") {
+            if (sanitizedPayload.timeline == null)
+              sanitizedPayload.timeline = [];
+            if (sanitizedPayload.cashCollected == null)
+              sanitizedPayload.cashCollected = 0;
+            if (sanitizedPayload.changeGiven == null)
+              sanitizedPayload.changeGiven = 0;
+          }
           if (record.tableName === "product" && Array.isArray(sanitizedPayload.allergenList)) {
             sanitizedPayload.allergenList = {
               allergies: sanitizedPayload.allergenList
@@ -24482,7 +24573,22 @@ ${signature}\r
         }
         return record;
       });
-      const payload = { records: finalizedRecords };
+      const tableWeight = (tableName) => {
+        if (tableName === "customers") return 10;
+        if (tableName === "cart") return 20;
+        if (tableName === "cart_item") return 30;
+        if (tableName === "orders") return 40;
+        return 100;
+      };
+      const sortedRecords = finalizedRecords.map((r, idx) => ({ r, idx })).sort(
+        (a, b) => tableWeight(a.r.tableName) - tableWeight(b.r.tableName) || a.idx - b.idx
+      ).map((x) => x.r);
+      const payload = {
+        records: sortedRecords.map((r) => ({
+          ...r,
+          tableName: toRemoteTableName(r.tableName)
+        }))
+      };
       console.log(payload);
       const response = await net.fetch(PUSH_ENDPOINT, {
         method: "POST",
@@ -24534,7 +24640,8 @@ ${signature}\r
         const dbResults = Array.isArray(responseJson?.data?.dbResults) ? responseJson.data.dbResults : [];
         const staleFixes = dbResults.map((r) => {
           const recordId = r?.recordId != null ? String(r.recordId) : "";
-          const tableName = r?.tableName != null ? String(r.tableName) : "";
+          const tableNameRaw = r?.tableName != null ? String(r.tableName) : "";
+          const tableName = toLocalTableName(tableNameRaw);
           const errorMsg = r?.error != null ? String(r.error) : "";
           const currentVersion = parseStaleTargetVersion(errorMsg);
           const isStale = /stale update rejected/i.test(errorMsg) && typeof currentVersion === "number" && Number.isFinite(currentVersion);
@@ -24565,7 +24672,7 @@ ${signature}\r
               );
             }
           }
-          const retryRecords = finalizedRecords.map((record) => {
+          const retryRecords = sortedRecords.map((record) => {
             const match = staleFixes.find(
               (f) => f.recordId === record.recordId && f.tableName === record.tableName
             );
@@ -24574,7 +24681,12 @@ ${signature}\r
             nextPayload.version = match.targetVersion;
             return { ...record, payload: nextPayload };
           });
-          const retryPayload = { records: retryRecords };
+          const retryPayload = {
+            records: retryRecords.map((r) => ({
+              ...r,
+              tableName: toRemoteTableName(r.tableName)
+            }))
+          };
           try {
             const retryResponse = await net.fetch(PUSH_ENDPOINT, {
               method: "POST",

@@ -614,6 +614,41 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
         return;
       }
 
+      const currentUserRows = await window.electronAPI.dbQuery(
+        "SELECT id, fullName, email FROM user LIMIT 1",
+      );
+      const currentUser = currentUserRows?.[0] ?? null;
+      const currentUserId =
+        currentUser?.id != null ? String(currentUser.id) : "";
+      const currentUserEmail =
+        currentUser?.email != null ? String(currentUser.email) : "";
+      const currentUserFullName =
+        currentUser?.fullName != null ? String(currentUser.fullName) : "";
+      const nameParts = currentUserFullName.trim().split(/\s+/).filter(Boolean);
+      const firstName = nameParts[0] || "User";
+      const lastName = nameParts.slice(1).join(" ") || "Account";
+
+      const businessRoleRows = await window.electronAPI.dbQuery(
+        "SELECT name FROM business_role WHERE businessId = ?",
+        [businessId],
+      );
+      const roleNames = (businessRoleRows || [])
+        .map((r: any) => (r?.name != null ? String(r.name) : ""))
+        .filter(Boolean);
+      const pickRoleName = () => {
+        const lowered = roleNames.map((n: string) => n.toLowerCase());
+        const superAdminIndex = lowered.findIndex((n: string) =>
+          n.includes("super"),
+        );
+        if (superAdminIndex >= 0) return roleNames[superAdminIndex];
+        const adminIndex = lowered.findIndex((n: string) =>
+          n.includes("admin"),
+        );
+        if (adminIndex >= 0) return roleNames[adminIndex];
+        return roleNames[0] || "Unassigned";
+      };
+      const roleName = pickRoleName();
+
       const hasExistingLocations = parsedLocations.length > 0;
 
       for (let i = 0; i < newLocations.length; i++) {
@@ -637,6 +672,17 @@ export const LocationSettingsModal: React.FC<LocationSettingsModalProps> = ({
         });
 
         if (res && res.success) {
+          if (currentUserId && currentUserEmail) {
+            await (window as any).electronAPI.upsertBusinessUser({
+              id: currentUserId,
+              outletId: res.outlet.id,
+              firstName,
+              lastName,
+              email: currentUserEmail,
+              roleName,
+            });
+          }
+
           addLocation({
             id: res.outlet.id,
             name: res.outlet.name,
