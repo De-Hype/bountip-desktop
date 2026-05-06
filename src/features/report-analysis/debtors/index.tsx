@@ -6,6 +6,7 @@ import { useBusinessStore } from "@/stores/useBusinessStore";
 import { formatPrice } from "@/utils/formatPrice";
 import ReportsStatsCards from "@/features/report-analysis/ReportsStatsCards";
 import ReportsAnalysisAssets from "@/assets/images/reports-analysis";
+import ViewDebtorsInfo from "./ViewDebtorsInfo";
 import DebtorsNotFound from "./NotFound";
 
 type DebtorsTabsTypeProps = {
@@ -167,6 +168,11 @@ const DebtorsTab = ({ outletId, dateRange }: DebtorsTabsTypeProps) => {
   const [rawRows, setRawRows] = useState<AnyRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [selectedDebtorKey, setSelectedDebtorKey] = useState<string | null>(
+    null,
+  );
+  const [selectedDebtorName, setSelectedDebtorName] = useState<string>("");
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -361,6 +367,37 @@ const DebtorsTab = ({ outletId, dateRange }: DebtorsTabsTypeProps) => {
     return debtors.slice(start, end);
   }, [currentPage, debtors, itemsPerPage]);
 
+  const selectedOrders = useMemo(() => {
+    if (!isDetailsOpen || !selectedDebtorKey) return [];
+    const safeRows = Array.isArray(rawRows) ? rawRows : [];
+    const filteredByDate = safeRows.filter((row) =>
+      isWithinRange(getRowDate(row), dateRange),
+    );
+
+    const list = filteredByDate
+      .filter((row) => {
+        if (isExcludedOrder(row)) return false;
+        const amountDue = getAmountDueForOrder(row);
+        if (amountDue <= 0) return false;
+        const customerIdRaw = row.customerId ?? row.customer_id ?? null;
+        const customerId =
+          customerIdRaw != null && String(customerIdRaw).trim()
+            ? String(customerIdRaw)
+            : null;
+        const key = customerId || `guest:${String(row.id ?? "").trim() || ""}`;
+        return key === selectedDebtorKey;
+      })
+      .sort((a, b) => {
+        const da = getRowDate(a);
+        const db = getRowDate(b);
+        const ta = da ? da.getTime() : 0;
+        const tb = db ? db.getTime() : 0;
+        return tb - ta;
+      });
+
+    return list;
+  }, [dateRange, isDetailsOpen, rawRows, selectedDebtorKey]);
+
   const reportsStats = useMemo(
     () => [
       {
@@ -481,7 +518,17 @@ const DebtorsTab = ({ outletId, dateRange }: DebtorsTabsTypeProps) => {
                   visibleRows.map((row) => (
                     <tr key={row.key} className="border-t border-[#F3F4F6]">
                       <td className="px-6 py-4 text-[14px] font-medium text-[#15BA5C]">
-                        {row.customerCode}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDebtorKey(row.key);
+                            setSelectedDebtorName(row.customerName);
+                            setIsDetailsOpen(true);
+                          }}
+                          className="cursor-pointer hover:underline"
+                        >
+                          {row.customerCode}
+                        </button>
                       </td>
                       <td className="px-6 py-4 text-[14px] text-[#111827]">
                         {row.customerName}
@@ -517,6 +564,17 @@ const DebtorsTab = ({ outletId, dateRange }: DebtorsTabsTypeProps) => {
           />
         </div>
       </div>
+
+      <ViewDebtorsInfo
+        isOpen={isDetailsOpen}
+        onClose={() => {
+          setIsDetailsOpen(false);
+          setSelectedDebtorKey(null);
+          setSelectedDebtorName("");
+        }}
+        customerName={selectedDebtorName}
+        orders={selectedOrders}
+      />
     </div>
   );
 };

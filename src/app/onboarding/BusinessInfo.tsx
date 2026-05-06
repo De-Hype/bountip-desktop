@@ -108,7 +108,9 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
   }, [outletIdParam, selectedOutletId, selectOutlet]);
 
   const showBackButton = Boolean(outletIdParam);
-  const outlet = outlets.find((o) => String(o.id) === String(outletIdParam)) as unknown as
+  const outlet = outlets.find(
+    (o) => String(o.id) === String(outletIdParam),
+  ) as unknown as
     | {
         isOnboarded?: boolean;
       }
@@ -333,36 +335,39 @@ const BusinessInfo = ({ onNext }: BusinessInfoProps) => {
   };
 
   const handleBack = () => {
-    const currentId = outletIdParam || selectedOutletId;
-
-    // Find any other outlet to switch to
-    const otherOutlets = outlets.filter(
-      (o) => String(o.id) !== String(currentId) && !o.isDeleted,
+    const activeOutlets = outlets.filter(
+      (o) => !o.isDeleted && String((o as any)?.deletedAt || "").trim() === "",
     );
 
-    // Prioritize switching to an onboarded outlet, but any other will do
-    const fallback =
-      otherOutlets.find((o) => Boolean(o.isOnboarded)) || otherOutlets[0];
+    const onboardedOutlets = activeOutlets.filter((o) =>
+      Boolean(o.isOnboarded),
+    );
+    const mainOutlet =
+      activeOutlets.find((o) => (o as any)?.isMainLocation === 1) ||
+      activeOutlets.find((o) => Boolean((o as any)?.isMainLocation)) ||
+      null;
+    const mainOnboardedOutlet =
+      (mainOutlet && Boolean(mainOutlet.isOnboarded) ? mainOutlet : null) ||
+      onboardedOutlets.find((o) => (o as any)?.isMainLocation === 1) ||
+      onboardedOutlets.find((o) => Boolean((o as any)?.isMainLocation)) ||
+      onboardedOutlets[0] ||
+      null;
 
-    if (fallback) {
-      selectOutlet(fallback.id);
-      if (Boolean(fallback.isOnboarded)) {
-        navigate("/dashboard", { replace: true });
-      } else {
-        navigate(`/onboarding?outletId=${fallback.id}`, { replace: true });
-      }
+    if (mainOnboardedOutlet?.id) {
+      selectOutlet(mainOnboardedOutlet.id);
+      navigate("/dashboard", { replace: true });
       return;
     }
 
-    // No other outlets found - if current is unonboarded, we can't go to dashboard
-    if (!outletIdParam) {
-      navigate(-1);
-    } else {
-      // If we are on a specific outlet onboarding and have no where else to go,
-      // just go back to the main onboarding step or auth if needed.
-      // But usually there's at least one outlet.
-      navigate("/onboarding", { replace: true });
+    const fallback = mainOutlet || activeOutlets[0] || null;
+
+    if (fallback?.id) {
+      selectOutlet(fallback.id);
+      navigate(`/onboarding?outletId=${fallback.id}`, { replace: true });
+      return;
     }
+
+    navigate("/onboarding", { replace: true });
   };
 
   // Show loading state

@@ -2,7 +2,6 @@
 import { create } from "zustand";
 import { Outlet } from "@/services/businessService";
 import type { Business } from "@/types/business";
-import { useNetworkStore } from "./useNetworkStore";
 
 type ElectronAPI = {
   [x: string]: any;
@@ -136,18 +135,62 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
       const outletIdEquals = (a: any, b: any) =>
         String(a ?? "") === String(b ?? "");
 
-      const nextSelectedId =
-        ((cachedSelectedId != null &&
-        outlets.some((o) => outletIdEquals(o.id, cachedSelectedId))
-          ? String(cachedSelectedId)
-          : null) ??
-          (currentSelectedId &&
-          outlets.some((o) => outletIdEquals(o.id, currentSelectedId))
-            ? String(currentSelectedId)
-            : String(
-                outlets.find((o) => o.isOnboarded)?.id ?? outlets[0]?.id ?? "",
-              ))) ||
-        null;
+      const isActiveOutlet = (o: any) => {
+        if (!o) return false;
+        if ((o as any)?.isDeleted === 1) return false;
+        if (Boolean((o as any)?.isDeleted)) return false;
+        if (String((o as any)?.deletedAt || "").trim() !== "") return false;
+        return true;
+      };
+
+      const activeOutlets = outlets.filter(isActiveOutlet);
+
+      const pickDefaultOutletId = () => {
+        const cachedId =
+          cachedSelectedId != null ? String(cachedSelectedId) : null;
+        if (
+          cachedId &&
+          activeOutlets.some((o) => outletIdEquals(o.id, cachedId))
+        ) {
+          return cachedId;
+        }
+
+        const currentId =
+          currentSelectedId != null ? String(currentSelectedId) : null;
+        if (
+          currentId &&
+          activeOutlets.some((o) => outletIdEquals(o.id, currentId))
+        ) {
+          return currentId;
+        }
+
+        const mainOnboarded =
+          activeOutlets.find(
+            (o) => (o as any)?.isMainLocation === 1 && Boolean(o.isOnboarded),
+          ) ||
+          activeOutlets.find(
+            (o) =>
+              Boolean((o as any)?.isMainLocation) && Boolean(o.isOnboarded),
+          ) ||
+          null;
+        if (mainOnboarded?.id != null) return String(mainOnboarded.id);
+
+        const anyOnboarded = activeOutlets.find((o) => Boolean(o.isOnboarded));
+        if (anyOnboarded?.id != null) return String(anyOnboarded.id);
+
+        const mainAny =
+          activeOutlets.find((o) => (o as any)?.isMainLocation === 1) ||
+          activeOutlets.find((o) => Boolean((o as any)?.isMainLocation)) ||
+          null;
+        if (mainAny?.id != null) return String(mainAny.id);
+
+        const first = activeOutlets[0] || outlets[0] || null;
+        if (first?.id != null) return String(first.id);
+
+        return null;
+      };
+
+      const nextSelectedId = pickDefaultOutletId();
 
       const nextSelected = nextSelectedId
         ? (outlets.find((o) => outletIdEquals(o.id, nextSelectedId)) ?? null)
@@ -212,17 +255,43 @@ export const useBusinessStore = create<BusinessState>((set, get) => ({
   },
   selectOutlet: (id: string) => {
     const outlets = get().outlets;
-    const found = outlets.find((o) => String(o.id) === String(id)) ?? null;
-    const nextId = found ? String(found.id) : String(id);
+    const isActiveOutlet = (o: any) => {
+      if (!o) return false;
+      if ((o as any)?.isDeleted === 1) return false;
+      if (Boolean((o as any)?.isDeleted)) return false;
+      if (String((o as any)?.deletedAt || "").trim() !== "") return false;
+      return true;
+    };
 
-    set({ selectedOutletId: nextId, selectedOutlet: found });
+    const activeOutlets = outlets.filter(isActiveOutlet);
+    const found =
+      activeOutlets.find((o) => String(o.id) === String(id)) ??
+      outlets.find((o) => String(o.id) === String(id)) ??
+      null;
+
+    const resolved =
+      (found && isActiveOutlet(found) ? found : null) ||
+      activeOutlets.find(
+        (o) => (o as any)?.isMainLocation === 1 && Boolean(o.isOnboarded),
+      ) ||
+      activeOutlets.find(
+        (o) => Boolean((o as any)?.isMainLocation) && Boolean(o.isOnboarded),
+      ) ||
+      activeOutlets.find((o) => Boolean(o.isOnboarded)) ||
+      activeOutlets[0] ||
+      null;
+
+    const nextId = resolved?.id != null ? String(resolved.id) : null;
+    if (!nextId) return;
+
+    set({ selectedOutletId: nextId, selectedOutlet: resolved });
 
     const api = getElectronAPI();
     if (api) {
       (async () => {
         try {
           await api.cachePut("business:selectedOutletId", nextId);
-          if (found) await api.cachePut("business:selectedOutlet", found);
+          if (resolved) await api.cachePut("business:selectedOutlet", resolved);
           const [
             allergens,
             preparationArea,

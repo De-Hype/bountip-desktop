@@ -80,7 +80,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   const isSplashVisible =
-    isBootstrapping || isInitialSyncing || (isAuthenticated && !hasInitialized);
+    isBootstrapping ||
+    isInitialSyncing ||
+    (isAuthenticated && (!hasInitialized || !hasCompletedStartupLoad));
 
   useEffect(() => {
     if (isBootstrapping || isInitialSyncing) return;
