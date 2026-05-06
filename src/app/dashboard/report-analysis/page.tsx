@@ -17,6 +17,10 @@ import SalesPerformance from "@/features/report-analysis/sales";
 import * as XLSX from "xlsx";
 import ReportTraceability from "@/features/report-analysis/traceability";
 import DebtorsTab from "@/features/report-analysis/debtors";
+import InventoryTab from "@/features/report-analysis/inventory";
+import ProductionTabReport from "@/features/report-analysis/production";
+import SalesByProductTabs from "@/features/report-analysis/sales-by-product";
+import AllSalesTab from "@/features/report-analysis/all_sales";
 
 type AnyRow = Record<string, any>;
 
@@ -143,7 +147,9 @@ const ReportAnalysisPage = () => {
 
   const reportOptions = useMemo<ReportDropdownOption[]>(
     () => [
-      { label: "Sales Performances", value: "all_sales" },
+      { label: "All Sales", value: "all_sales" },
+      { label: "Sales by Product", value: "sales_by_product" },
+      { label: "Sales Performances", value: "sales_performance" },
       { label: "Traceability", value: "traceability" },
       { label: "Debtors", value: "debtors" },
       { label: "Inventory", value: "inventory" },
@@ -171,7 +177,7 @@ const ReportAnalysisPage = () => {
   }, [outlets]);
 
   const [reportType, setReportType] =
-    useState<ReportDropdownOption["value"]>("all_sales");
+    useState<ReportDropdownOption["value"]>("sales_performance");
   const [location, setLocation] = useState<string>("all");
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -514,12 +520,12 @@ const ReportAnalysisPage = () => {
           </button>
         </div>
 
-        {reportType === "all_sales" && (
+        {reportType === "sales_performance" && (
           <ReportsStatsCards reportsStats={reportsStats} />
         )}
       </section>
       <section className="">
-        {reportType === "all_sales" ? (
+        {reportType === "sales_performance" ? (
           <SalesPerformance
             outletId={location !== "all" ? location : undefined}
             dateRange={dateRange}
@@ -535,12 +541,26 @@ const ReportAnalysisPage = () => {
             dateRange={dateRange}
           />
         ) : reportType === "inventory" ? (
-          <></>
+          <InventoryTab
+            outletId={location !== "all" ? location : undefined}
+            dateRange={dateRange}
+          />
         ) : reportType === "production" ? (
-          <></>
-        ) : (
-          <></>
-        )}
+          <ProductionTabReport
+            outletId={location !== "all" ? location : undefined}
+            dateRange={dateRange}
+          />
+        ) : reportType === "sales_by_product" ? (
+          <SalesByProductTabs
+            outletId={location !== "all" ? location : undefined}
+            dateRange={dateRange}
+          />
+        ) : reportType === "all_sales" ? (
+          <AllSalesTab
+            outletId={location !== "all" ? location : undefined}
+            dateRange={dateRange}
+          />
+        ) : null}
       </section>
 
       <CalendarModal

@@ -16,6 +16,7 @@ import { inventorySchema } from "./inventory.schema";
 import { inventoryItemSchema } from "./inventory_item.schema";
 import { itemMasterSchema } from "./item_master.schema";
 import { itemLotSchema } from "./item_lot.schema";
+import { itemLotLogSchema } from "./item_lot_log.schema";
 import { recipesSchema } from "./recipes.schema";
 import { recipeIngredientsSchema } from "./recipe_ingredients.schema";
 import { recipeVariantsSchema } from "./recipe_variants.schema";
@@ -64,6 +65,7 @@ export const schemas: TableSchema[] = [
   inventoryItemSchema,
   itemMasterSchema,
   itemLotSchema,
+  itemLotLogSchema,
   recipesSchema,
   recipeIngredientsSchema,
   recipeVariantsSchema,

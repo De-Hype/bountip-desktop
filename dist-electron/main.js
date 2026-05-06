@@ -2021,6 +2021,92 @@ const itemLotSchema = {
     "CREATE INDEX IF NOT EXISTS idx_item_lot_itemId ON item_lot(itemId)"
   ]
 };
+const itemLotLogUpsertSql = `
+  INSERT INTO item_lot_logs (
+    id,
+    changeType,
+    previousLevel,
+    currentLevel,
+    actionTakenBy,
+    changeAmount,
+    reason,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    lotId,
+    recordId,
+    version
+  ) VALUES (
+    @id,
+    @changeType,
+    @previousLevel,
+    @currentLevel,
+    @actionTakenBy,
+    @changeAmount,
+    @reason,
+    @createdAt,
+    @updatedAt,
+    @deletedAt,
+    @lotId,
+    @recordId,
+    @version
+  )
+  ON CONFLICT(id) DO UPDATE SET
+    changeType = excluded.changeType,
+    previousLevel = excluded.previousLevel,
+    currentLevel = excluded.currentLevel,
+    actionTakenBy = excluded.actionTakenBy,
+    changeAmount = excluded.changeAmount,
+    reason = excluded.reason,
+    createdAt = excluded.createdAt,
+    updatedAt = excluded.updatedAt,
+    deletedAt = excluded.deletedAt,
+    lotId = excluded.lotId,
+    recordId = excluded.recordId,
+    version = excluded.version
+  WHERE excluded.version >= item_lot_logs.version
+     OR excluded.updatedAt >= item_lot_logs.updatedAt
+     OR item_lot_logs.updatedAt IS NULL
+`;
+const buildItemLotLogUpsertParams = (ill) => ({
+  id: ill.id,
+  changeType: ill.changeType ?? null,
+  previousLevel: parseFloat(ill.previousLevel || 0),
+  currentLevel: parseFloat(ill.currentLevel || 0),
+  actionTakenBy: ill.actionTakenBy ?? null,
+  changeAmount: parseFloat(ill.changeAmount || 0),
+  reason: ill.reason ?? null,
+  createdAt: ill.createdAt ?? null,
+  updatedAt: ill.updatedAt ?? ill.createdAt ?? null,
+  deletedAt: ill.deletedAt ?? ill.deleted_at ?? null,
+  lotId: ill.lotId ?? null,
+  recordId: ill.recordId ?? null,
+  version: Number(ill.version || 0)
+});
+const itemLotLogSchema = {
+  name: "item_lot_logs",
+  create: `
+    CREATE TABLE IF NOT EXISTS item_lot_logs (
+      id TEXT PRIMARY KEY,
+      changeType TEXT,
+      previousLevel REAL,
+      currentLevel REAL,
+      actionTakenBy TEXT,
+      changeAmount REAL,
+      reason TEXT,
+      createdAt TEXT,
+      updatedAt TEXT,
+      deletedAt TEXT,
+      lotId TEXT,
+      recordId TEXT,
+      version INTEGER DEFAULT 0 NOT NULL
+    );
+  `,
+  indexes: [
+    "CREATE INDEX IF NOT EXISTS idx_item_lot_logs_lotId ON item_lot_logs(lotId);",
+    "CREATE INDEX IF NOT EXISTS idx_item_lot_logs_createdAt ON item_lot_logs(createdAt);"
+  ]
+};
 const recipeUpsertSql = `
   INSERT INTO recipes (
     id,
@@ -4420,6 +4506,7 @@ const schemas = [
   inventoryItemSchema,
   itemMasterSchema,
   itemLotSchema,
+  itemLotLogSchema,
   recipesSchema,
   recipeIngredientsSchema,
   recipeVariantsSchema,
@@ -5525,6 +5612,7 @@ class DatabaseService {
       resetTableIfFullAndProvided("inventoryItems", "inventory_item");
       resetTableIfFullAndProvided("inventories", "inventory");
       resetTableIfFullAndProvided("itemLots", "item_lot");
+      resetTableIfFullAndProvided("itemLotLogs", "item_lot_logs");
       resetTableIfFullAndProvided("itemMasters", "item_master");
       resetTableIfFullAndProvided("invoiceItems", "invoice_items");
       resetTableIfFullAndProvided("invoices", "invoices");
@@ -5699,6 +5787,12 @@ class DatabaseService {
         const stmt = this.prepare(itemLotUpsertSql);
         for (const il of data.itemLots) {
           stmt.run(this.sanitize(buildItemLotUpsertParams(il)));
+        }
+      }
+      if (Array.isArray(data.itemLotLogs) && data.itemLotLogs.length > 0) {
+        const stmt = this.prepare(itemLotLogUpsertSql);
+        for (const ill of data.itemLotLogs) {
+          stmt.run(this.sanitize(buildItemLotLogUpsertParams(ill)));
         }
       }
       if (Array.isArray(data.orders) && data.orders.length > 0) {

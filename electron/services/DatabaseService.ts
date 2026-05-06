@@ -60,6 +60,10 @@ import {
   buildItemLotUpsertParams,
 } from "../features/schemas/item_lot.schema";
 import {
+  itemLotLogUpsertSql,
+  buildItemLotLogUpsertParams,
+} from "../features/schemas/item_lot_log.schema";
+import {
   itemMasterUpsertSql,
   buildItemMasterUpsertParams,
 } from "../features/schemas/item_master.schema";
@@ -1350,6 +1354,7 @@ export class DatabaseService {
       resetTableIfFullAndProvided("inventoryItems", "inventory_item");
       resetTableIfFullAndProvided("inventories", "inventory");
       resetTableIfFullAndProvided("itemLots", "item_lot");
+      resetTableIfFullAndProvided("itemLotLogs", "item_lot_logs");
       resetTableIfFullAndProvided("itemMasters", "item_master");
 
       resetTableIfFullAndProvided("invoiceItems", "invoice_items");
@@ -1588,6 +1593,13 @@ export class DatabaseService {
 
         for (const il of data.itemLots) {
           stmt.run(this.sanitize(buildItemLotUpsertParams(il)));
+        }
+      }
+
+      if (Array.isArray((data as any).itemLotLogs) && (data as any).itemLotLogs.length > 0) {
+        const stmt = this.prepare(itemLotLogUpsertSql);
+        for (const ill of (data as any).itemLotLogs) {
+          stmt.run(this.sanitize(buildItemLotLogUpsertParams(ill)));
         }
       }
 
